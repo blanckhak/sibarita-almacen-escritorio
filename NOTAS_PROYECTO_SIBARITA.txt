@@ -1,0 +1,752 @@
+====================================================
+NOTAS - PROYECTO SIBARITA (Sistema de Gestion de Almacenes)
+Fecha de la nota: 20/08/2026
+Ultima actualizacion: 25/08/2026 (ver seccion 16, nuevo spec del cliente y
+Fase A entregada en esta sesion)
+====================================================
+
+--------------------------------------------------
+1. DE QUE TRATA EL PROYECTO
+--------------------------------------------------
+Sibarita es un sistema web de gestion de inventario y logistica
+multi-almacen. Gestiona 3 almacenes (MALSA, JOPISA, INDELPAS).
+
+Funcionalidades principales:
+- Autenticacion con roles: admin, supervisor, operador, auditor,
+  transportista (login con JWT).
+- Inventario: stock por almacen y producto, tipo NUEVO / DEVOLUCION.
+- Movimientos: transferencias de producto entre almacenes (origen -> destino),
+  con cantidad, tipo, usuario responsable y fecha.
+- Almacenes: alta y consulta de almacenes y su ubicacion.
+- Usuarios: administracion de usuarios, rol y almacen asignado (solo admin).
+- Alertas: notificaciones (ej. stock bajo).
+- Reportes / Historial: consulta y exportacion a PDF (jspdf + jspdf-autotable),
+  graficos con recharts en el Dashboard.
+- Logs: auditoria de acciones (logMiddleware).
+- Control de acceso por ruta y por rol en el frontend (RutaProtegida).
+
+--------------------------------------------------
+2. STACK TECNICO
+--------------------------------------------------
+BACKEND (backend/):
+- Node.js + Express 5
+- PostgreSQL (via pg), esquema en src/config/database.sql
+  (tablas: roles, almacenes, usuarios, productos, inventario, movimientos)
+- Autenticacion JWT (jsonwebtoken) + bcryptjs para passwords
+- Estructura por capas: routes/, controllers/, middlewares/ (auth y log), config/
+- cors, dotenv
+- Deploy: RESUELTO (21/08) -> Render. Backend real corriendo en
+  https://sibarita-almacen.onrender.com (ver seccion 5 para detalle
+  completo: base de datos, variables de entorno, fecha de vencimiento).
+  railway.toml se puede borrar si no se usa Railway (quedo como opcion
+  de respaldo, sin backend desplegado ahi).
+
+FRONTEND (frontend/):
+- React 19 + Vite 8
+- React Router v7 (rutas protegidas por rol)
+- Tailwind CSS v4
+- Axios (utils/api.js)
+- Recharts (graficos del Dashboard)
+- jsPDF + jspdf-autotable (exportar reportes PDF)
+- Context API (AuthContext) para sesion/usuario
+- TypeScript configurado, pero paginas en .jsx
+- Deploy: Vercel (vercel.json, carpeta .vercel/)
+
+Resumen: app full-stack React + Express + PostgreSQL tipo WMS ligero,
+con control de acceso por roles. Frontend en Vercel
+(https://sibarita-almacen.vercel.app), backend en Render
+(https://sibarita-almacen.onrender.com). Ver seccion 5 para el detalle
+completo del deploy.
+
+--------------------------------------------------
+3. REVISION DE LA PROPUESTA TECNICA - QUE HAY QUE ACTUALIZAR
+--------------------------------------------------
+
+Existen DOS documentos de propuesta distintos:
+
+A) INFORME TECNICO FASE 1
+   Carpeta: "PROPUESTA TECNICA/Informe_Tecnico_Sibarita_SaitanGroup.md"
+   Fecha: 03 de julio de 2026
+   Describe lo entregado en la Fase 1: auth, dashboard, almacenes,
+   inventario, movimientos, usuarios, alertas, historial, reportes.
+   El inventario se describe "por cantidades agregadas" (sin producto
+   individual).
+
+   DESACTUALIZADO respecto al codigo actual (working tree, sin commit):
+   - El codigo YA tiene tabla "productos" y "producto_id" en inventario
+     y movimientos (backend/src/config/setup.js, backend/src/routes/productos.js).
+     El informe (seccion 6, Modelo de Datos) no menciona esto.
+   - Los movimientos entre almacenes YA afectan el stock real de forma
+     transaccional (descuenta en origen con FOR UPDATE, valida stock
+     suficiente, valida cantidad>0 y origen<>destino, suma en destino)
+     -> backend/src/routes/movimientos.js
+     El informe original no detalla este comportamiento.
+
+   ACCION PENDIENTE: actualizar el Informe Tecnico Fase 1 para reflejar
+   el catalogo de productos y la logica real de movimiento de stock.
+
+B) PROPUESTA TECNICA FASE 2
+   Archivo raiz: Propuesta_Tecnica_Sibarita_SaitanGroup.html/.docx/.pdf
+   Fecha: 10 de julio de 2026, version 1.3
+   Estado: SIN FIRMAR (Hoja de Aceptacion, seccion 21, en blanco)
+   Duracion estimada: 15 dias calendario
+
+   Alcance propuesto (grande):
+   - Registro de ingreso por GUIA con multiples productos
+   - Codigo/etiqueta unico e imprimible por producto que queda en almacen
+   - Seleccion de destino con salida automatica (oficina/laboratorio)
+   - Catalogo maestro de productos (categoria + unidad de medida + codigo interno)
+   - Notas de salida multiples (imprimibles, con firmas) + control de devolucion
+   - Reglas: no se recibe devolucion sin nota de salida asociada
+   - Aprobacion previa para salidas de alto valor
+   - Alertas de devolucion vencida
+   - Historial de vida del codigo (etiqueta_historial)
+   - Transferencia de un codigo entre almacenes
+   - 7 tablas nuevas: guias, guia_items, etiquetas, etiqueta_historial,
+     notas_salida, notas_salida_detalle, parametros_aprobacion, unidades_medida
+
+   ESTADO REAL (actualizado 21/08/2026): IMPLEMENTADO COMPLETO.
+   Se construyo todo el alcance funcional de la Fase 2 (secciones 5 a 14):
+   - 5.1-5.3: Ingreso por guia con multiples productos, generacion de
+     codigo/etiqueta correlativo e imprimible, salida automatica para
+     destino Oficina/Laboratorio. -> Guias.jsx, GuiaDetalle.jsx,
+     backend/src/routes/guias.js
+   - 5.4: Catalogo maestro completo (nombre, categoria, unidad_medida_id,
+     codigo_interno). -> Productos.jsx, backend/src/routes/productos.js,
+     unidadesMedida.js
+   - 5.5: Notas de salida multiple, imprimibles, con devolucion solo
+     contra la nota original (regla "sin nota no se recibe"). ->
+     NotasSalida.jsx, NotaSalidaDetalle.jsx, backend/src/routes/notasSalida.js
+   - 5.6: Consulta de productos por almacen/producto/guia. ->
+     ConsultaProductos.jsx, endpoint guias/consulta/productos
+   - Seccion 14 (7 funcionalidades adicionales): alertas de devolucion
+     vencida, historial de vida del codigo, reporte de reimpresiones,
+     aprobacion previa para salidas de alto valor (con umbral configurable
+     en parametros_aprobacion), panel Fase 2 en el Dashboard, transferencia
+     de codigo entre almacenes, motivo de salida.
+   - EXTRA (fuera del alcance original, pedido aparte): codigo de barras
+     Code128 real (jsbarcode) en las etiquetas imprimibles, compatible con
+     pistola lectora sin cambios adicionales (la busqueda de codigo en
+     Notas de Salida ya reacciona a Enter).
+   Las 7 tablas nuevas (guias, guia_items, etiquetas, etiqueta_historial,
+   notas_salida, notas_salida_detalle, parametros_aprobacion,
+   unidades_medida) estan creadas en produccion.
+
+   Todo revisado con /code-review antes de comitear: se corrigieron 5
+   hallazgos (fecha de alerta de devolucion vencida contada desde la
+   fecha real de salida y no desde la creacion de la nota, busqueda de
+   codigo que podia perder coincidencias exactas, precio unitario en 0
+   mostrado como "sin precio", logica de inventario duplicada en 3
+   archivos ahora centralizada en backend/src/utils/inventario.js, y el
+   .gitignore restaurado).
+
+   OJO / RIESGO (sigue vigente): la propia propuesta (seccion 15, Riesgos)
+   advierte que "cambios de alcance durante el desarrollo" se mitiga con
+   alcance congelado desde la Fase 0. La Hoja de Aceptacion (seccion 21)
+   SIGUE SIN FIRMAR. Se avanzo con todo el desarrollo bajo el criterio de
+   que ya habia acuerdo verbal con el cliente -> conviene formalizar la
+   firma en algun momento para que quede respaldado.
+
+--------------------------------------------------
+4. OTRAS COSAS A LIMPIAR / ACTUALIZAR
+--------------------------------------------------
+- RENDER vs RAILWAY: RESUELTO (21/08) -> Render. Ver seccion 5.
+  Pendiente: borrar backend/railway.toml si no se va a usar Railway
+  (por ahora se dejo, no estorba, pero es config muerta).
+
+- .gitignore RAIZ ELIMINADO: RESUELTO (21/08). Se restauro con
+  `git checkout HEAD -- .gitignore` y quedo commiteado. Los .gitignore
+  de backend/ y frontend/ ya cubrian node_modules/.env de cada
+  subproyecto, asi que no hubo riesgo real en el tiempo que estuvo
+  borrado.
+
+- ARCHIVO DE BLOQUEO DE WORD: "~$opuesta_Tecnica_Sibarita_SaitanGroup.docx"
+  SIGUE PENDIENTE (162 bytes, temporal de Word, sin trackear). No
+  commitear; cerrar el Word y borrarlo.
+
+- DOCUMENTOS DE PROPUESTA SIN COMMITEAR: SIGUE PENDIENTE. Los docx/
+  html/pdf en la raiz y toda la carpeta "PROPUESTA TECNICA/" siguen
+  como untracked (??), igual que este mismo archivo de notas. Decidir
+  si se versionan en el repo de codigo o se guardan aparte.
+
+- siba.jpg ELIMINADO del repo, sin reemplazo visible. SIGUE PENDIENTE
+  confirmar que no se sigue referenciando en el frontend (no se
+  reviso en esta sesion).
+
+- .claude/ (carpeta de configuracion local de Claude Code) sigue sin
+  trackear, sin decidir si se versiona.
+
+--------------------------------------------------
+5. DEPLOY EN PRODUCCION - RESUELTO EN SESION DEL 21/08/2026
+--------------------------------------------------
+Antes de esta sesion, el backend NUNCA habia estado realmente
+desplegado: el frontend en Vercel caia por defecto a localhost:3000
+(el fallback de frontend/src/utils/api.js cuando VITE_API_URL no esta
+configurada), y solo "funcionaba" cuando se probaba desde la misma
+maquina que corria el backend local. Esto quedo resuelto asi:
+
+FRONTEND (Vercel):
+- URL: https://sibarita-almacen.vercel.app
+- Cuenta: DR_GATO (dr-gato en Vercel), proyecto conectado a
+  blanckhak/sibarita-almacen, branch main, auto-deploy activado.
+- Root Directory: "frontend" (tenia un espacio de mas al inicio,
+  " frontend", que rompia el build -> corregido).
+- Variable de entorno VITE_API_URL = https://sibarita-almacen.onrender.com
+  (Production and Preview). OJO: al crearla la primera vez el valor
+  quedo pegado por error en el campo "Note" en vez de "Value" y quedo
+  vacia -> si en el futuro el front vuelve a apuntar a localhost,
+  revisar que el campo Value tenga la URL real, no solo el Note.
+- El commit `git author email` tambien bloqueo deploys al inicio:
+  Vercel exige que el email del autor del commit coincida con un
+  email verificado de la cuenta de GitHub conectada. Se reescribieron
+  los commits con `git filter-branch` + `git push --force` a
+  DRGATO <2123110276@untels.edu.pe> (identidad de git local de este
+  repo tambien configurada a ese email).
+
+BACKEND (Render):
+- URL: https://sibarita-almacen.onrender.com
+- Cuenta: la del usuario en Render (workspace "My Workspace"), servicio
+  "sibarita-almacen" (Web Service, Node, plan Free, region Virginia)
+  conectado a blanckhak/sibarita-almacen, Root Directory "backend".
+  Hay tambien un servicio viejo "almacen-basico-api" (Oregon) sin tocar.
+- Variables de entorno del servicio: DATABASE_URL, JWT_SECRET, NODE_ENV.
+- Plan Free: la instancia "se duerme" tras ~15 min sin uso y la primera
+  request tras eso puede tardar 50+ segundos en responder.
+
+BASE DE DATOS (Render Postgres):
+- Nombre: sibarita-almacen-db (plan Free, region Virginia).
+- La base ANTERIOR (sibarita_db, en el mismo servicio, de hace ~2 meses)
+  ya habia expirado por el limite de 30 dias del plan gratis -> por eso
+  el backend tiraba "Connection terminated unexpectedly" al arrancar.
+- *** OJO IMPORTANTE: esta base NUEVA vence el 20 DE SEPTIEMBRE DE 2026.
+  Si no se pasa a un plan pago (desde $6/mes) antes de esa fecha, Render
+  la borra y el sistema se vuelve a caer igual que ahora. Hay que poner
+  un recordatorio o decidir el plan pago con tiempo. ***
+- Al crearse de nuevo, el setup.js corrio la inicializacion normal:
+  roles, 3 almacenes, catalogo base, usuarios de prueba (mismos de
+  siempre: admin@sibarita.com/admin123, etc.), unidades de medida.
+
+RAILWAY (opcion descartada por ahora):
+- Se intento usar Railway primero (habia backend/railway.toml y el
+  .env.example del frontend apuntaba ahi), pero el trial de la cuenta
+  ya habia vencido y pide metodo de pago para crear proyectos nuevos.
+  El usuario decidio agregar el pago mas adelante; mientras tanto se
+  uso Render (gratis, sin tarjeta). Si en el futuro se agrega pago a
+  Railway y se quiere migrar, el codigo ya esta listo para cualquiera
+  de los dos (variable DATABASE_URL estandar).
+
+VERIFICACION FINAL: login real (admin@sibarita.com/admin123) contra
+https://sibarita-almacen.onrender.com/api/auth/login funcionando (200,
+token valido), y el Dashboard en produccion muestra la data limpia de
+la base nueva (no la data de prueba local), confirmando que el flujo
+completo Vercel -> Render -> Postgres esta conectado de verdad.
+
+--------------------------------------------------
+6. APP DE ESCRITORIO CON BASE LOCAL - SESION DEL 21/08/2026
+--------------------------------------------------
+Se creo una app de escritorio (Electron) en
+C:\Users\DRGATO\Documents\sibarita escritorio, independiente del
+repo de codigo. Detalle:
+
+- Arranca un backend Node/Express local (copia de backend/, con su
+  propio .env) que sirve la API y el frontend ya compilado
+  (backend/frontend-dist/) en http://localhost:3000, todo dentro de
+  un mismo proceso hijo que lanza main.js de Electron.
+- Usa PostgreSQL LOCAL ya instalado en esta PC (servicio
+  postgresql-x64-16, puerto 5432), base "sibarita_db" -> esta base
+  ya existia de una sesion de desarrollo anterior (previa al deploy
+  en Render) y tenia el esquema completo de Fase 1 y Fase 2 (16
+  tablas) mas datos base (roles, 3 almacenes, usuarios de prueba,
+  catalogo).
+- Login de prueba verificado localmente (admin@sibarita.com/admin123)
+  contra esta base local, funcionando.
+- README.md dentro de esa carpeta explica como reconstruir el
+  frontend/backend empaquetados si el codigo del proyecto cambia, y
+  como generar el instalador .exe (npm run build, con electron-builder,
+  pendiente de generarse).
+
+DECISION IMPORTANTE (21/08/2026): el usuario decidio priorizar la
+app de escritorio con base LOCAL (gratis para siempre, sin fecha de
+vencimiento) en vez de pagar por mantener Render activo. Se explico
+que PostgreSQL como motor es gratis siempre (open source); lo que
+cuesta es el HOSTING (Render). Se opto por: dejar que la base de
+Render venza el 20 de septiembre de 2026 sin pagar, y usar de ahi en
+adelante solo la app de escritorio. Consecuencia: la web en Vercel
+(sibarita-almacen.vercel.app) dejara de funcionar despues de esa
+fecha (su backend en Render se queda sin base de datos), salvo que
+el usuario cambie de opinion antes. Los datos de la app de escritorio
+(base local) y los de la web/Render son independientes entre si, no
+se sincronizan -> no hay riesgo de perder datos de la app de
+escritorio al dejar vencer Render.
+
+PENDIENTE: generar el instalador .exe de la app de escritorio
+(npm run build en esa carpeta) si se quiere un acceso directo
+instalable en vez de correrla con npm start.
+
+--------------------------------------------------
+7. CAMBIO DE NEGOCIO - GUIAS OFICINA/LABORATORIO Y CATALOGO LIBRE (21/08/2026)
+--------------------------------------------------
+Pedido del usuario: para productos de una guia con destino Oficina o
+Laboratorio, antes SIEMPRE se asumia "salida automatica" (nunca se
+generaba etiqueta ni quedaba en inventario). Se agrego control real:
+
+- guia_items tiene ahora columna "recogido" (BOOLEAN, migracion
+  ALTER TABLE IF NOT EXISTS en setup.js). Solo aplica a destino
+  OFICINA/LABORATORIO:
+  - recogido = true (checkbox marcado en el form, default): se
+    comporta como antes, sale automatico, sin etiqueta ni inventario.
+  - recogido = false (checkbox desmarcado, "aun no lo recogen"): se
+    trata igual que destino ALMACEN -> genera etiqueta imprimible y
+    queda en el inventario del almacen hasta que alguien lo retire
+    (se retira despues con el flujo normal de Notas de Salida, que
+    ya existia, no se creo nada nuevo para "marcarlo como recogido"
+    despues).
+  -> backend/src/routes/guias.js, frontend/src/pages/Guias.jsx
+
+- Catalogo de productos ya NO es obligatorio al registrar una guia:
+  el campo Producto ahora es un input con sugerencias (datalist) del
+  catalogo existente, pero se puede escribir un nombre nuevo. Si no
+  coincide con ningun producto existente (comparacion case-insensitive),
+  el backend lo crea automaticamente al guardar la guia (antes crear
+  productos requeria rol admin via POST /api/productos; ahora
+  supervisor/operador tambien pueden crear uno implicitamente desde
+  guias, que es el mismo rol que ya podia registrar guias).
+  -> backend/src/routes/guias.js (INSERT INTO productos inline dentro
+  de la transaccion), frontend/src/pages/Guias.jsx
+
+- Trazabilidad "de donde salio el producto" al buscar un codigo: NO
+  se tuvo que construir nada nuevo, ya existia -> ConsultaProductos.jsx
+  (filtro por almacen/producto/N de guia, muestra numero_guia) y
+  EtiquetaDetalle.jsx (encabezado muestra "Guia G-XXXX" directamente).
+  Los items de Oficina/Laboratorio pendientes de recoger (recogido=false)
+  ahora tambien apareceran ahi automaticamente porque generan etiqueta
+  igual que un item de Almacen.
+
+Verificado con pruebas reales contra la base local (producto nuevo
+creado al vuelo, laboratorio sin recoger genero etiqueta+inventario,
+oficina recogido salio automatico sin etiqueta) y luego se limpiaron
+los datos de prueba. Cambios sincronizados a la app de escritorio
+(carpeta "sibarita escritorio": backend/src/routes/guias.js,
+backend/src/config/setup.js y database.sql, y frontend-dist
+reconstruido).
+
+PENDIENTE: estos cambios NO se han commiteado a git ni desplegado a
+Vercel/Render todavia, solo probados localmente y sincronizados a la
+app de escritorio.
+
+CORRECCION (21/08/2026, mismo dia): el campo Producto se habia
+cambiado a un <input> con datalist (autocompletar), pero eso no
+muestra la lista completa al hacer clic como un <select> normal -
+el usuario lo reporto como "se elimino el catalogo". Se corrigio:
+ahora el campo Producto vuelve a ser un <select> con todo el catalogo
+visible al abrirlo, mas una opcion "+ Producto nuevo (escribir)" al
+final que revela un input de texto solo cuando se elige esa opcion.
+-> frontend/src/pages/Guias.jsx (seleccionarProducto, campo it.nuevo)
+
+--------------------------------------------------
+8. INVENTARIO - VER PRODUCTO EN LOS 3 ALMACENES (21/08/2026)
+--------------------------------------------------
+Pedido: en la pantalla de Inventario, poder darle clic a un producto
+y ver cuanto hay de ese mismo producto en cada uno de los 3 almacenes
+(MALSA, JOPISA, INDELPAS), no solo la fila del almacen que se esta
+viendo.
+
+Se agrego: el nombre del producto en la tabla de Inventario ahora es
+un boton; al hacer clic abre un modal con una tabla Almacen / Nuevo /
+Devolucion / Total (con fila de Total general), calculada en el
+frontend a partir del inventario ya cargado (sin endpoint nuevo).
+-> frontend/src/pages/Inventario.jsx (productoSeleccionado,
+resumenPorAlmacen, modal al final del componente)
+
+Compilado y sincronizado a la app de escritorio.
+
+--------------------------------------------------
+9. RESPALDO AUTOMATICO DE LA BASE LOCAL (21/08/2026)
+--------------------------------------------------
+Como la app de escritorio quedo como unica fuente de datos (sin
+Render de respaldo), se configuro backup automatico de sibarita_db:
+
+- Script: "sibarita escritorio\scripts\backup-db.ps1" (usa pg_dump,
+  formato plano .sql). Password de postgres NO esta en el script:
+  se guardo en %APPDATA%\postgresql\pgpass.conf (metodo estandar de
+  PostgreSQL en Windows).
+- Guarda cada respaldo en "sibarita escritorio\backups\" (conserva
+  los ultimos 30) y copia cada uno tambien a
+  "C:\Users\DRGATO\OneDrive\SibaritaBackups\" (conserva los ultimos
+  90) para tener resguardo fuera de esta PC.
+- Tarea programada de Windows "Sibarita - Backup BD Diario": corre
+  todos los dias a las 8:00 PM, con recuperacion si la PC estuvo
+  apagada a esa hora.
+- Probado manualmente el 21/08: genero un dump real (~41 KB) y lo
+  copio correctamente a ambos lados. Log en
+  "sibarita escritorio\backups\backup-log.txt".
+
+PRUEBA DE RESTAURACION REAL (21/08/2026): se hizo la prueba pendiente
+-> se creo una base "sibarita_restore_test", se restauro el ultimo
+backup ahi con psql, se comparo el conteo de filas de las tablas
+clave contra sibarita_db (identico), y se borro la base de prueba.
+El backup SI sirve para recuperar datos reales, confirmado.
+
+--------------------------------------------------
+10. AUDITORIA DE ACCIONES CONECTADA (21/08/2026)
+--------------------------------------------------
+Hallazgo: existia backend/src/middlewares/logMiddleware.js (funcion
+"log") pero NUNCA se usaba en ninguna ruta -> actividad_log solo
+registraba LOGIN (insertado directo en authController.js), nada mas.
+Crear una guia, un movimiento, una nota de salida, etc. no dejaba
+ningun rastro de quien lo hizo.
+
+Se conecto el middleware (ahora soporta detalle dinamico por
+peticion, no solo texto fijo) a las acciones de negocio clave:
+- CREAR_GUIA          -> guias.js POST /
+- CREAR_MOVIMIENTO    -> movimientos.js POST /
+- CREAR_NOTA_SALIDA   -> notasSalida.js POST /
+- APROBAR_NOTA_SALIDA -> notasSalida.js POST /:id/aprobar
+- RECHAZAR_NOTA_SALIDA-> notasSalida.js POST /:id/rechazar
+- REGISTRAR_DEVOLUCION-> notasSalida.js POST /:id/devolucion
+- TRANSFERIR_ETIQUETA -> etiquetas.js POST /:id/transferir
+- CREAR_USUARIO       -> usuarios.js POST / (nunca se loguea el password)
+- CAMBIAR_ESTADO_USUARIO -> usuarios.js PUT /:id/estado
+
+Probado con una transferencia real (movimiento de 5 unidades) contra
+la base local: quedo registrada en actividad_log con detalle
+correcto. Se revirtio el movimiento de prueba (inventario, tabla
+movimientos y el registro de log de la prueba) para no dejar datos
+falsos. Sincronizado a la app de escritorio.
+
+--------------------------------------------------
+11. ACCIONES BLOQUEADAS POR EL SISTEMA DE PERMISOS (21/08/2026)
+--------------------------------------------------
+Tres acciones pedidas quedaron bloqueadas por el "auto mode
+classifier" de Claude Code (no es algo que se destrabe solo con
+autorizacion verbal en el chat; hay que correrlas manualmente con el
+prefijo "!" o ajustar los permisos de Claude Code). Comandos listos
+para copiar y pegar:
+
+1) Abrir el puerto 3000 en el firewall (para que otras PCs de la
+   misma red usen el sistema via navegador, apuntando a
+   http://192.168.18.254:3000 -- esa es la IP de esta PC en Wi-Fi,
+   puede cambiar si la red cambia):
+   powershell -NoProfile -Command "New-NetFirewallRule -DisplayName 'Sibarita - Backend Local (3000)' -Direction Inbound -Protocol TCP -LocalPort 3000 -Action Allow -Profile Private"
+
+2) Rotar las 5 contrasenas de prueba (admin/supervisor/operador/
+   auditor/transportista @sibarita.com) por unas seguras generadas al
+   azar. El script ya esta escrito en:
+   C:\Users\DRGATO\AppData\Local\Temp\claude\C--Users-DRGATO-Documents-sistemas-sibarita---pryecto-de-almacen\34ef206f-865b-4a87-a8de-0b8b33c5dedb\scratchpad\rotate-passwords.js
+   (OJO: esa carpeta es temporal de la sesion de Claude Code, puede
+   no existir en sesiones futuras -> si hace falta, pedir que se
+   regenere el script). Se corre con:
+   node "esa-ruta\rotate-passwords.js"
+   Imprime las contraseñas nuevas por pantalla -> guardarlas ahi mismo,
+   no quedan guardadas en ningun otro lado.
+
+3) RESUELTO (21/08/2026): instalador .exe generado. El problema real
+   era que electron-builder necesita crear symlinks al extraer una
+   herramienta interna (winCodeSign), y el usuario de Windows no
+   tenia ese privilegio -> se resolvio activando el "Modo de
+   desarrollador" de Windows (Configuracion > Privacidad y seguridad
+   > Para desarrolladores). Con eso activado, "npm run build" corrio
+   sin problema.
+   Instalador: "C:\Users\DRGATO\Documents\sibarita escritorio\dist\Sibarita Setup 1.0.0.exe"
+   (~82 MB, sin firma digital -> Windows/SmartScreen puede advertir
+   "Editor desconocido" al primera vez que se ejecuta, es normal para
+   un instalador sin certificado de firma de codigo comprado; se
+   puede abrir igual con "Mas informacion" > "Ejecutar de todas
+   formas"). Sin icono personalizado (usa el icono por defecto de
+   Electron).
+
+   BUG ENCONTRADO Y CORREGIDO (21/08/2026, mismo dia): el usuario
+   instalo el primer .exe generado y la ventana abrio EN BLANCO.
+   Causa real: electron-builder NO empaqueto backend/node_modules
+   (express, pg, cors, dotenv, bcryptjs, jsonwebtoken) dentro del
+   instalador, a pesar de que el "files" en package.json incluia
+   "backend/**/*" -> el patron de electron-builder para incluir
+   dependencias solo reconoce el node_modules de la RAIZ del
+   proyecto (segun las "dependencies" del package.json raiz), no un
+   node_modules anidado en una subcarpeta con su propio package.json.
+   Resultado: al abrir la app instalada, el backend fallaba con
+   "Cannot find module 'express'" (silencioso, sin ventana de error
+   visible) y la ventana de Electron quedaba en blanco esperando una
+   respuesta de localhost:3000 que nunca llegaba.
+
+   SOLUCION: se movieron esas 6 dependencias a "dependencies" en el
+   package.json RAIZ de "sibarita escritorio" (antes solo tenia
+   electron/electron-builder como devDependencies), se corrio
+   "npm install" ahi, se borro backend/node_modules por completo
+   (ya no hace falta: Node resuelve require('express') desde
+   backend/server.js caminando hacia arriba y lo encuentra en el
+   node_modules de la raiz), y se agrego
+   "!backend/node_modules/**/*" al files de electron-builder por
+   seguridad. Se re-genero el instalador y esta vez SI se verifico
+   (corriendo dist/win-unpacked/Sibarita.exe directamente) que carga
+   el login real, no pantalla en blanco.
+
+PENDIENTE (no accionable por Claude, requiere al cliente): firmar la
+Hoja de Aceptacion de la Propuesta Tecnica Fase 2 (seccion 21 del
+documento), sigue en blanco.
+
+--------------------------------------------------
+12. BUSCADOR DE CODIGO EN NOTAS DE SALIDA - LISTA EN VIVO (21/08/2026)
+--------------------------------------------------
+Pedido: al buscar un codigo de etiqueta en Notas de Salida, que
+aparezcan TODOS los codigos registrados/disponibles, con el nombre
+del producto y la cantidad que va a salir, no solo cuando se acierta
+el codigo exacto.
+
+Antes: el campo solo agregaba la linea si se escribia el codigo
+EXACTO y se presionaba Enter/Agregar; si no coincidia exacto, error.
+No habia forma de "explorar" los codigos disponibles.
+
+Ahora: al enfocar el campo (o mientras se escribe) aparece un
+desplegable con TODOS los codigos EN_ALMACEN disponibles (o
+filtrados por lo que se va escribiendo, con debounce de 200ms),
+mostrando codigo, producto y cantidad+unidad "saliendo". Click en
+cualquier fila lo agrega a la nota. Se preservo el flujo de Enter
+con codigo EXACTO para que la pistola lectora de codigo de barras
+siga funcionando igual que antes (sigue reaccionando a Enter).
+-> frontend/src/pages/NotasSalida.jsx (useEffect de busqueda en vivo,
+agregarEtiqueta, dropdown de sugerencias)
+
+Probado el endpoint backend sin filtro de codigo (devuelve la lista
+completa con producto/cantidad/almacen). Compilado y sincronizado a
+la app de escritorio.
+
+--------------------------------------------------
+13. OPTIMIZACION DE VELOCIDAD (21/08/2026)
+--------------------------------------------------
+Pedido: que la app de escritorio corra rapido. Cambios:
+
+1) VENTANA INSTANTANEA: antes main.js esperaba a que el backend local
+   respondiera (podia tardar 1-3+ segundos) SIN mostrar ninguna
+   ventana. Ahora la ventana se muestra de inmediato con una pantalla
+   de carga liviana (spinner + "Iniciando Sibarita...", HTML inline
+   como data: URL, sin depender de ningun archivo), y cuando el
+   backend ya responde, navega a la app real. Se siente instantaneo
+   aunque el tiempo real de arranque del backend sea el mismo.
+
+2) FRONTEND: TODAS las paginas se cargaban de una sola vez al abrir
+   la app (React.lazy no se usaba), incluyendo Dashboard (recharts) y
+   Reportes/Historial/Inventario/Productos/ConsultaProductos
+   (jspdf + html2canvas via utils/exportar.js) aunque el usuario nunca
+   las visitara. Se convirtieron todas las paginas (excepto Login) a
+   carga diferida con React.lazy + Suspense.
+   Resultado: el bundle inicial bajo de 1,259 KB a 292 KB (-77%).
+   Los graficos y el generador de PDF ahora solo se descargan cuando
+   se entra a esas pantallas.
+   -> frontend/src/App.jsx
+
+3) EMPAQUETADO: se habilito "asar": true en el instalador de
+   escritorio (antes estaba en false). Empaqueta todos los archivos
+   en un solo archivo .asar en vez de miles de archivos sueltos en
+   disco -> arranque mas rapido, menos I/O de disco. Ninguna de las
+   dependencias del backend tiene binarios nativos (bcryptjs es JS
+   puro, pg usa el driver JS puro por defecto), asi que era seguro
+   activarlo.
+
+   BUG encontrado al activar asar y CORREGIDO: el codigo que lanza el
+   backend como proceso hijo (main.js, startBackend) usaba `cwd:
+   BACKEND_DIR` apuntando DENTRO del .asar, pero un working directory
+   de un proceso del sistema operativo tiene que ser una carpeta real
+   en disco, no una ruta virtual dentro de un .asar -> el backend
+   nunca arrancaba (fallaba silencioso). Se corrigio pasando la ruta
+   absoluta del script (que si se puede leer desde dentro del asar
+   una vez que el proceso ya inicio) y usando como cwd la carpeta
+   real del ejecutable. Tambien se encontro que dotenv (en
+   backend/server.js) buscaba el .env de forma implicita en
+   process.cwd(), lo cual dejo de funcionar al cambiar el cwd -> se
+   corrigio para que apunte explicitamente a path.join(__dirname,
+   '.env'), sin depender del cwd para nada.
+
+Probado paso a paso: dev mode, luego el ejecutable empaquetado
+(dist/win-unpacked/Sibarita.exe) directamente, con login real
+verificado contra la base local. El instalador final quedo en el
+mismo lugar de siempre:
+"C:\Users\DRGATO\Documents\sibarita escritorio\dist\Sibarita Setup 1.0.0.exe"
+(hay que desinstalar cualquier version anterior antes de instalar
+esta).
+
+--------------------------------------------------
+14. DEVOLUCIONES: BOTONES DEVUELTO/NO DEVUELTO + PLAZO HABIL (21/08/2026)
+--------------------------------------------------
+Pedido: en el detalle de una Nota de Salida, reemplazar el
+checkbox + boton "Registrar devolucion (N)" en lote por DOS
+botones por linea/codigo: "Devuelto" y "No Devuelto". Aclarado con
+el usuario:
+- "Devuelto": abre un cuadro que muestra producto/cantidad esperada/
+  codigo, y pide escribir o escanear el codigo para CONFIRMAR (si no
+  coincide exacto con el codigo real, no deja continuar) antes de
+  registrar la devolucion real (mismo endpoint de siempre,
+  POST /:id/devolucion, ahora llamado con un solo etiqueta_id).
+- "No Devuelto": SOLO queda anotado en la auditoria (actividad_log,
+  accion MARCAR_NO_DEVUELTO) para seguimiento -> NO cambia ningun
+  estado (la etiqueta sigue SALIO, la nota sigue PENDIENTE). Nuevo
+  endpoint: POST /api/notas-salida/:id/lineas/:etiquetaId/no-devuelto
+  -> backend/src/routes/notasSalida.js,
+  frontend/src/pages/NotaSalidaDetalle.jsx
+
+- Plazo de devolucion: antes 15 dias CALENDARIO (env
+  DIAS_LIMITE_DEVOLUCION). El usuario confirmo que el plazo real es
+  1-2 semanas HABILES -> se cambio a contar dias HABILES (lunes a
+  viernes, excluye fines de semana) con limite de 10 dias habiles
+  (2 semanas), env renombrada a DIAS_HABILES_LIMITE_DEVOLUCION.
+  Formula SQL: cuenta con generate_series + EXTRACT(ISODOW).
+  -> backend/src/routes/alertas.js,
+  frontend/src/components/Notificaciones.jsx (campo
+  dias_habiles_pendiente en vez de dias_pendiente)
+
+Probado end-to-end contra la base local: creacion de guia+nota de
+salida de prueba, "no devuelto" (verificado que NO cambia estados,
+solo el log), devolucion real (etiqueta vuelve a EN_ALMACEN, nota
+a DEVUELTO), y el calculo de dias habiles (una nota con fecha_salida
+de hace 15 dias calendario dio 11 dias habiles, correctamente por
+encima del limite de 10 -> aparecio en /api/alertas). Todos los datos
+de prueba se limpiaron despues. Instalador regenerado y sincronizado.
+
+--------------------------------------------------
+15. ICONO PROPIO PARA LA APP DE ESCRITORIO (21/08/2026)
+--------------------------------------------------
+No existia ningun logo real de la empresa en el proyecto (el
+favicon.svg del frontend es el logo generico de la plantilla de
+Vite/React, no de Sibarita). Se diseño un icono simple desde cero:
+una casita/almacen blanca sobre fondo azul navy (#1e3a8a, el mismo
+tono que usa la barra de navegacion de la app -> bg-blue-900),
+generado como SVG y convertido a .ico multi-resolucion (16 a 256px)
+con sharp + png-to-ico (herramientas instaladas solo temporalmente
+en una carpeta scratch, no quedaron como dependencia del proyecto).
+
+Se guardo en "sibarita escritorio\icon.ico" y se conecto en:
+- package.json (build.win.icon y build.nsis.installerIcon/
+  uninstallerIcon) -> el .exe y el instalador ya no usan el icono
+  generico de Electron.
+- main.js (BrowserWindow icon) -> la ventana tambien lo usa.
+
+Probado: el build ya no muestra el aviso "default Electron icon is
+used", y el ejecutable empaquetado corrio bien con el icono nuevo.
+Instalador regenerado en el mismo lugar de siempre.
+
+PENDIENTE (opcional): si el usuario tiene un logo real de la empresa
+Sibarita (no el generico de la app web), se puede reemplazar
+facilmente este icon.ico por uno basado en el logo real.
+
+--------------------------------------------------
+16. NUEVO SPEC DEL CLIENTE (~30 requerimientos) Y FASE A ENTREGADA (25/08/2026)
+--------------------------------------------------
+El cliente entrego un documento nuevo de 7 secciones (~30 requerimientos)
+para ampliar Sibarita: proveedores/Orden de Compra, guias (edicion,
+tipos de metrica, formato de impresion), motivos/stock/codigos,
+devoluciones con estado "Usado", destinos/compras diarias, procesos en
+segundo plano/impresora Epson FX-890 II, y resiliencia de red/control de
+conflictos. La mayoria son ampliaciones sobre modulos que ya existian
+(guias, notas de salida, devoluciones); "Compras diarias" y la
+sincronizacion offline son funcionalidad nueva de cero.
+
+Se armo un plan de 7 fases (una fase a la vez, con aprobacion del
+usuario antes de pasar a la siguiente). El plan completo, con el detalle
+de cada fase (B a G siguen pendientes), quedo guardado en:
+C:\Users\DRGATO\.claude\plans\inherited-booping-steele.md
+(OJO: esa ruta es del perfil local de Claude Code, no del repo -> si se
+pierde, hay que volver a generarlo repasando esta seccion y la anterior
+del documento original con el cliente).
+
+Aclarado con el cliente antes de empezar: "proveedor no fijo" = campo de
+texto libre (no catalogo fijo); "Mesa" en devoluciones = punto de
+recepcion fisico, distinto del almacen (no requiere modelado propio).
+
+FASE A ENTREGADA (proveedor/O.C./direccion + edicion de guia + estado):
+- `guias` tiene 4 columnas nuevas: proveedor (texto libre), numero_oc,
+  direccion (las 3 nullable), y estado ('CARGADA'/'CERRADA', default
+  CARGADA) -> backend/src/config/database.sql, backend/src/config/setup.js
+  (ALTER TABLE ... ADD COLUMN IF NOT EXISTS, ya migrado en la base local
+  sibarita_db que comparten el repo y la app de escritorio).
+- Nuevo `PUT /api/guias/:id` (antes una guia era inmutable despues de
+  creada): edita SOLO proveedor/numero_oc/direccion/estado, nunca los
+  items ya generados (etiquetas/inventario). Un campo enviado vacio SI
+  limpia el valor a NULL (no usa COALESCE simple, ver comentario en el
+  codigo). Registra auditoria como EDITAR_GUIA via el logMiddleware
+  existente. -> backend/src/routes/guias.js
+- En `GuiaDetalle.jsx`: header con Proveedor/O.C./Direccion, boton
+  "Editar", y boton "+ Agregar Orden de Compra" cuando numero_oc esta
+  vacio. En `Guias.jsx`: campos opcionales en el form de ingreso, y
+  columna de estado (badge) en el listado.
+- De paso se corrigieron 2 carreras de concurrencia en `POST /api/guias`
+  (la unica ruta de negocio que no tenia ningun locking): (1) la
+  auto-creacion de producto por nombre nuevo ahora usa un upsert atomico
+  (`INSERT ... ON CONFLICT DO UPDATE`) en vez de check-then-insert; (2)
+  violaciones de unicidad (Postgres 23505) ahora devuelven 409 con
+  mensaje claro en vez de un 500 generico.
+- Bug encontrado por /code-review y corregido en la misma sesion: el
+  upsert de arriba comparaba nombres sin distinguir mayusculas/minusculas
+  pero el indice unico si las distinguia -> dos guias simultaneas con
+  "Tornillo"/"TORNILLO" como producto nuevo podian crear 2 productos
+  duplicados. Se agrego `productos_nombre_lower_unique` (indice unico
+  sobre LOWER(nombre)) y el ON CONFLICT ahora apunta a ese indice.
+  Verificado disparando 2 requests en paralelo con distinto casing:
+  ambas resuelven al mismo producto_id, sin duplicados.
+- Probado end-to-end contra la base local (crear guia con proveedor/OC,
+  editar, cerrar, limpiar un campo a NULL, rechazar estado invalido,
+  rechazar numero_guia duplicado) y limpiado despues. Sincronizado a
+  "sibarita escritorio" (backend/src/config/*, backend/src/routes/guias.js,
+  y frontend-dist reconstruido con `npm run build`).
+
+PENDIENTE:
+- Fase A NO se ha comiteado a git todavia (sigue como cambio en el
+  working tree, junto con el resto de cambios sin commitear de la sesion
+  del 21/08 que ya estaban ahi antes de empezar esto).
+- NO se regenero el instalador .exe de la app de escritorio (el
+  frontend-dist si se actualizo, asi que `npm start` ya sirve la version
+  nueva; el .exe empaquetado en "sibarita escritorio\dist\" sigue siendo
+  el anterior a la Fase A hasta que se corra `npm run build` ahi).
+- Fases B a G del plan siguen sin empezar. Puntos abiertos que necesitan
+  una respuesta del cliente antes de construir esa parte puntual (no
+  bloquean nada de lo ya entregado): que campos exactos abre "EN PARTIDA"
+  en guia_items (Fase B); si un item "Usado" en devolucion debe reingresar
+  a inventario disponible o quedar solo trazado por su etiqueta (Fase D);
+  campos completos de "Compras diarias" mas alla de Oficina/Solicitud
+  (Fase E); si "segundo plano" en solicitud de materiales/servicios de
+  limpieza esperaba algo mas literal que UX no bloqueante (Fase F).
+
+--------------------------------------------------
+17. DESARROLLO MIGRADO A ESTA CARPETA (25/08/2026)
+--------------------------------------------------
+Desde esta sesion, el desarrollo activo se hace directamente en
+"sibarita escritorio" (esta carpeta) y no en el repo original
+("sistemas/sibarita - pryecto de almacen"), que queda CONGELADO como
+snapshot historico (sigue conectado a GitHub/Vercel/Render por si se
+retoma la web mas adelante, pero sin mas cambios activos salvo pedido
+explicito). Motivo: el usuario ya habia decidido priorizar la app de
+escritorio sobre la web (ver seccion 6), y pidio que la edicion se haga
+directamente aqui.
+
+Cambios para que esta carpeta sea autosuficiente:
+- Se copio el codigo FUENTE del frontend (antes solo existia el build
+  compilado en backend/frontend-dist/) a una carpeta nueva `frontend/`
+  hermana de `backend/`. Se instalo con npm install y se verifico que
+  `npm run build` genera un dist/ funcional igual que en el proyecto
+  original.
+- Se inicializo un repo git PROPIO en esta carpeta (separado del repo
+  del proyecto original), con `.gitignore` (node_modules/, dist/,
+  backend/frontend-dist/, backups/, logs, .env). Identidad de git local
+  configurada igual que en el proyecto original (DRGATO,
+  2123110276@untels.edu.pe) porque esta maquina no tenia una identidad
+  de git global configurada -> sin eso, ningun commit hubiera sido
+  posible en ningun repo nuevo de esta PC, no solo en este.
+- Primer commit "snapshot inicial" (82e9e9d): todo el estado actual,
+  incluyendo la Fase A de guias (proveedor/O.C./direccion/estado, ver
+  seccion 16) y todo el trabajo previo de la sesion del 21/08 que hasta
+  ahora no tenia ningun historial de versiones en ningun lado.
+- README.md de esta carpeta actualizado con el flujo nuevo (compilar el
+  frontend aqui mismo, ya no hace falta ir al proyecto original).
+- Este mismo archivo de notas (NOTAS_PROYECTO_SIBARITA.txt) se copio
+  aqui y sigue actualizandose en esta carpeta de ahora en adelante. La
+  copia en el repo original queda como referencia historica congelada.
+
+De ahora en adelante: las Fases B a G del plan de negocio (ver seccion
+16 y el plan guardado en
+C:\Users\DRGATO\.claude\plans\inherited-booping-steele.md) se
+implementan editando directo backend/src/* y frontend/src/* de ESTA
+carpeta, probando contra la misma base local sibarita_db de siempre, y
+`/code-review` corre contra el git de esta carpeta.
+
+--------------------------------------------------
+FIN DE LA NOTA
+--------------------------------------------------
