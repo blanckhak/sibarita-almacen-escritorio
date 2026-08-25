@@ -1,0 +1,48 @@
+{
+  "name": "sibarita-escritorio",
+  "version": "1.0.0",
+  "description": "Aplicacion de escritorio para Sibarita (Sistema de Gestion de Almacenes)",
+  "main": "main.js",
+  "author": "DRGATO",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "pg": "^8.21.0"
+  },
+  "devDependencies": {
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.sibarita.escritorio",
+    "productName": "Sibarita",
+    "asar": true,
+    "win": {
+      "target": "nsis",
+      "icon": "icon.ico"
+    },
+    "nsis": {
+      "installerIcon": "icon.ico",
+      "uninstallerIcon": "icon.ico"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "package.json",
+      "icon.ico",
+      "backend/**/*",
+      "!backend/node_modules/**/*",
+      "!backend/frontend-dist/**/*.map"
+    ],
+    "directories": {
+      "output": "dist"
+    }
+  }
+}
