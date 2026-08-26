@@ -14,6 +14,8 @@ const Guias              = lazy(() => import('./pages/Guias'))
 const GuiaDetalle        = lazy(() => import('./pages/GuiaDetalle'))
 const NotasSalida        = lazy(() => import('./pages/NotasSalida'))
 const NotaSalidaDetalle  = lazy(() => import('./pages/NotaSalidaDetalle'))
+const SolicitudesMateriales = lazy(() => import('./pages/SolicitudesMateriales'))
+const SolicitudMaterialesDetalle = lazy(() => import('./pages/SolicitudMaterialesDetalle'))
 const ConsultaProductos  = lazy(() => import('./pages/ConsultaProductos'))
 const EtiquetaDetalle    = lazy(() => import('./pages/EtiquetaDetalle'))
 const Usuarios           = lazy(() => import('./pages/Usuarios'))
@@ -116,6 +118,18 @@ function AppContent() {
         <Route path="/notas-salida/:id" element={
           <RutaProtegida roles={['admin', 'supervisor', 'operador', 'auditor', 'transportista']}>
             <NotaSalidaDetalle />
+          </RutaProtegida>
+        } />
+
+        <Route path="/solicitudes-materiales" element={
+          <RutaProtegida roles={['admin', 'supervisor', 'operador', 'auditor']}>
+            <SolicitudesMateriales />
+          </RutaProtegida>
+        } />
+
+        <Route path="/solicitudes-materiales/:id" element={
+          <RutaProtegida roles={['admin', 'supervisor', 'operador', 'auditor']}>
+            <SolicitudMaterialesDetalle />
           </RutaProtegida>
         } />
 

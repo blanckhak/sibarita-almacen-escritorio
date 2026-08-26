@@ -26,6 +26,7 @@ export default function Navbar() {
     { path: '/productos',   label: 'Catalogo',    roles: ['admin','supervisor','operador','auditor'] },
     { path: '/guias',       label: 'Guias',       roles: ['admin','supervisor','operador','auditor'] },
     { path: '/notas-salida', label: 'Notas de Salida', roles: ['admin','supervisor','operador','auditor','transportista'] },
+    { path: '/solicitudes-materiales', label: 'Solicitud Materiales', roles: ['admin','supervisor','operador','auditor'] },
     { path: '/consulta-productos', label: 'Consulta', roles: ['admin','supervisor','operador','auditor'] },
     { path: '/movimientos', label: 'Movimientos', roles: ['admin','supervisor'] },
     { path: '/reportes',    label: 'Reportes',    roles: ['admin','supervisor','auditor'] },

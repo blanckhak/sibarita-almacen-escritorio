@@ -167,6 +167,34 @@ async function setup() {
       activo BOOLEAN NOT NULL DEFAULT false
     );
 
+    -- Solicitud de Materiales (Fase B): registro independiente, no ligado a
+    -- inventario/etiquetas porque las lineas son texto libre (muestras,
+    -- herramientas, etc.) que no siempre estan en el catalogo de productos.
+    -- Atenderla solo cambia su estado, no genera movimientos de stock.
+    CREATE SEQUENCE IF NOT EXISTS solicitudes_materiales_numero_seq START 1;
+
+    CREATE TABLE IF NOT EXISTS solicitudes_materiales (
+      id SERIAL PRIMARY KEY,
+      numero_solicitud VARCHAR(20) NOT NULL UNIQUE,
+      almacen_id INTEGER REFERENCES almacenes(id),
+      seccion VARCHAR(100),
+      persona_responsable VARCHAR(150) NOT NULL,
+      categoria VARCHAR(20) NOT NULL CHECK (categoria IN ('MUESTRAS', 'INSUMOS', 'MATERIA_PRIMA', 'REPUESTOS', 'HERRAMIENTAS', 'OTROS')),
+      categoria_detalle VARCHAR(200),
+      periodo DATE,
+      usuario_id INTEGER REFERENCES usuarios(id),
+      fecha TIMESTAMP DEFAULT NOW(),
+      estado VARCHAR(20) NOT NULL DEFAULT 'PENDIENTE' CHECK (estado IN ('PENDIENTE', 'ATENDIDA', 'RECHAZADA')),
+      observaciones TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS solicitudes_materiales_detalle (
+      id SERIAL PRIMARY KEY,
+      solicitud_id INTEGER REFERENCES solicitudes_materiales(id),
+      producto VARCHAR(200) NOT NULL,
+      cantidad NUMERIC(12,2) NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS actividad_log (
       id SERIAL PRIMARY KEY,
       usuario_id INTEGER REFERENCES usuarios(id),

@@ -1,8 +1,9 @@
 ====================================================
 NOTAS - PROYECTO SIBARITA (Sistema de Gestion de Almacenes)
 Fecha de la nota: 20/08/2026
-Ultima actualizacion: 26/08/2026 (ver seccion 18, Fase B - formato de
-impresion - entregada en esta sesion)
+Ultima actualizacion: 26/08/2026 (ver secciones 18 y 19, Fase B -
+formato de impresion y modulo Solicitud de Materiales - entregadas en
+esta sesion)
 ====================================================
 
 --------------------------------------------------
@@ -820,6 +821,81 @@ PENDIENTE:
   del 21/08.
 - Nada de esto se ha desplegado a Vercel/Render (repo congelado, ver
   seccion 17).
+
+--------------------------------------------------
+19. MODULO NUEVO: SOLICITUD DE MATERIALES (26/08/2026)
+--------------------------------------------------
+Segunda parte de Fase B en esta sesion: el reverso del talonario fisico
+de Notas de Salida (carpeta "para giarse/", ver seccion 18) es un
+formato distinto - "Solicitud de Materiales" - con casillas de
+categoria (Muestras/Insumos/Materia Prima/Otros/Repuestos/Herramientas)
+que no existia en Sibarita.
+
+Antes de construirlo se le pregunto al usuario como debia conectarse
+con el resto del sistema (la decision no se podia inferir del papel):
+se eligio la opcion mas simple -> registro independiente, SIN tocar
+inventario ni etiquetas. Las lineas son producto/cantidad en texto
+libre (no ligadas al catalogo) porque una solicitud puede pedir cosas
+que no estan catalogadas (ej. "herramientas", "muestras"). Atenderla
+solo cambia su estado, no genera movimientos de stock ni Notas de
+Salida automaticas.
+
+Construido:
+- Tablas nuevas `solicitudes_materiales` (numero_solicitud con su propia
+  secuencia, almacen_id, seccion, persona_responsable, categoria con
+  CHECK, categoria_detalle para cuando categoria='OTROS', periodo,
+  usuario_id, estado PENDIENTE/ATENDIDA/RECHAZADA, observaciones) y
+  `solicitudes_materiales_detalle` (producto texto libre, cantidad) ->
+  backend/src/config/database.sql, backend/src/config/setup.js.
+- backend/src/routes/solicitudesMateriales.js (nuevo): GET / (lista,
+  filtro opcional por estado), GET /:id (con detalle), POST / (crear,
+  roles admin/supervisor/operador), POST /:id/atender y POST
+  /:id/rechazar (roles admin/supervisor, mismo patron de aprobar/
+  rechazar que ya existia en notas_salida). Registrado en server.js
+  (app.use('/api/solicitudes-materiales', ...)) y con auditoria via
+  logMiddleware (CREAR_SOLICITUD_MATERIALES, ATENDER_SOLICITUD_
+  MATERIALES, RECHAZAR_SOLICITUD_MATERIALES).
+- frontend/src/pages/SolicitudesMateriales.jsx (nueva, lista + form de
+  registro con lineas dinamicas producto/cantidad) y
+  SolicitudMaterialesDetalle.jsx (nueva, detalle + atender/rechazar +
+  vista de impresion que replica el formato fisico real: casillas de
+  categoria marcadas con X, tabla producto/cantidad, firmas "Solicitado
+  por" / "V.B. Autorizado por", pie FT-GE-17 ED.-01). Rutas registradas
+  en App.jsx (/solicitudes-materiales y /solicitudes-materiales/:id) y
+  enlace nuevo en Navbar.jsx.
+
+Probado end-to-end contra la base local (POST real con 2 lineas, GET
+lista y detalle, atender, doble-atender rechazado con 400, rechazar,
+categoria invalida rechazada con 400, sin lineas rechazado con 400,
+cantidad 0 rechazada con 400, rol operador bloqueado con 403 al intentar
+atender) y limpiado despues (DELETE directo de la solicitud de prueba y
+reset de la secuencia a 1, ya que no hay endpoint de borrado por diseno
+-> las solicitudes reales no se pueden eliminar desde la UI, solo
+pasar a ATENDIDA o RECHAZADA).
+
+Revisado con /code-review antes de comitear (3 rondas, se corrigieron
+5 hallazgos en total): categoria_detalle ahora es obligatorio en el
+backend cuando categoria='OTROS' (antes solo lo exigia el <input
+required> del frontend, saltable con una llamada directa a la API);
+atender/rechazar ahora corren dentro de una transaccion con SELECT ...
+FOR UPDATE (antes el check-then-update sin lock permitia que dos
+supervisores atendieran y rechazaran la misma solicitud casi al mismo
+tiempo y una de las dos acciones se perdiera en silencio); la lista de
+categorias quedo centralizada en frontend/src/utils/categoriasMateriales.js
+en vez de repetida (y con orden distinto) en cada pagina; el backend ya
+no revienta con 500 si "producto" llega como algo que no es texto; y la
+tabla de listado ahora muestra la categoria legible en vez del valor
+crudo del enum.
+
+PENDIENTE:
+- No hay forma de editar una solicitud ya creada (igual que Notas de
+  Salida no permite editar lineas). Si hace falta corregir algo hoy por
+  hoy se rechaza y se crea una nueva.
+- "Tipos de metrica" (resto de Fase B) y Fases C-G siguen bloqueadas
+  por falta del detalle fino del cliente (ver seccion 18).
+- Instalador .exe y deploy Vercel/Render: mismo estado que seccion 18
+  (npm start sirve todo lo nuevo, el .exe y la web siguen sin
+  regenerar/actualizar).
 
 --------------------------------------------------
 FIN DE LA NOTA
