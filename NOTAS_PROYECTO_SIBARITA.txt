@@ -1,8 +1,8 @@
 ====================================================
 NOTAS - PROYECTO SIBARITA (Sistema de Gestion de Almacenes)
 Fecha de la nota: 20/08/2026
-Ultima actualizacion: 25/08/2026 (ver seccion 16, nuevo spec del cliente y
-Fase A entregada en esta sesion)
+Ultima actualizacion: 26/08/2026 (ver seccion 18, Fase B - formato de
+impresion - entregada en esta sesion)
 ====================================================
 
 --------------------------------------------------
@@ -746,6 +746,80 @@ C:\Users\DRGATO\.claude\plans\inherited-booping-steele.md) se
 implementan editando directo backend/src/* y frontend/src/* de ESTA
 carpeta, probando contra la misma base local sibarita_db de siempre, y
 `/code-review` corre contra el git de esta carpeta.
+
+--------------------------------------------------
+18. FASE B - FORMATO DE IMPRESION (26/08/2026)
+--------------------------------------------------
+Contexto: al revisar el estado del proyecto en esta sesion se detecto que
+el plan detallado de las Fases B-G (referenciado en la seccion 16 como
+guardado en C:\Users\DRGATO\.claude\plans\inherited-booping-steele.md)
+en realidad NO tiene ese contenido -> ese archivo se reuso despues para
+el plan de migracion de la seccion 17 y el detalle original de Fase B-G
+no quedo en ningun otro lado. El documento original del cliente con los
+~30 requerimientos tampoco esta en disco. Es decir, el detalle fino de
+Fases B-G esta perdido salvo el resumen de la seccion 16 de esta nota.
+
+El usuario agrego una carpeta "para giarse/" (sin trackear en git, son
+documentos de referencia, no codigo) con los formatos fisicos reales que
+usa Manufactura de Alimentos S.A.: "Nota de Ingresos de Activos" (mapea
+a Guias), "Nota de Salida de Activos" (mapea a Notas de Salida),
+"Solicitud de Materiales" (modulo nuevo, reverso del mismo talonario,
+NO construido en esta sesion), y "MALSA.xlsx" (kardex manual real con
+columnas Maquina-MOTIVO, Ubicacion, O.C. Externa, etc., util para
+Fase C mas adelante).
+
+Con eso como referencia se construyo la parte de Fase B que si tenia
+alcance sin ambiguedad -> formato de impresion:
+
+- `guias` tiene 2 columnas nuevas: guia_remision, factura (VARCHAR(50)
+  nullable, mismo patron que proveedor/numero_oc de Fase A) ->
+  backend/src/config/database.sql, backend/src/config/setup.js (ALTER
+  TABLE ... ADD COLUMN IF NOT EXISTS, ya migrado en sibarita_db local).
+  Conectados en POST /api/guias y PUT /api/guias/:id (backend/src/routes/
+  guias.js). GET /api/guias/:id no necesito cambio (usa SELECT g.*).
+- Guias.jsx (formulario de registro) y GuiaDetalle.jsx (tarjetas de info
+  + formulario de edicion): campos nuevos "Guia de Remision" y "Factura",
+  ambos opcionales.
+- GuiaDetalle.jsx: nuevo boton "Imprimir Nota de Ingreso" y una vista de
+  impresion nueva que replica el talonario fisico real ("MANUFACTURA DE
+  ALIMENTOS S.A." - Nota de Ingresos de Activos): fecha, N.deg. de guia,
+  proveedor/O.C./guia de remision/factura, tabla de detalle (P.Unit./
+  Total quedan en blanco para llenado a mano porque Sibarita no maneja
+  precios en inventario), y las 5 firmas del formato real (Jefe de Mto.
+  [almacen], Dpto. Compras, Dpto. Tesoreria, Almacen, Jefe de Produccion).
+  Se agrego un estado `vistaImpresion` ('etiquetas' | 'nota') para que
+  conviva con la vista de impresion de etiquetas que ya existia sin que
+  se muestren las dos a la vez.
+- NotaSalidaDetalle.jsx: la vista de impresion que ya existia (generica,
+  "SIBARITA - NOTA DE SALIDA DE PRODUCTOS") se actualizo para calzar con
+  el talonario real: mismo encabezado de empresa, etiquetas "Secc." /
+  "Orden de Ingreso" en vez de las genericas, la nota "Cuando no hay
+  stock se envia una copia al area de Compras", y pie de pagina con el
+  codigo de formato real "FT-GE-17 ED.-01" y las copias (c.c. Almacen
+  Materia Prima, Almacen [nombre] / c.c. Compras).
+
+Probado contra la base local: build de frontend limpio (tsc + vite sin
+errores), backend levantado localmente (aplico la migracion sin error),
+login real verificado, y round-trip de guia_remision/factura via
+GET/PUT sobre una guia real existente (se dejo en null otra vez despues
+de la prueba, sin tocar datos reales). Revisado con /code-review medium
+antes de comitear: sin hallazgos.
+
+PENDIENTE:
+- El modulo "Solicitud de Materiales" (reverso del talonario de Notas de
+  Salida) sigue sin construir - es funcionalidad nueva, no ajuste de
+  formato, y no era el alcance elegido en esta sesion.
+- El resto de Fase B (tipos de metrica) y las Fases C-G siguen sin
+  alcance claro: falta recuperar o re-generar el detalle fino de esos
+  requerimientos con el cliente antes de construir mas alla de lo que
+  ya cubren la seccion 16 (resumen alto nivel) y los documentos de
+  "para giarse/".
+- El instalador .exe sigue sin regenerar con estos cambios (igual que
+  la Fase A, ver seccion 11 punto 3 y seccion 16): `npm start` ya sirve
+  la version nueva, pero dist/Sibarita Setup 1.0.0.exe sigue siendo el
+  del 21/08.
+- Nada de esto se ha desplegado a Vercel/Render (repo congelado, ver
+  seccion 17).
 
 --------------------------------------------------
 FIN DE LA NOTA

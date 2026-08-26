@@ -98,6 +98,10 @@ async function setup() {
     ALTER TABLE guias ADD COLUMN IF NOT EXISTS estado VARCHAR(20) NOT NULL DEFAULT 'CARGADA'
       CHECK (estado IN ('CARGADA', 'CERRADA'));
 
+    -- Guia de remision y factura del proveedor (Fase B, formato de impresion)
+    ALTER TABLE guias ADD COLUMN IF NOT EXISTS guia_remision VARCHAR(50);
+    ALTER TABLE guias ADD COLUMN IF NOT EXISTS factura VARCHAR(50);
+
     CREATE TABLE IF NOT EXISTS guia_items (
       id SERIAL PRIMARY KEY,
       guia_id INTEGER REFERENCES guias(id),

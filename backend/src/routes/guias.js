@@ -105,7 +105,7 @@ router.get('/:id', verificarToken, async (req, res) => {
 router.post('/', verificarToken, soloRoles('admin', 'supervisor', 'operador'),
   log('CREAR_GUIA', req => `Guia ${req.body.numero_guia}, almacen ${req.body.almacen_id}, ${Array.isArray(req.body.items) ? req.body.items.length : 0} linea(s)`),
   async (req, res) => {
-  const { numero_guia, almacen_id, fecha, items, proveedor, numero_oc, direccion } = req.body
+  const { numero_guia, almacen_id, fecha, items, proveedor, numero_oc, direccion, guia_remision, factura } = req.body
 
   if (!numero_guia || !numero_guia.trim()) {
     return res.status(400).json({ error: 'El numero de guia es requerido' })
@@ -142,13 +142,15 @@ router.post('/', verificarToken, soloRoles('admin', 'supervisor', 'operador'),
     }
 
     const guiaResult = await client.query(
-      `INSERT INTO guias (numero_guia, almacen_id, usuario_id, fecha, proveedor, numero_oc, direccion)
-       VALUES ($1, $2, $3, COALESCE($4, CURRENT_DATE), $5, $6, $7) RETURNING *`,
+      `INSERT INTO guias (numero_guia, almacen_id, usuario_id, fecha, proveedor, numero_oc, direccion, guia_remision, factura)
+       VALUES ($1, $2, $3, COALESCE($4, CURRENT_DATE), $5, $6, $7, $8, $9) RETURNING *`,
       [
         numero_guia.trim(), almacen_id, req.usuario.id, fecha || null,
         (proveedor || '').trim() || null,
         (numero_oc || '').trim() || null,
         (direccion || '').trim() || null,
+        (guia_remision || '').trim() || null,
+        (factura || '').trim() || null,
       ]
     )
     const guia = guiaResult.rows[0]
@@ -270,7 +272,7 @@ router.post('/', verificarToken, soloRoles('admin', 'supervisor', 'operador'),
 router.put('/:id', verificarToken, soloRoles('admin', 'supervisor', 'operador'),
   log('EDITAR_GUIA', req => `Guia ${req.params.id}: ${JSON.stringify(req.body)}`),
   async (req, res) => {
-  const { proveedor, numero_oc, direccion, estado } = req.body
+  const { proveedor, numero_oc, direccion, estado, guia_remision, factura } = req.body
   const ESTADOS = ['CARGADA', 'CERRADA']
 
   if (estado !== undefined && !ESTADOS.includes(estado)) {
@@ -298,6 +300,14 @@ router.put('/:id', verificarToken, soloRoles('admin', 'supervisor', 'operador'),
   if (estado !== undefined) {
     valores.push(estado)
     cambios.push(`estado = $${valores.length}`)
+  }
+  if (guia_remision !== undefined) {
+    valores.push((guia_remision || '').trim() || null)
+    cambios.push(`guia_remision = $${valores.length}`)
+  }
+  if (factura !== undefined) {
+    valores.push((factura || '').trim() || null)
+    cambios.push(`factura = $${valores.length}`)
   }
   if (cambios.length === 0) {
     return res.status(400).json({ error: 'No se envio ningun campo para editar' })

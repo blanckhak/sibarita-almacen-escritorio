@@ -276,17 +276,23 @@ export default function NotaSalidaDetalle() {
         </div>
       )}
 
-      {/* Vista de impresion: replica el formato fisico de Nota de Salida (seccion 10.2) */}
+      {/* Vista de impresion: replica el formato fisico real "Nota de Salida
+          de Activos" de la empresa (talonario FT-GE-17, Fase B) */}
       <div className="hidden print:block border-2 border-gray-800 rounded">
-        <div className="bg-gray-800 text-white text-center font-bold py-2 tracking-wide">
-          SIBARITA — NOTA DE SALIDA DE PRODUCTOS
+        <div className="flex items-start justify-between px-4 pt-3">
+          <div>
+            <div className="font-bold text-lg text-gray-800">MANUFACTURA DE ALIMENTOS S.A.</div>
+            <div className="font-semibold text-sm text-gray-700 uppercase tracking-wide">Nota de Salida de Activos</div>
+          </div>
+          <div className="border border-gray-800 text-center text-sm">
+            <div className="bg-gray-100 px-3 py-0.5 border-b border-gray-800 font-semibold">Fecha</div>
+            <div className="px-3 py-1">{new Date(nota.fecha).toLocaleDateString('es-GT')}</div>
+          </div>
         </div>
-        <div className="text-center text-xs text-gray-500 py-1.5 border-b border-gray-300">
-          N.° {nota.numero_nota} &nbsp;|&nbsp; Fecha: {new Date(nota.fecha).toLocaleDateString('es-GT')}
-        </div>
+        <div className="text-right px-4 text-sm text-red-600 font-bold">N.° {nota.numero_nota}</div>
         <div className="grid grid-cols-2 gap-x-6 gap-y-1 px-4 py-3 text-sm">
-          <div className="border-b border-gray-200 pb-1"><b className="text-gray-500 text-xs uppercase mr-1">Seccion</b> {nota.seccion || '—'}</div>
-          <div className="border-b border-gray-200 pb-1"><b className="text-gray-500 text-xs uppercase mr-1">Guia relacionada</b> {nota.numero_guia || '—'}</div>
+          <div className="border-b border-gray-200 pb-1"><b className="text-gray-500 text-xs uppercase mr-1">Secc.</b> {nota.seccion || '—'}</div>
+          <div className="border-b border-gray-200 pb-1"><b className="text-gray-500 text-xs uppercase mr-1">Orden de Ingreso</b> {nota.numero_guia || '—'}</div>
           <div className="border-b border-gray-200 pb-1"><b className="text-gray-500 text-xs uppercase mr-1">Persona responsable</b> {nota.persona_responsable}</div>
           <div className="border-b border-gray-200 pb-1"><b className="text-gray-500 text-xs uppercase mr-1">Motivo</b> {nota.motivo}</div>
         </div>
@@ -323,10 +329,17 @@ export default function NotaSalidaDetalle() {
         <div className="px-4 py-2 text-xs">
           <b className="text-gray-500 uppercase mr-1">Observaciones</b> {nota.observaciones || ''}
         </div>
+        <div className="px-4 py-1 text-xs italic text-gray-600 border-t border-gray-300">
+          Nota.- Cuando no hay stock se envia una copia al area de Compras.
+        </div>
         <div className="flex justify-between px-4 py-6 text-xs text-gray-500 text-center">
           <div className="border-t border-gray-800 pt-1 w-[30%]">Solicitado por</div>
           <div className="border-t border-gray-800 pt-1 w-[30%]">Revisado por</div>
           <div className="border-t border-gray-800 pt-1 w-[30%]">Aprobado por</div>
+        </div>
+        <div className="flex justify-between items-end px-4 pb-2 pt-1 text-[10px] text-gray-400 border-t border-gray-300">
+          <span>FT-GE-17 ED.-01</span>
+          <span className="text-right">c.c. Almacen Materia Prima, Almacen {nota.detalle[0]?.almacen_nombre || '—'}<br />c.c. Compras</span>
         </div>
       </div>
     </div>

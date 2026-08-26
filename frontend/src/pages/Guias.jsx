@@ -16,7 +16,7 @@ export default function Guias() {
   const [mostrarForm, setMostrarForm] = useState(false)
   const [guardando, setGuardando] = useState(false)
   const [mensaje, setMensaje]     = useState(null)
-  const [form, setForm] = useState({ numero_guia: '', almacen_id: '', fecha: hoy(), proveedor: '', numero_oc: '', direccion: '', items: [LINEA_VACIA()] })
+  const [form, setForm] = useState({ numero_guia: '', almacen_id: '', fecha: hoy(), proveedor: '', numero_oc: '', direccion: '', guia_remision: '', factura: '', items: [LINEA_VACIA()] })
 
   const puedeRegistrar = ['admin', 'supervisor', 'operador'].includes(usuario?.rol)
 
@@ -37,7 +37,7 @@ export default function Guias() {
   useEffect(() => { cargarDatos() }, [])
 
   const abrirNuevo = () => {
-    setForm({ numero_guia: '', almacen_id: '', fecha: hoy(), proveedor: '', numero_oc: '', direccion: '', items: [LINEA_VACIA()] })
+    setForm({ numero_guia: '', almacen_id: '', fecha: hoy(), proveedor: '', numero_oc: '', direccion: '', guia_remision: '', factura: '', items: [LINEA_VACIA()] })
     setMostrarForm(true)
   }
 
@@ -186,6 +186,22 @@ export default function Guias() {
                 <input
                   value={form.direccion}
                   onChange={e => setForm({ ...form, direccion: e.target.value })}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">Guia de Remision <span className="text-gray-400 font-normal">(opcional, la del proveedor)</span></label>
+                <input
+                  value={form.guia_remision}
+                  onChange={e => setForm({ ...form, guia_remision: e.target.value })}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">Factura <span className="text-gray-400 font-normal">(opcional)</span></label>
+                <input
+                  value={form.factura}
+                  onChange={e => setForm({ ...form, factura: e.target.value })}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>

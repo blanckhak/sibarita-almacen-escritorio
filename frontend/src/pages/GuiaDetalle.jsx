@@ -21,6 +21,7 @@ export default function GuiaDetalle() {
   const [guia, setGuia]           = useState(null)
   const [cargando, setCargando]   = useState(true)
   const [imprimiendo, setImprimiendo] = useState(null)
+  const [vistaImpresion, setVistaImpresion] = useState(null) // 'etiquetas' | 'nota'
   const [mensaje, setMensaje]     = useState(null)
   const [editando, setEditando]   = useState(false)
   const [formEdicion, setFormEdicion] = useState(null)
@@ -43,6 +44,8 @@ export default function GuiaDetalle() {
       numero_oc: guia.numero_oc || '',
       direccion: guia.direccion || '',
       estado: guia.estado || 'CARGADA',
+      guia_remision: guia.guia_remision || '',
+      factura: guia.factura || '',
     })
     setEditando(true)
   }
@@ -64,13 +67,13 @@ export default function GuiaDetalle() {
   }
 
   useEffect(() => {
-    if (!imprimiendo) return
+    if (!vistaImpresion) return
     const t = setTimeout(() => window.print(), 150)
     return () => clearTimeout(t)
-  }, [imprimiendo])
+  }, [vistaImpresion])
 
   useEffect(() => {
-    const onAfterPrint = () => setImprimiendo(null)
+    const onAfterPrint = () => { setImprimiendo(null); setVistaImpresion(null) }
     window.addEventListener('afterprint', onAfterPrint)
     return () => window.removeEventListener('afterprint', onAfterPrint)
   }, [])
@@ -83,7 +86,10 @@ export default function GuiaDetalle() {
       setTimeout(() => setMensaje(null), 4000)
     }
     setImprimiendo(etiquetaIds)
+    setVistaImpresion('etiquetas')
   }
+
+  const handleImprimirNota = () => setVistaImpresion('nota')
 
   if (cargando) {
     return <div className="p-6 text-center py-12 text-gray-400">Cargando guia...</div>
@@ -121,6 +127,14 @@ export default function GuiaDetalle() {
                 Editar
               </button>
             )}
+            {puedeImprimir && (
+              <button
+                onClick={handleImprimirNota}
+                className="border border-gray-300 text-gray-700 text-sm px-4 py-2 rounded-lg font-medium hover:bg-gray-50 transition"
+              >
+                Imprimir Nota de Ingreso
+              </button>
+            )}
             {puedeImprimir && conEtiqueta.length > 0 && (
               <button
                 onClick={() => handleImprimir(conEtiqueta.map(it => it.etiqueta_id))}
@@ -153,6 +167,14 @@ export default function GuiaDetalle() {
             <div className="text-gray-400 text-xs font-medium mb-1">Direccion</div>
             <div className="text-gray-800">{guia.direccion || '—'}</div>
           </div>
+          <div className="bg-white rounded-lg border border-gray-200 px-4 py-3">
+            <div className="text-gray-400 text-xs font-medium mb-1">Guia de Remision</div>
+            <div className="text-gray-800">{guia.guia_remision || '—'}</div>
+          </div>
+          <div className="bg-white rounded-lg border border-gray-200 px-4 py-3">
+            <div className="text-gray-400 text-xs font-medium mb-1">Factura</div>
+            <div className="text-gray-800">{guia.factura || '—'}</div>
+          </div>
         </div>
 
         {editando && (
@@ -182,6 +204,22 @@ export default function GuiaDetalle() {
                   <input
                     value={formEdicion.direccion}
                     onChange={e => setFormEdicion(f => ({ ...f, direccion: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-1">Guia de Remision</label>
+                  <input
+                    value={formEdicion.guia_remision}
+                    onChange={e => setFormEdicion(f => ({ ...f, guia_remision: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-1">Factura</label>
+                  <input
+                    value={formEdicion.factura}
+                    onChange={e => setFormEdicion(f => ({ ...f, factura: e.target.value }))}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
@@ -274,8 +312,8 @@ export default function GuiaDetalle() {
         </div>
       </div>
 
-      {/* Vista de impresion: solo visible al imprimir */}
-      <div className="hidden print:block">
+      {/* Vista de impresion de etiquetas: solo visible al imprimir etiquetas */}
+      <div className={vistaImpresion === 'etiquetas' ? 'hidden print:block' : 'hidden'}>
         <div className="grid grid-cols-2 gap-4">
           {itemsAImprimir.map(it => (
             <div key={it.etiqueta_id} className="border border-gray-800 rounded print:break-inside-avoid">
@@ -301,6 +339,74 @@ export default function GuiaDetalle() {
               </div>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* Vista de impresion de la Nota de Ingresos de Activos: replica el
+          formato fisico real de la empresa (talonario "Nota de Ingresos de
+          Activos", Fase B). P. Unit./Total quedan en blanco para llenado a
+          mano porque el inventario de Sibarita no maneja precios. */}
+      <div className={vistaImpresion === 'nota' ? 'hidden print:block border-2 border-gray-800 rounded' : 'hidden'}>
+        <div className="flex items-start justify-between px-4 pt-3">
+          <div>
+            <div className="font-bold text-lg text-gray-800">MANUFACTURA DE ALIMENTOS S.A.</div>
+            <div className="font-semibold text-sm text-gray-700 uppercase tracking-wide">Nota de Ingresos de Activos</div>
+          </div>
+          <div className="border border-gray-800 text-center text-sm">
+            <div className="bg-gray-100 px-3 py-0.5 border-b border-gray-800 font-semibold">Fecha</div>
+            <div className="px-3 py-1">{new Date(guia.fecha).toLocaleDateString('es-GT')}</div>
+          </div>
+        </div>
+        <div className="text-right px-4 text-sm text-red-600 font-bold">N.° {guia.numero_guia}</div>
+
+        <div className="grid grid-cols-2 gap-x-6 gap-y-1 px-4 py-3 text-sm">
+          <div className="border-b border-gray-200 pb-1"><b className="text-gray-500 text-xs uppercase mr-1">Proveedor</b> {guia.proveedor || '—'}</div>
+          <div className="border-b border-gray-200 pb-1"><b className="text-gray-500 text-xs uppercase mr-1">Orden de Compra</b> {guia.numero_oc || '—'}</div>
+          <div className="border-b border-gray-200 pb-1"><b className="text-gray-500 text-xs uppercase mr-1">Guia de Remision</b> {guia.guia_remision || '—'}</div>
+          <div className="border-b border-gray-200 pb-1"><b className="text-gray-500 text-xs uppercase mr-1">Factura</b> {guia.factura || '—'}</div>
+        </div>
+
+        <table className="w-full text-xs mx-4" style={{ width: 'calc(100% - 2rem)', margin: '0.5rem auto' }}>
+          <thead>
+            <tr className="border-b-2 border-gray-800">
+              <th className="text-left py-1">Detalle</th>
+              <th className="text-right py-1">Cantidad</th>
+              <th className="text-right py-1">P. Unit.</th>
+              <th className="text-right py-1">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {guia.items.map(it => (
+              <tr key={it.id} className="border-b border-gray-200">
+                <td className="py-1">{it.producto_nombre}</td>
+                <td className="py-1 text-right">
+                  {it.cantidad}{it.unidad_medida_abreviatura ? ` ${it.unidad_medida_abreviatura}` : ''}
+                </td>
+                <td className="py-1 text-right">&nbsp;</td>
+                <td className="py-1 text-right">&nbsp;</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <div className="px-4 py-2 text-xs">
+          <b className="text-gray-500 uppercase mr-1">Observaciones</b>
+          <span className="inline-block border-b border-gray-400" style={{ width: '80%' }}>&nbsp;</span>
+        </div>
+
+        <div className="px-4 py-2 text-xs text-gray-600 border-t border-gray-300">
+          Por medio de la presente se da conformidad a los siguientes materiales ingresados segun la calidad
+          y caracteristicas por Produccion y Dpto. de Compras.
+        </div>
+
+        <div className="grid grid-cols-3 gap-x-6 px-4 pt-8 pb-2 text-xs text-gray-500 text-center">
+          <div className="border-t border-gray-800 pt-1">V.° B.° Jefe de Mto. {guia.almacen_nombre}</div>
+          <div className="border-t border-gray-800 pt-1">Revisado por: Dpto. Compras</div>
+          <div className="border-t border-gray-800 pt-1">Revisado por: Dpto. Tesoreria</div>
+        </div>
+        <div className="grid grid-cols-2 gap-x-6 px-4 pt-8 pb-4 text-xs text-gray-500 text-center">
+          <div className="border-t border-gray-800 pt-1">Revisado por: Almacen</div>
+          <div className="border-t border-gray-800 pt-1">Aprobado por: Jefe de Produccion</div>
         </div>
       </div>
     </div>

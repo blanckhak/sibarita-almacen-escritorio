@@ -126,7 +126,13 @@ CREATE TABLE guias (
   proveedor VARCHAR(150),
   numero_oc VARCHAR(50),
   direccion VARCHAR(200),
-  estado VARCHAR(20) NOT NULL DEFAULT 'CARGADA' CHECK (estado IN ('CARGADA', 'CERRADA'))
+  estado VARCHAR(20) NOT NULL DEFAULT 'CARGADA' CHECK (estado IN ('CARGADA', 'CERRADA')),
+  -- Datos del documento fisico del proveedor (Fase B, formato de impresion):
+  -- el numero de guia interno de Sibarita no es el mismo que la guia de
+  -- remision o factura que trae el proveedor, y el formato fisico "Nota de
+  -- Ingresos de Activos" los pide como campos separados.
+  guia_remision VARCHAR(50),
+  factura VARCHAR(50)
 );
 
 CREATE UNIQUE INDEX guias_numero_almacen_unique ON guias (numero_guia, almacen_id);
