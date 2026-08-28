@@ -1,0 +1,103 @@
+FASE 6 — Reportes: salidas por motivo + alerta de stock sin movimiento
+=====================================================================
+Fecha: 28/08/2026
+
+QUE SE HIZO
+-----------
+Los dos puntos del Bloque 3 que en la Fase 3 se definieron como
+"reporte" y "alerta" (no cambian el esquema de la base):
+
+1. SALIDAS POR MOTIVO (Bloque 3: "stock consolidado en el campo Motivo")
+   - backend/src/routes/reportes.js (NUEVO):
+     GET /api/reportes/salidas-por-motivo?desde=&hasta=&almacen_id=
+     Suma las unidades que salieron (notas_salida_detalle.cantidad)
+     agrupadas por motivo + almacen. Solo cuenta notas que YA salieron
+     fisicamente (n.fecha_salida IS NOT NULL); una nota EN_APROBACION
+     todavia no movio stock. Filtro opcional por rango de fechas
+     (sobre fecha_salida) y por almacen.
+   - Registrado en backend/server.js (app.use('/api/reportes', ...)).
+   - frontend/src/pages/Reportes.jsx:
+     * Tarjeta nueva "Salidas por Motivo" con export Excel/PDF
+       (columnas Motivo / Almacen / Notas / Unidades).
+     * Grafica de barras nueva al pie: unidades por motivo (todos los
+       almacenes juntos), con dos <input type=date> "Desde"/"Hasta"
+       que recargan solos el reporte (useEffect sobre [desde, hasta])
+       + boton "Limpiar".
+   - frontend/src/utils/motivos.js (NUEVO): lista MOTIVOS + helper
+     motivoLabel(), para no repetir la lista (estaba solo en
+     NotasSalida.jsx). NotasSalida.jsx ahora la importa de ahi.
+
+2. ALERTA DE STOCK SIN MOVIMIENTO (Bloque 3: "parametros de stock a
+   10 dias")
+   - backend/src/routes/alertas.js: el endpoint GET /api/alertas ahora
+     tambien devuelve alertas categoria 'STOCK_SIN_MOVIMIENTO'.
+     Etiquetas estado='EN_ALMACEN' cuya ultima actividad (la mas
+     reciente entre e.fecha_generacion y su ultimo evento en
+     etiqueta_historial) es de hace >= DIAS_SIN_MOVIMIENTO dias
+     (env, default 10). Se agrupan por producto+almacen para no llenar
+     el panel con una fila por codigo: "PRODUCTO en ALMACEN: N
+     codigo(s) llevan X+ dias sin movimiento". nivel critico si
+     dias_max >= 3x el limite.
+   - frontend/src/components/Notificaciones.jsx: seccion nueva "Stock
+     sin movimiento" en el desplegable de la campana; el punto rojo del
+     badge ahora tambien se enciende si hay una de estas en nivel
+     critico (se extrajo a la variable hayCritico).
+   - backend/src/routes/reportes.js: ademas, version detallada y
+     exportable: GET /api/reportes/stock-sin-movimiento?dias=
+     (una fila por etiqueta: codigo, producto, almacen, dias_inmovil,
+     ultimo_movimiento). Tarjeta "Stock sin Movimiento" en Reportes.jsx
+     con export Excel/PDF.
+
+Sin cambios de esquema. Ninguna migracion. Ningun endpoint destructivo.
+
+PROBADO (contra la base local sibarita_db, datos de la Fase 0)
+-------------------------------------------------------------
+- Build de frontend limpio: `npm run build` (tsc + vite) sin errores.
+  frontend/dist copiado a backend/frontend-dist.
+- GET /api/reportes/salidas-por-motivo (con y sin rango de fechas):
+  devuelve 7 filas motivo/almacen. Total 293 unidades. La grafica del
+  front coincide: Uso interno 225, Reparacion 45, Desecho 15,
+  Prestamo 8. (captura 02)
+- GET /api/reportes/stock-sin-movimiento: con el default de 10 dias
+  devuelve [] (los datos de la Fase 0 son de hace <10 dias, correcto).
+  Con ?dias=1 devuelve 12 etiquetas ordenadas por dias_inmovil DESC;
+  con ?dias=0 tambien responde (se corrigio el `parseInt(x) || def`
+  que ignoraba el 0 -> ahora usa Number.isFinite).
+- Alerta STOCK_SIN_MOVIMIENTO: se reinicio el backend con
+  DIAS_SIN_MOVIMIENTO=3 solo para la prueba visual -> GET /api/alertas
+  devolvio 4 alertas agrupadas (Plancha Inox/MALSA, TONILLO/INDELPAS,
+  GLP ENVASADO 15 KG/MALSA con 2 codigos, LLAVE DE PESO/JOPISA) y el
+  desplegable de la campana las mostro en su seccion (captura 03).
+  El backend se volvio a dejar con la config normal (10 dias) despues.
+- Login real verificado (admin@sibarita.com) en la app corriendo.
+- No se creo ni borro ningun dato: todo fue lectura.
+
+CAPTURAS
+--------
+01_reportes_tarjetas.jpg          - las 6 tarjetas de Reportes (2 nuevas)
+02_grafica_salidas_por_motivo.jpg - grafica nueva + filtros de fecha
+03_alerta_stock_sin_movimiento.jpg- seccion nueva en la campana
+
+/CODE-REVIEW (medium, 28/08) - 3 hallazgos, los 3 corregidos
+-----------------------------------------------------------
+1. Reportes.jsx: el Promise.all del mount no tenia .catch y ahora
+   depende del endpoint nuevo -> si fallaba, la pagina quedaba en
+   "Cargando reportes..." para siempre. Corregido con .catch +
+   .finally(setCargando(false)).
+2. reportes.js: stock-sin-movimiento inline-aba el subquery de
+   "ultima actividad" 3 veces. Corregido a JOIN LATERAL (mismo patron
+   que alertas.js).
+3. Reportes.jsx: el fetch de salidas-por-motivo en el useEffect de
+   fechas no tenia .catch (unhandled rejection). Corregido.
+Re-probado despues de los fixes: los 3 endpoints y el build siguen OK.
+
+PENDIENTE / A TENER EN CUENTA
+----------------------------
+- Nada de esta fase esta commiteado a git todavia (hay un diff grande
+  previo sin commitear de fases 0/2/3 y de los cambios puntuales de la
+  seccion 20; decidir con el usuario como separar los commits).
+- El instalador .exe no se regenero (igual que fases anteriores);
+  `npm start` ya sirve la version nueva porque se actualizo
+  backend/frontend-dist.
+- Env nueva opcional: DIAS_SIN_MOVIMIENTO (default 10), usada por
+  alertas.js y reportes.js.

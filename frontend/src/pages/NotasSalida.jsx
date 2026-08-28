@@ -2,14 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import api from '../utils/api'
 import { useAuth } from '../context/AuthContext'
-
-const MOTIVOS = [
-  { value: 'USO_INTERNO', label: 'Uso interno' },
-  { value: 'PRESTAMO',    label: 'Prestamo' },
-  { value: 'REPARACION',  label: 'Reparacion' },
-  { value: 'DESECHO',     label: 'Desecho' },
-  { value: 'OTRO',        label: 'Otro' },
-]
+import { MOTIVOS } from '../utils/motivos'
 
 const colorEstado = {
   PENDIENTE:     'bg-orange-100 text-orange-700',

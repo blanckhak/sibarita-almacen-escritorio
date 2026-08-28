@@ -21,9 +21,13 @@ export default function Notificaciones() {
 
   const stock       = alertas.filter(a => a.categoria === 'STOCK_BAJO')
   const devoluciones = alertas.filter(a => a.categoria === 'DEVOLUCION_VENCIDA')
+  const sinMovimiento = alertas.filter(a => a.categoria === 'STOCK_SIN_MOVIMIENTO')
   const criticas    = stock.filter(a => a.nivel === 'critico')
   const advertencias = stock.filter(a => a.nivel === 'advertencia')
   const total = alertas.length
+  const hayCritico = criticas.length > 0
+    || devoluciones.some(d => d.nivel === 'critico')
+    || sinMovimiento.some(s => s.nivel === 'critico')
 
   return (
     <div className="relative" ref={ref}>
@@ -37,7 +41,7 @@ export default function Notificaciones() {
             d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
         </svg>
         {total > 0 && (
-          <span className={`absolute -top-1 -right-1 text-white text-xs font-bold w-4 h-4 rounded-full flex items-center justify-center ${(criticas.length > 0 || devoluciones.some(d => d.nivel === 'critico')) ? 'bg-red-500' : 'bg-yellow-500'}`}>
+          <span className={`absolute -top-1 -right-1 text-white text-xs font-bold w-4 h-4 rounded-full flex items-center justify-center ${hayCritico ? 'bg-red-500' : 'bg-yellow-500'}`}>
             {total}
           </span>
         )}
@@ -91,6 +95,20 @@ export default function Notificaciones() {
                   <p className={`text-xs font-semibold ${a.nivel === 'critico' ? 'text-red-700' : 'text-orange-700'}`}>Nota {a.numero_nota}</p>
                   <p className={`text-xs mt-0.5 ${a.nivel === 'critico' ? 'text-red-500' : 'text-orange-600'}`}>
                     {a.persona_responsable} — {a.dias_habiles_pendiente} dias habiles pendiente
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {sinMovimiento.length > 0 && (
+            <div>
+              <p className="px-4 pt-3 pb-1 text-xs font-bold text-slate-600 uppercase tracking-wide">Stock sin movimiento</p>
+              {sinMovimiento.map((a, i) => (
+                <div key={i} className={`px-4 py-2.5 border-l-4 mx-3 mb-2 rounded-r-lg ${a.nivel === 'critico' ? 'border-red-500 bg-red-50' : 'border-slate-400 bg-slate-50'}`}>
+                  <p className={`text-xs font-semibold ${a.nivel === 'critico' ? 'text-red-700' : 'text-slate-700'}`}>{a.producto} — {a.almacen}</p>
+                  <p className={`text-xs mt-0.5 ${a.nivel === 'critico' ? 'text-red-500' : 'text-slate-500'}`}>
+                    {a.codigos} codigo(s), {a.dias_max}+ dias sin movimiento
                   </p>
                 </div>
               ))}

@@ -2,12 +2,17 @@ import { useEffect, useState } from 'react'
 import api from '../utils/api'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { exportarCSV, exportarPDF } from '../utils/exportar'
+import { motivoLabel } from '../utils/motivos'
 
 export default function Reportes() {
   const [resumen, setResumen]         = useState([])
   const [movimientos, setMovimientos] = useState([])
   const [inventario, setInventario]   = useState([])
   const [reimpresiones, setReimpresiones] = useState([])
+  const [salidasMotivo, setSalidasMotivo] = useState([])
+  const [sinMovimiento, setSinMovimiento] = useState([])
+  const [desde, setDesde]             = useState('')
+  const [hasta, setHasta]             = useState('')
   const [cargando, setCargando]       = useState(true)
 
   useEffect(() => {
@@ -16,14 +21,27 @@ export default function Reportes() {
       api.get('/api/movimientos'),
       api.get('/api/inventario'),
       api.get('/api/etiquetas/reportes/reimpresiones'),
-    ]).then(([res, mov, inv, reimp]) => {
+      api.get('/api/reportes/stock-sin-movimiento'),
+    ]).then(([res, mov, inv, reimp, sinMov]) => {
       setResumen(res.data)
       setMovimientos(mov.data)
       setInventario(inv.data)
       setReimpresiones(reimp.data)
-      setCargando(false)
-    })
+      setSinMovimiento(sinMov.data)
+    }).catch(err => {
+      console.error('No se pudieron cargar los reportes', err)
+    }).finally(() => setCargando(false))
   }, [])
+
+  // Salidas por motivo: se recarga sola cuando cambia el rango de fechas.
+  useEffect(() => {
+    const params = {}
+    if (desde) params.desde = desde
+    if (hasta) params.hasta = hasta
+    api.get('/api/reportes/salidas-por-motivo', { params })
+      .then(res => setSalidasMotivo(res.data))
+      .catch(err => console.error('No se pudo cargar salidas por motivo', err))
+  }, [desde, hasta])
 
   const totalGeneral = resumen.reduce((s, a) => s + Number(a.total), 0)
   const totalNuevos  = resumen.reduce((s, a) => s + Number(a.nuevos), 0)
@@ -33,6 +51,29 @@ export default function Reportes() {
     almacen:      a.almacen,
     Nuevos:       Number(a.nuevos),
     Devoluciones: Number(a.devoluciones),
+  }))
+
+  // Filas de "salidas por motivo" con el motivo ya legible, para tabla y export.
+  const salidasMotivoFilas = salidasMotivo.map(r => ({
+    ...r,
+    motivo_label: motivoLabel(r.motivo),
+  }))
+  const totalUnidadesMotivo = salidasMotivo.reduce((s, r) => s + Number(r.unidades), 0)
+
+  // Grafica: unidades que salieron sumadas por motivo (todos los almacenes juntos).
+  const datosGraficaMotivo = Object.values(
+    salidasMotivo.reduce((acc, r) => {
+      acc[r.motivo] = acc[r.motivo] || { motivo: motivoLabel(r.motivo), Unidades: 0 }
+      acc[r.motivo].Unidades += Number(r.unidades)
+      return acc
+    }, {})
+  )
+
+  const sinMovimientoFilas = sinMovimiento.map(r => ({
+    ...r,
+    ultimo_movimiento_fecha: r.ultimo_movimiento
+      ? new Date(r.ultimo_movimiento).toLocaleDateString('es-GT')
+      : '—',
   }))
 
   if (cargando) return <div className="p-6 text-center text-gray-400">Cargando reportes...</div>
@@ -45,7 +86,7 @@ export default function Reportes() {
       </div>
 
       {/* Tarjetas de reporte */}
-      <div className="grid grid-cols-4 gap-6 mb-10">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-6 mb-10">
 
         {/* Reporte resumen */}
         <div className="bg-white rounded-xl shadow p-6 border border-gray-100">
@@ -191,10 +232,84 @@ export default function Reportes() {
             </button>
           </div>
         </div>
+
+        {/* Reporte salidas por motivo (Bloque 3) */}
+        <div className="bg-white rounded-xl shadow p-6 border border-gray-100">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="bg-purple-100 text-purple-700 p-2 rounded-lg text-xl">🎯</div>
+            <div>
+              <h3 className="font-semibold text-gray-800">Salidas por Motivo</h3>
+              <p className="text-xs text-gray-400">{salidasMotivo.length} combinaciones motivo/almacen</p>
+            </div>
+          </div>
+          <p className="text-sm text-gray-500 mb-4">{totalUnidadesMotivo.toLocaleString()} unidades salidas en el rango</p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => exportarCSV(salidasMotivoFilas, [
+                { titulo: 'Motivo', campo: 'motivo_label' },
+                { titulo: 'Almacen', campo: 'almacen' },
+                { titulo: 'Notas', campo: 'notas' },
+                { titulo: 'Unidades', campo: 'unidades' },
+              ], 'salidas_por_motivo')}
+              className="flex-1 bg-green-600 hover:bg-green-700 text-white text-xs py-2 rounded-lg transition"
+            >
+              Excel
+            </button>
+            <button
+              onClick={() => exportarPDF(salidasMotivoFilas, [
+                { titulo: 'Motivo', campo: 'motivo_label' },
+                { titulo: 'Almacen', campo: 'almacen' },
+                { titulo: 'Notas', campo: 'notas' },
+                { titulo: 'Unidades', campo: 'unidades' },
+              ], 'Salidas por Motivo', 'salidas_por_motivo')}
+              className="flex-1 bg-red-600 hover:bg-red-700 text-white text-xs py-2 rounded-lg transition"
+            >
+              PDF
+            </button>
+          </div>
+        </div>
+
+        {/* Alerta de stock sin movimiento (Bloque 3) */}
+        <div className="bg-white rounded-xl shadow p-6 border border-gray-100">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="bg-slate-100 text-slate-700 p-2 rounded-lg text-xl">🕸️</div>
+            <div>
+              <h3 className="font-semibold text-gray-800">Stock sin Movimiento</h3>
+              <p className="text-xs text-gray-400">{sinMovimiento.length} codigos, 10+ dias quietos</p>
+            </div>
+          </div>
+          <p className="text-sm text-gray-500 mb-4">Etiquetas en almacen sin ninguna actividad</p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => exportarCSV(sinMovimientoFilas, [
+                { titulo: 'Codigo', campo: 'etiqueta_codigo' },
+                { titulo: 'Producto', campo: 'producto_nombre' },
+                { titulo: 'Almacen', campo: 'almacen_nombre' },
+                { titulo: 'Dias sin movimiento', campo: 'dias_inmovil' },
+                { titulo: 'Ultimo movimiento', campo: 'ultimo_movimiento_fecha' },
+              ], 'stock_sin_movimiento')}
+              className="flex-1 bg-green-600 hover:bg-green-700 text-white text-xs py-2 rounded-lg transition"
+            >
+              Excel
+            </button>
+            <button
+              onClick={() => exportarPDF(sinMovimientoFilas, [
+                { titulo: 'Codigo', campo: 'etiqueta_codigo' },
+                { titulo: 'Producto', campo: 'producto_nombre' },
+                { titulo: 'Almacen', campo: 'almacen_nombre' },
+                { titulo: 'Dias', campo: 'dias_inmovil' },
+                { titulo: 'Ultimo mov.', campo: 'ultimo_movimiento_fecha' },
+              ], 'Stock sin Movimiento', 'stock_sin_movimiento')}
+              className="flex-1 bg-red-600 hover:bg-red-700 text-white text-xs py-2 rounded-lg transition"
+            >
+              PDF
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Grafica comparativa */}
-      <div className="bg-white rounded-xl shadow p-6">
+      <div className="bg-white rounded-xl shadow p-6 mb-8">
         <h2 className="text-lg font-semibold text-gray-700 mb-6">Grafica Comparativa por Almacen</h2>
         <ResponsiveContainer width="100%" height={300}>
           <BarChart data={datosGrafica} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
@@ -207,6 +322,38 @@ export default function Reportes() {
             <Bar dataKey="Devoluciones" fill="#f97316" radius={[4,4,0,0]} />
           </BarChart>
         </ResponsiveContainer>
+      </div>
+
+      {/* Grafica de salidas por motivo */}
+      <div className="bg-white rounded-xl shadow p-6">
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+          <h2 className="text-lg font-semibold text-gray-700">Salidas por Motivo</h2>
+          <div className="flex items-center gap-2 text-sm">
+            <label className="text-gray-500">Desde</label>
+            <input type="date" value={desde} onChange={e => setDesde(e.target.value)}
+              className="border border-gray-200 rounded-lg px-2 py-1" />
+            <label className="text-gray-500">Hasta</label>
+            <input type="date" value={hasta} onChange={e => setHasta(e.target.value)}
+              className="border border-gray-200 rounded-lg px-2 py-1" />
+            {(desde || hasta) && (
+              <button onClick={() => { setDesde(''); setHasta('') }}
+                className="text-blue-600 hover:underline">Limpiar</button>
+            )}
+          </div>
+        </div>
+        {datosGraficaMotivo.length === 0 ? (
+          <p className="text-center text-gray-400 py-10 text-sm">No hay salidas registradas en el rango seleccionado</p>
+        ) : (
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={datosGraficaMotivo} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis dataKey="motivo" />
+              <YAxis />
+              <Tooltip />
+              <Bar dataKey="Unidades" fill="#7c3aed" radius={[4,4,0,0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
       </div>
     </div>
   )

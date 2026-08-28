@@ -1,9 +1,9 @@
 ====================================================
 NOTAS - PROYECTO SIBARITA (Sistema de Gestion de Almacenes)
 Fecha de la nota: 20/08/2026
-Ultima actualizacion: 26/08/2026 (ver secciones 18 y 19, Fase B -
-formato de impresion y modulo Solicitud de Materiales - entregadas en
-esta sesion)
+Ultima actualizacion: 27/08/2026 (ver seccion 20: se encontro el
+documento de requerimientos que se daba por perdido en la seccion 18,
+y arranco un plan de fases para implementarlo)
 ====================================================
 
 --------------------------------------------------
@@ -896,6 +896,249 @@ PENDIENTE:
 - Instalador .exe y deploy Vercel/Render: mismo estado que seccion 18
   (npm start sirve todo lo nuevo, el .exe y la web siguen sin
   regenerar/actualizar).
+
+--------------------------------------------------
+20. SE ENCONTRO Cambios_del_Sistema_Requerimientos.txt Y PLAN DE FASES
+    (27/08/2026)
+--------------------------------------------------
+Contexto: al arrancar la sesion del 27/08 se hicieron primero varios
+cambios puntuales pedidos por el usuario en el chat (sin relacion con
+el documento de requerimientos, que todavia no se habia encontrado):
+
+- Campo Proveedor en Guias.jsx y GuiaDetalle.jsx: paso de texto libre a
+  un <select> con los proveedores ya usados en guias anteriores +
+  opcion "+ Otro proveedor (escribir)", mismo patron que ya existia
+  para "Producto nuevo" en la linea de items. Logica centralizada en
+  frontend/src/utils/proveedores.js (extraerProveedoresConocidos).
+- Etiqueta del campo "N de guia" -> "N de Guia / Factura / Boleta"
+  (el campo es el mismo, solo se aclaro que ahi puede ir cualquiera de
+  los 3 documentos).
+- Roles: se reemplazo el set completo (admin/supervisor/operador/
+  auditor/transportista) por los 4 perfiles reales de la empresa:
+  admin / almacen / mantenimiento / compras. Detalle:
+  * backend/src/config/database.sql y setup.js: nuevo seed de roles +
+    migracion idempotente en setup.js (corre en cada arranque, sin
+    condicion) que renombra supervisor->almacen, fusiona operador en
+    almacen (UPDATE usuarios + DELETE FROM roles), auditor->compras,
+    transportista->mantenimiento, y realinea las cuentas demo
+    pre-existentes con los nuevos emails/passwords
+    (almacen@sibarita.com/almac123, mantenimiento@sibarita.com/mant123,
+    compras@sibarita.com/compras123; admin sin cambios). La cuenta
+    demo vieja "operador@sibarita.com" no se borra ni se renombra,
+    queda duplicada con rol 'almacen' (inofensivo).
+  * Mapeo de permisos: almacen opera el dia a dia (guias, notas de
+    salida, inventario, movimientos, atiende/rechaza solicitudes);
+    mantenimiento solo crea Solicitudes de Materiales y ve guias/notas
+    de salida; compras es de solo lectura (guias, reportes, historial).
+    Aplicado en los soloRoles(...) de guias.js, notasSalida.js,
+    etiquetas.js, logs.js, solicitudesMateriales.js, y se agrego
+    soloRoles a movimientos.js (antes no tenia ninguna restriccion de
+    rol en el backend, solo en el frontend).
+  * Nuevo GET /api/usuarios/roles (admin-only) para que
+    frontend/src/pages/Usuarios.jsx deje de hardcodear IDs de rol en un
+    array fijo -> ahora carga el select de Rol dinamicamente. Import
+    en App.jsx, Navbar.jsx y Login.jsx (usuarios de prueba) actualizados
+    a los 4 roles nuevos.
+  * Probado: reinicio de backend (corrio la migracion sin error),
+    login real con los 4 perfiles nuevos verificando menu y permisos
+    de creacion/edicion, usuario de prueba creado y revertido en el
+    select de Proveedor.
+- Formulario "Nuevo Ingreso" (Guias.jsx): se sacaron los campos
+  Direccion, Guia de Remision y Factura (quedan disponibles para
+  cargarlos despues desde "Editar guia" en GuiaDetalle.jsx, igual que
+  ya pasaba con la Orden de Compra). El alta rapida quedo con: N de
+  Guia/Factura/Boleta, Almacen, Fecha, Proveedor, N de O.C.
+
+NADA de lo anterior esta commiteado a git todavia (ver "git status" al
+cierre de sesion) ni paso por /code-review.
+
+Despues de esos cambios puntuales, el usuario pregunto si me estaba
+guiando por un documento llamado "Cambios_del_Sistema_Requerimientos" -
+resulto que existe en para giarse/Cambios_del_Sistema_Requerimientos.txt
+y NO se habia leido en ninguna sesion anterior. Es, con alta probabilidad,
+el documento de ~30 requerimientos de las Fases B-G que la seccion 18
+daba por perdido (el resumen alto nivel de la seccion 16 era lo unico
+que quedaba). Son 7 bloques:
+
+1. Proveedores y O.C. -> YA CUBIERTO por el codigo actual (incluyendo el
+   cambio de proveedor de hoy).
+2. Gestion de guias: vincular guia<->nota de salida ya existe
+   (notas_salida.guia_id se calcula solo, se muestra como "Orden de
+   Ingreso" en NotaSalidaDetalle.jsx). Falta: filtrar Guias.jsx para
+   mostrar solo CARGADA por defecto; "tipos de metrica" ENTERO/EN
+   PARTIDA (no existe nada parecido en el schema, requerimiento
+   ambiguo, sigue bloqueado igual que antes); edicion limitada de
+   guias cerradas (ambiguo, falta aclarar que significa "su orden").
+3. Motivos/stock/codigos: el campo motivo de notas_salida ya existe:
+   falta "stock consolidado por motivo" y "parametros de stock a 10
+   dias" - mezcla de conceptos de alerta/reorden, necesita aclaracion.
+4. Devoluciones: ya existe un flujo (POST /:id/devolucion en
+   notasSalida.js) que reactiva la misma etiqueta; falta estado "Usado"
+   + codigo nuevo para el item devuelto + Nota de devolucion
+   imprimible - necesita aclarar la regla de negocio antes de tocar
+   schema.
+5. Destino "Otro" en guia_items (hoy CHECK fijo a ALMACEN/OFICINA/
+   LABORATORIO, sin texto libre) -> patron ya probado en
+   categoria/categoria_detalle de Solicitud de Materiales, bajo riesgo.
+   "Compras diarias" es modulo nuevo, sin modelo de datos aun.
+6. Impresora Epson FX-890 II: SE CONFIRMO CON EL USUARIO que imprimen
+   sobre el talonario fisico pre-impreso, no en blanco -> el formato de
+   impresion de la seccion 18 (replica completa con bordes) hay que
+   reemplazarlo por una plantilla que imprima SOLO los datos variables,
+   posicionados en cm para calzar sobre el papel real. Se armo una
+   ficha de calibracion imprimible/rellenable (HTML, en el scratchpad
+   de la sesion, no publicada todavia) para que el usuario mida la Nota
+   de Ingreso de Activos con una regla y pase los datos. El resto de
+   ese bloque (procesos en 2do plano de servicios de
+   modificacion/limpieza) es demasiado ambiguo para disenar sin mas
+   contexto del cliente.
+7. Stock en Orden de Salida (hay que aclarar si se refiere al stock
+   agregado de la tabla inventario -Fase A- o a las etiquetas
+   individuales del flujo Fase 2, son dos conceptos de stock distintos
+   y conviven hoy); resiliencia de red offline (el cambio mas grande de
+   los 7 bloques, requiere arquitectura aparte); validacion de
+   duplicados (falta precisar que duplicidad exacta) y "pestana de
+   alcance" (redaccion demasiado vaga).
+
+PLAN DE FASES acordado con el usuario (ver tambien el archivo de plan
+en C:\Users\DRGATO\.claude\plans\twinkly-knitting-jellyfish.md):
+- Fase 0: sembrar datos de prueba mas ricos en sibarita_db (productos
+  variados, guias/inventario repartidos entre MALSA/JOPISA/INDELPAS,
+  notas de salida con motivos variados, solicitudes en varios estados)
+  para poder ver el Dashboard y el detalle por almacen con numeros
+  creibles, y tener casos concretos para discutir "stock consolidado"
+  en la Fase 3.
+- Fase 1: calibracion de impresion matricial (Nota de Ingreso primero
+  como piloto, despues Nota de Salida y Solicitud de Materiales).
+- Fase 2: ajustes de bajo riesgo con patron ya probado (filtro CARGADA
+  en Guias.jsx, destino "Otro" en guia_items).
+- Fase 3: aclarar con el cliente/usuario, bloque por bloque, todo lo
+  marcado arriba como ambiguo, antes de disenar codigo.
+- Fase 4: resiliencia de red offline, al final y aparte por ser la de
+  mayor riesgo/arquitectura.
+
+Se acordo con el usuario: se trabaja en modo automatico DENTRO de cada
+fase, pero se para a pedir confirmacion AL TERMINAR cada fase antes de
+arrancar la siguiente. Cada fase guarda sus capturas en su propia
+subcarpeta dentro de captura/ (ej. captura/fase0_datos_prueba/) con un
+NOTA.txt explicando que se hizo. Esta seccion 20 se va a seguir
+actualizando a medida que cierra cada fase, en vez de esperar al final
+de la sesion.
+
+FASE 0 CERRADA (27/08/2026): se sembraron datos de prueba realistas
+contra sibarita_db via la API real (no SQL directo): 8 productos
+nuevos, 5 guias repartidas en los 3 almacenes (12 etiquetas), 5 notas
+de salida con motivos variados, 4 solicitudes de materiales en
+categorias y estados distintos (pendiente/atendida/rechazada). Detalle
+completo y capturas en captura/fase0_datos_prueba/NOTA.txt. Estos datos
+de prueba se dejan (no se limpian) porque son la base para las fases
+siguientes. No se toco codigo en esta fase.
+
+FASE 1 ARRANCADA (27/08/2026): se publico la ficha de calibracion
+(Artifact) para que el usuario mida el talonario real de la Nota de
+Ingreso de Activos. Sigue esperando que el usuario pase las medidas
+(no hay forma de verlas hasta que las pegue en el chat, la ficha guarda
+todo en localStorage del navegador del usuario, no llega a esta
+sesion).
+
+FASE 2 CERRADA (27/08/2026): filtro "solo CARGADA por defecto" en
+Guias.jsx (con checkbox para ver tambien las cerradas) + destino "Otro"
+en las lineas de guia (guia_items.destino_detalle, mismo patron que
+categoria_detalle de Solicitud de Materiales). Detalle completo,
+capturas y lo probado en captura/fase2_ajustes_bajo_riesgo/NOTA.txt.
+
+FASE 3 CERRADA (28/08/2026): se aclararon con el usuario, uno por uno,
+todos los bloques ambiguos del documento de requerimientos. No se toco
+codigo. Detalle completo en captura/fase3_aclaraciones/NOTA.txt.
+Decisiones tomadas (regla de negocio de cada punto):
+
+- METRICA ENTERO / EN PARTIDA (Bloque 2): es un atributo FIJO del
+  producto en el CATALOGO (no por linea, no por guia). "EN PARTIDA"
+  abre una sub-tabla de partidas parciales (cantidad + referencia) que
+  suman la cantidad total de la linea. "ENTERO" = comportamiento actual.
+- EDITAR GUIA CERRADA (Bloque 2): en estado CERRADA solo se puede
+  cambiar la CANTIDAD de las lineas y el NUMERO DE O.C. Nada mas.
+- STOCK CONSOLIDADO POR MOTIVO (Bloque 3): es un REPORTE de salidas
+  agrupadas por motivo (uso interno / prestamo / reparacion / desecho /
+  otro), por almacen y periodo. No es marcar el inventario con motivo.
+- "CODIGO NUEVO EN NOMBRE USADO" (Bloque 3): NO es requerimiento aparte,
+  es lo mismo que la devolucion "Usado" del Bloque 4.
+- "PARAMETROS DE STOCK A 10 DIAS" (Bloque 3): es una ALERTA DE STOCK
+  SIN MOVIMIENTO -> etiquetas/productos con 10+ dias en almacen sin
+  salir.
+- DEVOLUCION "USADO" (Bloque 4): el item devuelto a Mesa marcado como
+  usado REINGRESA al inventario con una ETIQUETA/CODIGO NUEVO (marcado
+  usado, separado del stock nuevo) PERO SI cuenta para el stock
+  consolidado. Nota de devolucion imprimible, ingreso por unidad.
+- COMPRAS DIARIAS (Bloque 5): MODULO NUEVO APARTE (fecha, oficina,
+  proveedor, montos), ligado OPCIONALMENTE a una Solicitud de
+  Materiales. No es extension del modulo actual ni un reporte.
+- SERVICIOS (Bloque 6): guia o linea de TIPO "SERVICIO" -> se registra
+  e imprime, NO genera etiqueta ni toca inventario.
+- STOCK EN ORDEN DE SALIDA (Bloque 7): mostrar LOS DOS -> total
+  agregado por producto + conteo de etiquetas individuales disponibles.
+- "QUE LOS PRODUCTOS NO SE CRUCEN" (Bloque 7): control de CONCURRENCIA
+  sobre la MISMA ETIQUETA (bloquear/avisar si dos operaciones tocan el
+  mismo codigo a la vez).
+- "PESTANA DE ALCANCE / INGRESO NORMAL" (Bloque 7): solo una
+  advertencia, no romper el flujo actual. NADA que construir.
+
+DESGLOSE DE FASES DE IMPLEMENTACION PROPUESTO (post Fase 3, pendiente
+de que el usuario confirme el orden antes de arrancar):
+- Fase 5: Devoluciones "Usado" (etiqueta nueva marcada usado + reingreso
+  a inventario contando para consolidado + Nota de devolucion
+  imprimible). Amplia el flujo POST /:id/devolucion que ya existe.
+- Fase 6: Reportes -> salidas por motivo + alerta de stock sin
+  movimiento (10 dias). Solo lectura, bajo riesgo.
+- Fase 7: Metrica de producto en catalogo (ENTERO / EN PARTIDA) +
+  sub-tabla de partidas en las lineas de guia EN PARTIDA.
+- Fase 8: Guia/linea tipo "Servicio" (sin etiqueta ni inventario) +
+  edicion de guia CERRADA restringida a cantidad y N de O.C.
+- Fase 9: Stock visible en la Orden de Salida (agregado + etiquetas) +
+  control de concurrencia sobre etiqueta.
+- Fase 10: Modulo nuevo "Compras diarias".
+  (Fase 1 = calibracion impresion, Fase 4 = offline, siguen igual.)
+
+FASE 6 ENTREGADA (28/08/2026, pasada por /code-review, pendiente commit): los dos
+puntos del Bloque 3 que en la Fase 3 se definieron como "reporte" y
+"alerta" (sin cambios de esquema). Detalle y capturas en
+captura/fase6_reportes/NOTA.txt. Resumen:
+- backend/src/routes/reportes.js (NUEVO) + registrado en server.js:
+  * GET /api/reportes/salidas-por-motivo?desde=&hasta=&almacen_id=
+    -> suma unidades salidas por motivo+almacen; solo notas con
+    fecha_salida NOT NULL (EN_APROBACION no cuenta).
+  * GET /api/reportes/stock-sin-movimiento?dias= -> una fila por
+    etiqueta EN_ALMACEN sin actividad hace N+ dias (default 10).
+- backend/src/routes/alertas.js: GET /api/alertas ahora tambien
+  devuelve categoria 'STOCK_SIN_MOVIMIENTO', agrupada por
+  producto+almacen. Env nueva DIAS_SIN_MOVIMIENTO (default 10).
+- frontend: Reportes.jsx con 2 tarjetas nuevas (Excel/PDF) + grafica
+  de salidas por motivo con filtros de fecha; Notificaciones.jsx con
+  seccion "Stock sin movimiento" en la campana; utils/motivos.js
+  (NUEVO) centraliza la lista de motivos (antes solo en NotasSalida.jsx).
+- Probado contra sibarita_db (datos Fase 0): todo lectura, sin crear ni
+  borrar nada. Build de frontend limpio, frontend-dist actualizado.
+
+--------------------------------------------------
+ESTADO DEL PLAN DE FASES (se actualiza al cerrar cada fase)
+--------------------------------------------------
+[x] Fase 0 - Datos de prueba realistas por almacen
+[ ] Fase 1 - Calibracion de impresion matricial (EN CURSO, esperando
+    medidas del usuario)
+[x] Fase 2 - Ajustes de bajo riesgo (filtro CARGADA + destino Otro)
+[x] Fase 3 - Aclarar los bloques ambiguos (CERRADA 28/08, ver arriba)
+[ ] Fase 4 - Resiliencia de red offline
+[ ] Fase 5 - Devoluciones "Usado" (codigo nuevo + nota imprimible)
+[~] Fase 6 - Reportes: salidas por motivo + alerta stock sin movimiento
+    (ENTREGADA 28/08, code-review OK con 3 fixes, falta commit)
+[ ] Fase 7 - Metrica ENTERO/EN PARTIDA + partidas parciales
+[ ] Fase 8 - Guia/linea tipo Servicio + edicion guia CERRADA
+[ ] Fase 9 - Stock en Orden de Salida + control de concurrencia
+[ ] Fase 10 - Modulo Compras diarias
+
+Nada de las Fases 0/2 esta commiteado a git todavia ni paso por
+/code-review (ver plan completo en
+C:\Users\DRGATO\.claude\plans\twinkly-knitting-jellyfish.md).
 
 --------------------------------------------------
 FIN DE LA NOTA
