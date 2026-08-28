@@ -320,7 +320,10 @@ export default function NotasSalida() {
                           className="w-full grid grid-cols-12 gap-3 items-center px-4 py-2 text-left text-sm hover:bg-blue-50 border-b border-gray-100 last:border-b-0"
                         >
                           <span className="col-span-2 font-mono font-bold text-gray-800">{e.codigo}</span>
-                          <span className="col-span-6 text-gray-700 truncate">{e.producto_nombre}</span>
+                          <span className="col-span-6 text-gray-700 truncate">
+                            {e.producto_nombre}
+                            {e.condicion === 'USADO' && <span className="ml-1 text-xs text-amber-600 font-medium">(usado)</span>}
+                          </span>
                           <span className="col-span-3 text-gray-500 text-right">
                             {e.cantidad} {e.unidad_medida_abreviatura || ''} <span className="text-gray-400">saliendo</span>
                           </span>

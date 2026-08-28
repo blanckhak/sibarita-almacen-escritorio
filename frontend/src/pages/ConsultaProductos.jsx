@@ -2,17 +2,13 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import api from '../utils/api'
 import { exportarCSV, exportarPDF } from '../utils/exportar'
+import { colorEtiquetaEstado } from '../utils/etiquetaEstados'
 
 const colorDestino = {
   ALMACEN:     'bg-blue-100 text-blue-700',
   OFICINA:     'bg-green-100 text-green-700',
   LABORATORIO: 'bg-purple-100 text-purple-700',
   OTRO:        'bg-amber-100 text-amber-700',
-}
-
-const colorEstado = {
-  EN_ALMACEN: 'bg-blue-100 text-blue-700',
-  SALIO:      'bg-orange-100 text-orange-700',
 }
 
 export default function ConsultaProductos() {
@@ -151,7 +147,7 @@ export default function ConsultaProductos() {
                   <td className="px-6 py-3">
                     <span className={`px-2 py-1 rounded-full text-xs font-bold mr-1.5 ${colorDestino[r.destino]}`}>{r.destino}</span>
                     {r.etiqueta_estado && (
-                      <span className={`px-2 py-1 rounded-full text-xs font-bold ${colorEstado[r.etiqueta_estado]}`}>{r.etiqueta_estado}</span>
+                      <span className={`px-2 py-1 rounded-full text-xs font-bold ${colorEtiquetaEstado(r.etiqueta_estado)}`}>{r.etiqueta_estado}</span>
                     )}
                   </td>
                   <td className="px-6 py-3 text-right">{r.cantidad}</td>

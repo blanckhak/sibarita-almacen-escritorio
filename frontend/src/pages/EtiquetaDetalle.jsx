@@ -3,16 +3,16 @@ import { useParams, Link } from 'react-router-dom'
 import api from '../utils/api'
 import { useAuth } from '../context/AuthContext'
 import CodigoBarras from '../components/CodigoBarras'
-
-const colorEstado = { EN_ALMACEN: 'bg-blue-100 text-blue-700', SALIO: 'bg-orange-100 text-orange-700' }
+import { colorEtiquetaEstado } from '../utils/etiquetaEstados'
 
 const colorEvento = {
-  GENERADA:   'bg-blue-100 text-blue-700',
-  IMPRESA:    'bg-gray-200 text-gray-700',
-  REIMPRESA:  'bg-yellow-100 text-yellow-700',
-  SALIO:      'bg-orange-100 text-orange-700',
-  DEVOLVIO:   'bg-green-100 text-green-700',
+  GENERADA:    'bg-blue-100 text-blue-700',
+  IMPRESA:     'bg-gray-200 text-gray-700',
+  REIMPRESA:   'bg-yellow-100 text-yellow-700',
+  SALIO:       'bg-orange-100 text-orange-700',
+  DEVOLVIO:    'bg-green-100 text-green-700',
   TRANSFERIDA: 'bg-purple-100 text-purple-700',
+  REEMPLAZADA: 'bg-gray-200 text-gray-500',
 }
 
 export default function EtiquetaDetalle() {
@@ -85,7 +85,10 @@ export default function EtiquetaDetalle() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <span className={`px-3 py-1.5 rounded-full text-xs font-bold ${colorEstado[etiqueta.estado]}`}>{etiqueta.estado}</span>
+            {etiqueta.condicion === 'USADO' && (
+              <span className="px-3 py-1.5 rounded-full text-xs font-bold bg-amber-100 text-amber-700">USADO</span>
+            )}
+            <span className={`px-3 py-1.5 rounded-full text-xs font-bold ${colorEtiquetaEstado(etiqueta.estado)}`}>{etiqueta.estado}</span>
             {puedeGestionar && (
               <button onClick={imprimir} className="bg-blue-700 hover:bg-blue-800 text-white text-sm px-4 py-2 rounded-lg font-medium transition">
                 Imprimir / Reimprimir

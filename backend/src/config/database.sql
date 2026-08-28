@@ -162,7 +162,12 @@ CREATE TABLE etiquetas (
   guia_item_id INTEGER REFERENCES guia_items(id),
   producto_id INTEGER REFERENCES productos(id),
   almacen_id INTEGER REFERENCES almacenes(id),
-  estado VARCHAR(20) NOT NULL DEFAULT 'EN_ALMACEN' CHECK (estado IN ('EN_ALMACEN', 'SALIO')),
+  -- REEMPLAZADA (Bloque 4): estado terminal del codigo viejo cuando el item
+  -- vuelve "usado" y se le asigna un codigo nuevo.
+  estado VARCHAR(20) NOT NULL DEFAULT 'EN_ALMACEN' CHECK (estado IN ('EN_ALMACEN', 'SALIO', 'REEMPLAZADA')),
+  -- NUEVO / USADO (Bloque 4): un codigo generado por devolucion "usada"
+  -- nace con condicion USADO y su stock va aparte del stock nuevo.
+  condicion VARCHAR(10) NOT NULL DEFAULT 'NUEVO' CHECK (condicion IN ('NUEVO', 'USADO')),
   fecha_generacion TIMESTAMP DEFAULT NOW()
 );
 
@@ -170,7 +175,7 @@ CREATE TABLE etiquetas (
 CREATE TABLE etiqueta_historial (
   id SERIAL PRIMARY KEY,
   etiqueta_id INTEGER REFERENCES etiquetas(id),
-  evento VARCHAR(20) NOT NULL CHECK (evento IN ('GENERADA', 'IMPRESA', 'REIMPRESA', 'SALIO', 'DEVOLVIO', 'TRANSFERIDA')),
+  evento VARCHAR(20) NOT NULL CHECK (evento IN ('GENERADA', 'IMPRESA', 'REIMPRESA', 'SALIO', 'DEVOLVIO', 'TRANSFERIDA', 'REEMPLAZADA')),
   almacen_origen_id INTEGER REFERENCES almacenes(id),
   almacen_destino_id INTEGER REFERENCES almacenes(id),
   usuario_id INTEGER REFERENCES usuarios(id),
@@ -201,7 +206,13 @@ CREATE TABLE notas_salida_detalle (
   cantidad INTEGER NOT NULL,
   p_unitario NUMERIC(12,2),
   total NUMERIC(12,2),
-  observaciones TEXT
+  observaciones TEXT,
+  -- Devolucion (Bloque 4): condicion en la que volvio la linea, cuando volvio,
+  -- y el codigo nuevo generado si volvio "usada". NULL mientras la linea
+  -- sigue afuera.
+  devuelto_condicion VARCHAR(10) CHECK (devuelto_condicion IN ('NUEVO', 'USADO')),
+  devuelto_en TIMESTAMP,
+  etiqueta_devuelta_id INTEGER REFERENCES etiquetas(id)
 );
 
 ALTER TABLE notas_salida ADD COLUMN requiere_devolucion BOOLEAN NOT NULL DEFAULT true;

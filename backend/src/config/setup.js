@@ -129,20 +129,36 @@ async function setup() {
       guia_item_id INTEGER REFERENCES guia_items(id),
       producto_id INTEGER REFERENCES productos(id),
       almacen_id INTEGER REFERENCES almacenes(id),
-      estado VARCHAR(20) NOT NULL DEFAULT 'EN_ALMACEN' CHECK (estado IN ('EN_ALMACEN', 'SALIO')),
+      estado VARCHAR(20) NOT NULL DEFAULT 'EN_ALMACEN' CHECK (estado IN ('EN_ALMACEN', 'SALIO', 'REEMPLAZADA')),
+      condicion VARCHAR(10) NOT NULL DEFAULT 'NUEVO' CHECK (condicion IN ('NUEVO', 'USADO')),
       fecha_generacion TIMESTAMP DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS etiqueta_historial (
       id SERIAL PRIMARY KEY,
       etiqueta_id INTEGER REFERENCES etiquetas(id),
-      evento VARCHAR(20) NOT NULL CHECK (evento IN ('GENERADA', 'IMPRESA', 'REIMPRESA', 'SALIO', 'DEVOLVIO', 'TRANSFERIDA')),
+      evento VARCHAR(20) NOT NULL CHECK (evento IN ('GENERADA', 'IMPRESA', 'REIMPRESA', 'SALIO', 'DEVOLVIO', 'TRANSFERIDA', 'REEMPLAZADA')),
       almacen_origen_id INTEGER REFERENCES almacenes(id),
       almacen_destino_id INTEGER REFERENCES almacenes(id),
       usuario_id INTEGER REFERENCES usuarios(id),
       fecha TIMESTAMP DEFAULT NOW(),
       detalle TEXT
     );
+
+    -- Devoluciones "Usado" (Bloque 4, Cambios_del_Sistema_Requerimientos.txt):
+    -- el codigo viejo pasa a estado REEMPLAZADA y se genera uno nuevo con
+    -- condicion USADO. Los CHECK con nombre propio se recrean con DROP/ADD
+    -- (idempotente); en instalaciones nuevas ya salen bien del CREATE de arriba.
+    ALTER TABLE etiquetas ADD COLUMN IF NOT EXISTS condicion VARCHAR(10) NOT NULL DEFAULT 'NUEVO';
+    ALTER TABLE etiquetas DROP CONSTRAINT IF EXISTS etiquetas_estado_check;
+    ALTER TABLE etiquetas ADD CONSTRAINT etiquetas_estado_check
+      CHECK (estado IN ('EN_ALMACEN', 'SALIO', 'REEMPLAZADA'));
+    ALTER TABLE etiquetas DROP CONSTRAINT IF EXISTS etiquetas_condicion_check;
+    ALTER TABLE etiquetas ADD CONSTRAINT etiquetas_condicion_check
+      CHECK (condicion IN ('NUEVO', 'USADO'));
+    ALTER TABLE etiqueta_historial DROP CONSTRAINT IF EXISTS etiqueta_historial_evento_check;
+    ALTER TABLE etiqueta_historial ADD CONSTRAINT etiqueta_historial_evento_check
+      CHECK (evento IN ('GENERADA', 'IMPRESA', 'REIMPRESA', 'SALIO', 'DEVOLVIO', 'TRANSFERIDA', 'REEMPLAZADA'));
 
     CREATE SEQUENCE IF NOT EXISTS notas_salida_numero_seq START 1;
 
@@ -171,6 +187,15 @@ async function setup() {
 
     ALTER TABLE notas_salida ADD COLUMN IF NOT EXISTS requiere_devolucion BOOLEAN NOT NULL DEFAULT true;
     ALTER TABLE notas_salida ADD COLUMN IF NOT EXISTS fecha_salida TIMESTAMP;
+
+    -- Devoluciones "Usado" (Bloque 4): condicion/fecha en que volvio cada linea
+    -- y el codigo nuevo si volvio usada.
+    ALTER TABLE notas_salida_detalle ADD COLUMN IF NOT EXISTS devuelto_condicion VARCHAR(10);
+    ALTER TABLE notas_salida_detalle DROP CONSTRAINT IF EXISTS notas_salida_detalle_devuelto_condicion_check;
+    ALTER TABLE notas_salida_detalle ADD CONSTRAINT notas_salida_detalle_devuelto_condicion_check
+      CHECK (devuelto_condicion IN ('NUEVO', 'USADO'));
+    ALTER TABLE notas_salida_detalle ADD COLUMN IF NOT EXISTS devuelto_en TIMESTAMP;
+    ALTER TABLE notas_salida_detalle ADD COLUMN IF NOT EXISTS etiqueta_devuelta_id INTEGER REFERENCES etiquetas(id);
 
     CREATE TABLE IF NOT EXISTS parametros_aprobacion (
       id SERIAL PRIMARY KEY,

@@ -1099,7 +1099,7 @@ de que el usuario confirme el orden antes de arrancar):
 - Fase 10: Modulo nuevo "Compras diarias".
   (Fase 1 = calibracion impresion, Fase 4 = offline, siguen igual.)
 
-FASE 6 ENTREGADA (28/08/2026, pasada por /code-review, pendiente commit): los dos
+FASE 6 CERRADA (28/08/2026, code-review OK + commiteada): los dos
 puntos del Bloque 3 que en la Fase 3 se definieron como "reporte" y
 "alerta" (sin cambios de esquema). Detalle y capturas en
 captura/fase6_reportes/NOTA.txt. Resumen:
@@ -1119,6 +1119,34 @@ captura/fase6_reportes/NOTA.txt. Resumen:
 - Probado contra sibarita_db (datos Fase 0): todo lectura, sin crear ni
   borrar nada. Build de frontend limpio, frontend-dist actualizado.
 
+FASE 5 ENTREGADA (28/08/2026, code-review OK con 4 fixes, pendiente commit):
+devoluciones con estado "Usado" (Bloque 4). Detalle y capturas en
+captura/fase5_devoluciones_usado/NOTA.txt. Resumen:
+- Al devolver una linea se elige NUEVA (el mismo codigo vuelve al stock,
+  como antes) o USADA (el codigo viejo pasa a estado REEMPLAZADA y se
+  genera un CODIGO NUEVO con condicion USADO que reingresa al inventario
+  como tipo DEVOLUCION -> separado del stock nuevo pero suma al total).
+- Esquema (migraciones idempotentes): etiquetas +estado REEMPLAZADA,
+  +columna condicion (NUEVO/USADO); etiqueta_historial +evento
+  REEMPLAZADA; notas_salida_detalle +devuelto_condicion/+devuelto_en/
+  +etiqueta_devuelta_id.
+- utils/inventario.js: ajustarInventario acepta `tipo` (default NUEVO).
+- notasSalida.js POST /:id/devolucion: body { etiqueta_ids, condicion };
+  responde codigos_nuevos. GET /:id trae los campos de devolucion.
+- guias.js: el LEFT JOIN a etiquetas excluye REEMPLAZADA para no
+  duplicar la linea del guia_item.
+- Frontend: modal de devolucion con 2 botones (nueva/usada), badges en
+  la tabla, boton + vista de impresion "Nota de Devolucion de Activos"
+  en NotaSalidaDetalle.jsx; badge USADO en EtiquetaDetalle.jsx;
+  marca "(usado)" en el buscador de codigos de NotasSalida.jsx.
+- Probado end-to-end por API contra sibarita_db y limpiado despues;
+  build de frontend limpio.
+- /code-review medium: 4 hallazgos, los 4 corregidos (reset de
+  modoImpresion + carrera del window.print; extraccion de
+  CabeceraTalonario; utils/etiquetaEstados.js centraliza el mapa de
+  colores de estado de etiqueta -usado en 4 paginas-; fecha de la nota
+  de devolucion desde devuelto_en, no new Date()).
+
 --------------------------------------------------
 ESTADO DEL PLAN DE FASES (se actualiza al cerrar cada fase)
 --------------------------------------------------
@@ -1128,17 +1156,26 @@ ESTADO DEL PLAN DE FASES (se actualiza al cerrar cada fase)
 [x] Fase 2 - Ajustes de bajo riesgo (filtro CARGADA + destino Otro)
 [x] Fase 3 - Aclarar los bloques ambiguos (CERRADA 28/08, ver arriba)
 [ ] Fase 4 - Resiliencia de red offline
-[ ] Fase 5 - Devoluciones "Usado" (codigo nuevo + nota imprimible)
-[~] Fase 6 - Reportes: salidas por motivo + alerta stock sin movimiento
-    (ENTREGADA 28/08, code-review OK con 3 fixes, falta commit)
+[~] Fase 5 - Devoluciones "Usado" (codigo nuevo + nota imprimible)
+    (ENTREGADA 28/08, code-review OK con 4 fixes, pendiente commit)
+[x] Fase 6 - Reportes: salidas por motivo + alerta stock sin movimiento
+    (CERRADA 28/08, code-review OK con 3 fixes, commit da4a6c1)
 [ ] Fase 7 - Metrica ENTERO/EN PARTIDA + partidas parciales
 [ ] Fase 8 - Guia/linea tipo Servicio + edicion guia CERRADA
 [ ] Fase 9 - Stock en Orden de Salida + control de concurrencia
 [ ] Fase 10 - Modulo Compras diarias
 
-Nada de las Fases 0/2 esta commiteado a git todavia ni paso por
-/code-review (ver plan completo en
-C:\Users\DRGATO\.claude\plans\twinkly-knitting-jellyfish.md).
+ESTADO GIT (28/08/2026): todo lo pendiente de las sesiones 25-28/08 quedo
+commiteado en master en 2 commits:
+- 0b0603d "Sesion 27/08: perfiles de empresa, proveedor como select y
+  Fase 2" (junta los cambios puntuales del 27/08 + Fase 2 porque tocaban
+  los mismos archivos hunk por hunk; incluye capturas fases 0/2/3).
+- da4a6c1 "Fase 6: reportes de salidas por motivo y alerta de stock sin
+  movimiento".
+Sigue SIN commitear (a proposito): la carpeta "para giarse/" (documentos
+de referencia del cliente, no codigo). El repo original
+(sistemas/sibarita - pryecto de almacen) sigue congelado; nada de esto se
+desplego a Vercel/Render. El instalador .exe tampoco se regenero.
 
 --------------------------------------------------
 FIN DE LA NOTA

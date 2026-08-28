@@ -73,12 +73,15 @@ router.get('/:id', verificarToken, async (req, res) => {
     }
 
     const detalle = await pool.query(`
-      SELECT d.*, e.codigo as etiqueta_codigo, e.estado as etiqueta_estado, e.almacen_id,
-             p.nombre as producto_nombre, a.nombre as almacen_nombre
+      SELECT d.*, e.codigo as etiqueta_codigo, e.estado as etiqueta_estado,
+             e.condicion as etiqueta_condicion, e.almacen_id,
+             p.nombre as producto_nombre, a.nombre as almacen_nombre,
+             en.codigo as etiqueta_devuelta_codigo
       FROM notas_salida_detalle d
       JOIN etiquetas e ON d.etiqueta_id = e.id
       JOIN productos p ON e.producto_id = p.id
       JOIN almacenes a ON e.almacen_id = a.id
+      LEFT JOIN etiquetas en ON d.etiqueta_devuelta_id = en.id
       WHERE d.nota_salida_id = $1
       ORDER BY d.id
     `, [req.params.id])
@@ -275,11 +278,15 @@ router.post('/:id/rechazar', verificarToken, soloRoles('admin', 'almacen'),
   }
 })
 
-// CU-03: la devolucion solo puede registrarse contra una nota de salida valida y vigente
+// CU-03: la devolucion solo puede registrarse contra una nota de salida valida y vigente.
+// Bloque 4: cada linea puede volver como 'NUEVO' (el mismo codigo vuelve a
+// EN_ALMACEN, stock NUEVO) o 'USADO' (el codigo viejo pasa a REEMPLAZADA y se
+// genera un codigo nuevo con condicion USADO que reingresa como stock DEVOLUCION).
 router.post('/:id/devolucion', verificarToken, soloRoles('admin', 'almacen'),
-  log('REGISTRAR_DEVOLUCION', req => `Nota de salida id ${req.params.id}, ${Array.isArray(req.body.etiqueta_ids) ? req.body.etiqueta_ids.length : 0} codigo(s)`),
+  log('REGISTRAR_DEVOLUCION', req => `Nota de salida id ${req.params.id}, ${Array.isArray(req.body.etiqueta_ids) ? req.body.etiqueta_ids.length : 0} codigo(s), condicion ${req.body.condicion === 'USADO' ? 'USADO' : 'NUEVO'}`),
   async (req, res) => {
   const { etiqueta_ids } = req.body
+  const condicion = req.body.condicion === 'USADO' ? 'USADO' : 'NUEVO'
   if (!Array.isArray(etiqueta_ids) || etiqueta_ids.length === 0) {
     return res.status(400).json({ error: 'Selecciona al menos un codigo para devolver' })
   }
@@ -307,7 +314,8 @@ router.post('/:id/devolucion', verificarToken, soloRoles('admin', 'almacen'),
     }
 
     const detalle = await client.query(`
-      SELECT d.etiqueta_id, e.estado, e.almacen_id, e.producto_id, e.codigo, d.cantidad
+      SELECT d.id as detalle_id, d.etiqueta_id, d.cantidad,
+             e.estado, e.almacen_id, e.producto_id, e.codigo, e.guia_item_id
       FROM notas_salida_detalle d
       JOIN etiquetas e ON d.etiqueta_id = e.id
       WHERE d.nota_salida_id = $1
@@ -327,23 +335,75 @@ router.post('/:id/devolucion', verificarToken, soloRoles('admin', 'almacen'),
       }
     }
 
+    const numeroNota = nota.rows[0].numero_nota
+    const codigosNuevos = []
+
     for (const eid of etiqueta_ids) {
       const linea = detallePorId[eid]
 
-      await client.query(`UPDATE etiquetas SET estado = 'EN_ALMACEN' WHERE id = $1`, [eid])
+      if (condicion === 'USADO') {
+        // El codigo viejo queda retirado; el item fisico ahora vive bajo un
+        // codigo nuevo marcado USADO, que reingresa como stock DEVOLUCION.
+        await client.query(`UPDATE etiquetas SET estado = 'REEMPLAZADA' WHERE id = $1`, [eid])
 
-      await client.query(
-        `INSERT INTO etiqueta_historial (etiqueta_id, evento, almacen_destino_id, usuario_id, detalle)
-         VALUES ($1, 'DEVOLVIO', $2, $3, $4)`,
-        [eid, linea.almacen_id, req.usuario.id, `Devolucion nota ${nota.rows[0].numero_nota}`]
-      )
+        const codigoResult = await client.query(`SELECT nextval('etiquetas_codigo_seq') as codigo`)
+        const codigoNuevo = codigoResult.rows[0].codigo
+        const nuevaEtiqueta = await client.query(
+          `INSERT INTO etiquetas (codigo, guia_item_id, producto_id, almacen_id, estado, condicion)
+           VALUES ($1, $2, $3, $4, 'EN_ALMACEN', 'USADO') RETURNING id`,
+          [codigoNuevo, linea.guia_item_id, linea.producto_id, linea.almacen_id]
+        )
+        const nuevaEtiquetaId = nuevaEtiqueta.rows[0].id
+        codigosNuevos.push({ codigo_viejo: linea.codigo, codigo_nuevo: Number(codigoNuevo) })
 
-      await ajustarInventario(client, {
-        almacenId: linea.almacen_id,
-        productoId: linea.producto_id,
-        delta: linea.cantidad,
-        descripcion: 'Devolucion nota de salida',
-      })
+        await client.query(
+          `INSERT INTO etiqueta_historial (etiqueta_id, evento, almacen_origen_id, usuario_id, detalle)
+           VALUES ($1, 'REEMPLAZADA', $2, $3, $4)`,
+          [eid, linea.almacen_id, req.usuario.id, `Devuelta usada en nota ${numeroNota}, reemplazada por codigo ${codigoNuevo}`]
+        )
+        await client.query(
+          `INSERT INTO etiqueta_historial (etiqueta_id, evento, almacen_destino_id, usuario_id, detalle)
+           VALUES ($1, 'GENERADA', $2, $3, $4)`,
+          [nuevaEtiquetaId, linea.almacen_id, req.usuario.id, `Reingreso por devolucion usada del codigo ${linea.codigo}, nota ${numeroNota}`]
+        )
+
+        await ajustarInventario(client, {
+          almacenId: linea.almacen_id,
+          productoId: linea.producto_id,
+          delta: linea.cantidad,
+          descripcion: `Devolucion usada nota ${numeroNota}`,
+          tipo: 'DEVOLUCION',
+        })
+
+        await client.query(
+          `UPDATE notas_salida_detalle
+           SET devuelto_condicion = 'USADO', devuelto_en = NOW(), etiqueta_devuelta_id = $1
+           WHERE id = $2`,
+          [nuevaEtiquetaId, linea.detalle_id]
+        )
+      } else {
+        await client.query(`UPDATE etiquetas SET estado = 'EN_ALMACEN' WHERE id = $1`, [eid])
+
+        await client.query(
+          `INSERT INTO etiqueta_historial (etiqueta_id, evento, almacen_destino_id, usuario_id, detalle)
+           VALUES ($1, 'DEVOLVIO', $2, $3, $4)`,
+          [eid, linea.almacen_id, req.usuario.id, `Devolucion nota ${numeroNota}`]
+        )
+
+        await ajustarInventario(client, {
+          almacenId: linea.almacen_id,
+          productoId: linea.producto_id,
+          delta: linea.cantidad,
+          descripcion: 'Devolucion nota de salida',
+        })
+
+        await client.query(
+          `UPDATE notas_salida_detalle
+           SET devuelto_condicion = 'NUEVO', devuelto_en = NOW()
+           WHERE id = $1`,
+          [linea.detalle_id]
+        )
+      }
     }
 
     const pendientes = await client.query(`
@@ -359,7 +419,7 @@ router.post('/:id/devolucion', verificarToken, soloRoles('admin', 'almacen'),
     )
 
     await client.query('COMMIT')
-    res.json(actualizada.rows[0])
+    res.json({ ...actualizada.rows[0], condicion, codigos_nuevos: codigosNuevos })
   } catch (err) {
     await client.query('ROLLBACK')
     res.status(500).json({ error: err.message })

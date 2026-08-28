@@ -1,0 +1,115 @@
+FASE 5 - Devoluciones "Usado" (Bloque 4)
+========================================
+Fecha: 28/08/2026
+
+REGLA DE NEGOCIO (definida en Fase 3)
+------------------------------------
+Al devolver una linea de una nota de salida, se elige como vuelve:
+- NUEVA  -> el mismo codigo vuelve a EN_ALMACEN, stock NUEVO (igual que antes).
+- USADA  -> el codigo viejo pasa a estado REEMPLAZADA (terminal, fuera de
+  stock) y se genera un CODIGO NUEVO con condicion USADO, EN_ALMACEN,
+  mismo producto/almacen/guia de origen. Reingresa al inventario como
+  tipo DEVOLUCION -> separado del stock nuevo pero suma al total
+  consolidado (inventario/resumen ya suma NUEVO + DEVOLUCION).
+Se puede imprimir una Nota de Devolucion con lo que volvio.
+
+CAMBIOS DE ESQUEMA (migraciones idempotentes en setup.js)
+--------------------------------------------------------
+- etiquetas.estado: + 'REEMPLAZADA'  (CHECK recreado con DROP/ADD)
+- etiquetas.condicion: NUEVO/USADO, default NUEVO  (columna + CHECK nuevos)
+- etiqueta_historial.evento: + 'REEMPLAZADA'
+- notas_salida_detalle: + devuelto_condicion (NUEVO/USADO), + devuelto_en,
+  + etiqueta_devuelta_id (FK a etiquetas)
+Ninguna migracion borra datos. Ya aplicadas en sibarita_db local.
+
+BACKEND
+-------
+- utils/inventario.js: ajustarInventario ahora acepta `tipo` (default
+  'NUEVO'); la devolucion usada pasa tipo:'DEVOLUCION'.
+- notasSalida.js POST /:id/devolucion: body ahora { etiqueta_ids, condicion }.
+  condicion 'USADO' -> REEMPLAZADA + etiqueta nueva + historial (REEMPLAZADA
+  en la vieja, GENERADA en la nueva) + inventario DEVOLUCION + marca la
+  linea (devuelto_condicion/devuelto_en/etiqueta_devuelta_id). condicion
+  'NUEVO' -> comportamiento anterior + marca devuelto_condicion='NUEVO'.
+  Responde { ...nota, condicion, codigos_nuevos:[{codigo_viejo,codigo_nuevo}] }.
+- notasSalida.js GET /:id: el detalle ahora trae etiqueta_condicion,
+  devuelto_condicion, devuelto_en y etiqueta_devuelta_codigo (LEFT JOIN).
+- etiquetas.js GET /: + e.condicion en el SELECT (para el buscador de
+  Notas de Salida).
+- guias.js (consulta/productos y detalle de guia): el LEFT JOIN a etiquetas
+  ahora excluye estado='REEMPLAZADA' para no duplicar la linea del
+  guia_item (que ahora puede tener 2 etiquetas: la vieja retirada y la
+  nueva usada). + e.condicion en ambos SELECT.
+
+FRONTEND
+--------
+- NotaSalidaDetalle.jsx: el modal de confirmacion de devolucion ahora
+  tiene 2 botones ("Devuelta nueva" verde / "Devuelta usada" ambar),
+  ambos exigen tipear/escanear el codigo. La tabla muestra, por linea
+  devuelta, "-> cod. NNNN (usado)" y un badge "Devuelta usada/nueva".
+  Nuevo boton "Imprimir Nota de Devolucion" (aparece cuando ya hay
+  lineas devueltas) + vista de impresion nueva (replica de talonario,
+  titulo "Nota de Devolucion de Activos", firmas "Recibido en Mesa por"
+  / "V.B. Almacen"). Un estado `modoImpresion` alterna entre la nota de
+  salida y la de devolucion.
+- EtiquetaDetalle.jsx: badge "USADO" cuando condicion='USADO'; color
+  para estado/evento REEMPLAZADA.
+- NotasSalida.jsx (buscador de codigos): marca "(usado)" junto al
+  producto en el desplegable.
+
+PROBADO (contra sibarita_db local, datos de la Fase 0)
+-----------------------------------------------------
+Test end-to-end por API (scratchpad/test-fase5.mjs):
+- guia de prueba (2 lineas) -> 2 etiquetas.
+- nota de salida -> ambas SALIO, inventario NUEVO descontado.
+- devolucion linea 1 USADO -> etiqueta vieja REEMPLAZADA, etiqueta nueva
+  9028 EN_ALMACEN/USADO, inventario MALSA/DEVOLUCION += 7, linea marcada
+  devuelto_condicion=USADO + etiqueta_devuelta_id.
+- devolucion linea 2 NUEVO -> etiqueta EN_ALMACEN, inventario NUEVO += 4,
+  nota pasa a DEVUELTO.
+- historial etiqueta vieja: GENERADA -> SALIO -> REEMPLAZADA.
+- /api/etiquetas devuelve la nueva con condicion USADO.
+- consulta de productos de la guia NO duplica la linea (muestra la nueva,
+  no la REEMPLAZADA).
+Todos los datos de prueba se borraron despues (secuencias de codigo y de
+numero de nota reseteadas a su valor previo). Build de frontend limpio.
+Verificacion visual en la app (capturas 01-04) con un segundo set de
+datos demo, tambien borrado despues.
+
+CAPTURAS
+--------
+01_nota_lineas_salio.jpg      - nota con 2 lineas SALIO y botones Devuelto/No devuelto
+02_modal_nueva_o_usada.jpg    - modal de confirmacion con los 2 botones
+03_linea_devuelta_usada.jpg   - linea con "-> cod. 9026 (usado)", estado REEMPLAZADA
+04_nota_devolucion_impresa.jpg- vista de impresion "Nota de Devolucion de Activos"
+
+/CODE-REVIEW (medium, 28/08) - 4 hallazgos, los 4 corregidos
+-----------------------------------------------------------
+1. modoImpresion no se reseteaba: tras imprimir la nota de devolucion,
+   un Ctrl+P posterior sacaba el documento equivocado. Ademas el
+   window.print() en un setTimeout fijo de 60ms era una carrera.
+   -> se imprime desde un useEffect (imprimirTick) que corre cuando el
+   DOM ya refleja el modo, y siempre se vuelve a dejar modoImpresion en
+   'salida'.
+2. La vista de impresion de devolucion era copy-paste de la de salida.
+   -> se extrajo <CabeceraTalonario> (empresa + fecha + referencia +
+   grid de datos), compartida por las dos vistas.
+3. 'REEMPLAZADA' agregado a mano en varios mapas de color, con copias
+   sin actualizar en ConsultaProductos.jsx y GuiaDetalle.jsx.
+   -> frontend/src/utils/etiquetaEstados.js (nuevo) centraliza el mapa;
+   las 4 paginas (NotaSalidaDetalle, EtiquetaDetalle, ConsultaProductos,
+   GuiaDetalle) lo importan.
+4. La "Fecha" de la nota de devolucion usaba new Date() (momento de
+   render). -> ahora usa el devuelto_en mas reciente de las lineas
+   devueltas.
+Re-verificado: tsc + build limpios, la vista de devolucion sigue OK
+(captura 04 regenerada con la version refactorizada).
+
+PENDIENTE / A TENER EN CUENTA
+----------------------------
+- Sin commitear todavia (pendiente commit).
+- Instalador .exe no regenerado; `npm start` sirve la version nueva.
+- Env: ninguna nueva.
+- La calibracion del formato matricial de la Nota de Devolucion es parte
+  de la Fase 1 (pendiente de medidas del usuario), igual que las otras
+  notas imprimibles.

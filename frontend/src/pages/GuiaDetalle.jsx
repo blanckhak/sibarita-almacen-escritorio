@@ -4,17 +4,13 @@ import api from '../utils/api'
 import { useAuth } from '../context/AuthContext'
 import CodigoBarras from '../components/CodigoBarras'
 import { extraerProveedoresConocidos } from '../utils/proveedores'
+import { colorEtiquetaEstado } from '../utils/etiquetaEstados'
 
 const colorDestino = {
   ALMACEN:     'bg-blue-100 text-blue-700',
   OFICINA:     'bg-green-100 text-green-700',
   LABORATORIO: 'bg-purple-100 text-purple-700',
   OTRO:        'bg-amber-100 text-amber-700',
-}
-
-const colorEstado = {
-  EN_ALMACEN: 'bg-blue-100 text-blue-700',
-  SALIO:      'bg-orange-100 text-orange-700',
 }
 
 export default function GuiaDetalle() {
@@ -327,7 +323,7 @@ export default function GuiaDetalle() {
                   </td>
                   <td className="px-6 py-3">
                     {it.etiqueta_estado
-                      ? <span className={`px-2 py-1 rounded-full text-xs font-bold ${colorEstado[it.etiqueta_estado]}`}>{it.etiqueta_estado}</span>
+                      ? <span className={`px-2 py-1 rounded-full text-xs font-bold ${colorEtiquetaEstado(it.etiqueta_estado)}`}>{it.etiqueta_estado}</span>
                       : <span className="text-gray-400 text-xs">Salida automatica</span>}
                   </td>
                   {puedeImprimir && (

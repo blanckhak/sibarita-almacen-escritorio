@@ -32,12 +32,15 @@ router.get('/consulta/productos', verificarToken, async (req, res) => {
       SELECT g.numero_guia, g.fecha, a.nombre as almacen_nombre,
              gi.id as guia_item_id, p.nombre as producto_nombre, p.categoria,
              gi.cantidad, gi.destino,
-             e.id as etiqueta_id, e.codigo as etiqueta_codigo, e.estado as etiqueta_estado
+             e.id as etiqueta_id, e.codigo as etiqueta_codigo, e.estado as etiqueta_estado,
+             e.condicion as etiqueta_condicion
       FROM guia_items gi
       JOIN guias g ON gi.guia_id = g.id
       JOIN almacenes a ON g.almacen_id = a.id
       JOIN productos p ON gi.producto_id = p.id
-      LEFT JOIN etiquetas e ON e.guia_item_id = gi.id
+      -- Una devolucion "usada" deja el codigo viejo como REEMPLAZADA y crea uno
+      -- nuevo para el mismo guia_item; se muestra el vigente, no el retirado.
+      LEFT JOIN etiquetas e ON e.guia_item_id = gi.id AND e.estado <> 'REEMPLAZADA'
       ${where}
       ORDER BY g.fecha DESC, gi.id DESC
       LIMIT 300
@@ -87,11 +90,12 @@ router.get('/:id', verificarToken, async (req, res) => {
       SELECT gi.id, gi.producto_id, gi.cantidad, gi.destino, gi.destino_detalle, gi.recogido,
              p.nombre as producto_nombre,
              um.nombre as unidad_medida_nombre, um.abreviatura as unidad_medida_abreviatura,
-             e.id as etiqueta_id, e.codigo as etiqueta_codigo, e.estado as etiqueta_estado
+             e.id as etiqueta_id, e.codigo as etiqueta_codigo, e.estado as etiqueta_estado,
+             e.condicion as etiqueta_condicion
       FROM guia_items gi
       JOIN productos p ON gi.producto_id = p.id
       LEFT JOIN unidades_medida um ON p.unidad_medida_id = um.id
-      LEFT JOIN etiquetas e ON e.guia_item_id = gi.id
+      LEFT JOIN etiquetas e ON e.guia_item_id = gi.id AND e.estado <> 'REEMPLAZADA'
       WHERE gi.guia_id = $1
       ORDER BY gi.id
     `, [req.params.id])

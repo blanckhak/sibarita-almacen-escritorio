@@ -35,7 +35,7 @@ router.get('/', verificarToken, async (req, res) => {
 
   try {
     const result = await pool.query(`
-      SELECT e.id, e.codigo, e.estado, e.almacen_id, e.producto_id,
+      SELECT e.id, e.codigo, e.estado, e.condicion, e.almacen_id, e.producto_id,
              p.nombre as producto_nombre, a.nombre as almacen_nombre,
              gi.cantidad, g.numero_guia,
              um.nombre as unidad_medida_nombre, um.abreviatura as unidad_medida_abreviatura
