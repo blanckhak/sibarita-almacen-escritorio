@@ -1,0 +1,55 @@
+FASE 0 — Datos de prueba realistas por almacen
+================================================
+Fecha: 27/08/2026
+
+QUE SE HIZO
+-----------
+Se sembraron datos de prueba contra sibarita_db (local) usando la API
+real (no SQL directo), para poder ver el Dashboard y el detalle por
+almacen con numeros creibles antes de discutir "stock consolidado"
+(Bloque 3 del documento de requerimientos).
+
+Se agregaron 8 productos nuevos (variedad realista para una fabrica de
+alimentos: EPP, repuestos, insumos, materia prima) y con ellos:
+
+- 5 guias de ingreso nuevas, repartidas entre los 3 almacenes:
+  G-DEMO-JOP-01, G-DEMO-JOP-02 (JOPISA), G-DEMO-IND-01, G-DEMO-IND-02
+  (INDELPAS), G-DEMO-MAL-01 (MALSA). 12 etiquetas generadas en total.
+- 5 notas de salida nuevas con motivos variados (REPARACION,
+  USO_INTERNO, DESECHO, PRESTAMO), 2 en cada uno de JOPISA/INDELPAS y 1
+  en MALSA.
+- 4 solicitudes de materiales nuevas en categorias distintas
+  (HERRAMIENTAS, INSUMOS, MUESTRAS, REPUESTOS), repartidas en los 3
+  almacenes. Se dejo una atendida, una rechazada, y dos pendientes,
+  para tener los 3 estados posibles representados.
+
+Script usado: seed_fase0.js (quedo en el scratchpad de la sesion, no en
+el repo -> es un script de un solo uso, no forma parte del codigo de
+la app).
+
+VERIFICADO
+----------
+- Dashboard: "Productos que mas rotan" ahora muestra nombres reales en
+  vez de solo "Producto General"; Guias Ingresadas paso de 5 a 10,
+  Codigos Generados de 5 a 17.
+- Inventario (tabla agregada NUEVO/DEVOLUCION, la de Fase A): 22
+  resultados con productos y almacenes variados.
+- Se detecto (y se descarto como bug) que algunos productos quedaron
+  en cantidad 0 en el inventario agregado: es correcto, no un error -
+  el propio script de siembra genero una nota de salida que retiro
+  exactamente esa cantidad del mismo producto/almacen justo despues de
+  ingresarla (ajustarInventario en backend/src/utils/inventario.js
+  resta al emitir una nota de salida). Confirma que ese ajuste
+  funciona bien.
+- Notas de Salida: lista muestra los 4 motivos y los 3 estados
+  (PENDIENTE/CERRADO/DEVUELTO) mezclados.
+- Solicitud de Materiales: lista muestra las 4 categorias nuevas y los
+  3 estados (PENDIENTE/ATENDIDA/RECHAZADA).
+
+PENDIENTE / A TENER EN CUENTA
+------------------------------
+- Estos datos de prueba NO se limpian (a diferencia del resto de las
+  fases) porque el proposito de la Fase 0 es justamente dejarlos para
+  seguir trabajando con numeros reales en las fases siguientes.
+- No se toco ningun archivo de codigo en esta fase, solo se sembraron
+  datos contra la base local.

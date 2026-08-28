@@ -28,8 +28,8 @@ export default function NotaSalidaDetalle() {
   const [codigoConfirmacion, setCodigoConfirmacion] = useState('')
   const [marcandoNoDevuelto, setMarcandoNoDevuelto] = useState(null)
 
-  const puedeGestionar = ['admin', 'supervisor', 'operador'].includes(usuario?.rol)
-  const puedeAprobar    = ['admin', 'supervisor'].includes(usuario?.rol)
+  const puedeGestionar = ['admin', 'almacen'].includes(usuario?.rol)
+  const puedeAprobar    = ['admin', 'almacen'].includes(usuario?.rol)
 
   const cargar = () => {
     api.get(`/api/notas-salida/${id}`)

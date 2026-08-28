@@ -3,7 +3,7 @@ const router = express.Router()
 const pool = require('../config/db')
 const { verificarToken, soloRoles } = require('../middlewares/authMiddleware')
 
-router.get('/', verificarToken, soloRoles('admin', 'auditor'), async (req, res) => {
+router.get('/', verificarToken, soloRoles('admin', 'almacen', 'compras'), async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 100
     const result = await pool.query(

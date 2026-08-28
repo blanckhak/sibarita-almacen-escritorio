@@ -1,38 +1,32 @@
 import { useEffect, useState } from 'react'
 import api from '../utils/api'
 
-const ROLES = [
-  { id: 1, nombre: 'admin' },
-  { id: 2, nombre: 'supervisor' },
-  { id: 3, nombre: 'operador' },
-  { id: 4, nombre: 'auditor' },
-  { id: 5, nombre: 'transportista' },
-]
-
 const colorRol = {
   admin:         'bg-purple-100 text-purple-700',
-  supervisor:    'bg-blue-100 text-blue-700',
-  operador:      'bg-green-100 text-green-700',
-  auditor:       'bg-yellow-100 text-yellow-700',
-  transportista: 'bg-gray-100 text-gray-700',
+  almacen:       'bg-blue-100 text-blue-700',
+  mantenimiento: 'bg-green-100 text-green-700',
+  compras:       'bg-yellow-100 text-yellow-700',
 }
 
 export default function Usuarios() {
   const [usuarios, setUsuarios]       = useState([])
   const [almacenes, setAlmacenes]     = useState([])
+  const [roles, setRoles]             = useState([])
   const [cargando, setCargando]       = useState(true)
   const [mostrarForm, setMostrarForm] = useState(false)
   const [guardando, setGuardando]     = useState(false)
   const [mensaje, setMensaje]         = useState(null)
-  const [form, setForm] = useState({ nombre: '', email: '', password: '', rol_id: '3', almacen_id: '' })
+  const [form, setForm] = useState({ nombre: '', email: '', password: '', rol_id: '', almacen_id: '' })
 
   const cargarDatos = async () => {
-    const [usr, alm] = await Promise.all([
+    const [usr, alm, rol] = await Promise.all([
       api.get('/api/usuarios'),
       api.get('/api/almacenes'),
+      api.get('/api/usuarios/roles'),
     ])
     setUsuarios(usr.data)
     setAlmacenes(alm.data)
+    setRoles(rol.data)
     setCargando(false)
   }
 
@@ -44,7 +38,7 @@ export default function Usuarios() {
     try {
       await api.post('/api/usuarios', form)
       setMensaje({ tipo: 'ok', texto: 'Usuario creado correctamente' })
-      setForm({ nombre: '', email: '', password: '', rol_id: '3', almacen_id: '' })
+      setForm({ nombre: '', email: '', password: '', rol_id: '', almacen_id: '' })
       setMostrarForm(false)
       cargarDatos()
     } catch (err) {
@@ -125,11 +119,13 @@ export default function Usuarios() {
             <div>
               <label className="block text-sm font-medium text-gray-600 mb-1">Rol</label>
               <select
+                required
                 value={form.rol_id}
                 onChange={e => setForm({ ...form, rol_id: e.target.value })}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                {ROLES.map(r => (
+                <option value="">Seleccionar rol...</option>
+                {roles.map(r => (
                   <option key={r.id} value={r.id}>{r.nombre}</option>
                 ))}
               </select>

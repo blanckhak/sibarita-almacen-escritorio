@@ -74,79 +74,79 @@ function AppContent() {
         } />
 
         <Route path="/inventario" element={
-          <RutaProtegida roles={['admin', 'supervisor', 'operador', 'auditor']}>
+          <RutaProtegida roles={['admin', 'almacen', 'mantenimiento', 'compras']}>
             <Inventario />
           </RutaProtegida>
         } />
 
         <Route path="/productos" element={
-          <RutaProtegida roles={['admin', 'supervisor', 'operador', 'auditor']}>
+          <RutaProtegida roles={['admin', 'almacen', 'mantenimiento', 'compras']}>
             <Productos />
           </RutaProtegida>
         } />
 
         <Route path="/guias" element={
-          <RutaProtegida roles={['admin', 'supervisor', 'operador', 'auditor']}>
+          <RutaProtegida roles={['admin', 'almacen', 'mantenimiento', 'compras']}>
             <Guias />
           </RutaProtegida>
         } />
 
         <Route path="/guias/:id" element={
-          <RutaProtegida roles={['admin', 'supervisor', 'operador', 'auditor']}>
+          <RutaProtegida roles={['admin', 'almacen', 'mantenimiento', 'compras']}>
             <GuiaDetalle />
           </RutaProtegida>
         } />
 
         <Route path="/consulta-productos" element={
-          <RutaProtegida roles={['admin', 'supervisor', 'operador', 'auditor']}>
+          <RutaProtegida roles={['admin', 'almacen', 'mantenimiento', 'compras']}>
             <ConsultaProductos />
           </RutaProtegida>
         } />
 
         <Route path="/etiquetas/:id" element={
-          <RutaProtegida roles={['admin', 'supervisor', 'operador', 'auditor']}>
+          <RutaProtegida roles={['admin', 'almacen', 'mantenimiento', 'compras']}>
             <EtiquetaDetalle />
           </RutaProtegida>
         } />
 
         <Route path="/notas-salida" element={
-          <RutaProtegida roles={['admin', 'supervisor', 'operador', 'auditor', 'transportista']}>
+          <RutaProtegida roles={['admin', 'almacen', 'mantenimiento', 'compras']}>
             <NotasSalida />
           </RutaProtegida>
         } />
 
         <Route path="/notas-salida/:id" element={
-          <RutaProtegida roles={['admin', 'supervisor', 'operador', 'auditor', 'transportista']}>
+          <RutaProtegida roles={['admin', 'almacen', 'mantenimiento', 'compras']}>
             <NotaSalidaDetalle />
           </RutaProtegida>
         } />
 
         <Route path="/solicitudes-materiales" element={
-          <RutaProtegida roles={['admin', 'supervisor', 'operador', 'auditor']}>
+          <RutaProtegida roles={['admin', 'almacen', 'mantenimiento', 'compras']}>
             <SolicitudesMateriales />
           </RutaProtegida>
         } />
 
         <Route path="/solicitudes-materiales/:id" element={
-          <RutaProtegida roles={['admin', 'supervisor', 'operador', 'auditor']}>
+          <RutaProtegida roles={['admin', 'almacen', 'mantenimiento', 'compras']}>
             <SolicitudMaterialesDetalle />
           </RutaProtegida>
         } />
 
         <Route path="/movimientos" element={
-          <RutaProtegida roles={['admin', 'supervisor']}>
+          <RutaProtegida roles={['admin', 'almacen']}>
             <Movimientos />
           </RutaProtegida>
         } />
 
         <Route path="/reportes" element={
-          <RutaProtegida roles={['admin', 'supervisor', 'auditor']}>
+          <RutaProtegida roles={['admin', 'almacen', 'compras']}>
             <Reportes />
           </RutaProtegida>
         } />
 
         <Route path="/historial" element={
-          <RutaProtegida roles={['admin', 'auditor']}>
+          <RutaProtegida roles={['admin', 'almacen', 'compras']}>
             <Historial />
           </RutaProtegida>
         } />

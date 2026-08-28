@@ -100,7 +100,7 @@ router.get('/:id', verificarToken, async (req, res) => {
 
 // Registra la impresion de una etiqueta: la primera vez queda como IMPRESA,
 // las siguientes como REIMPRESA (seccion 5.2 y seccion 14 punto 3-4)
-router.post('/:id/imprimir', verificarToken, soloRoles('admin', 'supervisor', 'operador'), async (req, res) => {
+router.post('/:id/imprimir', verificarToken, soloRoles('admin', 'almacen'), async (req, res) => {
   try {
     const etiqueta = await pool.query('SELECT id FROM etiquetas WHERE id = $1', [req.params.id])
     if (etiqueta.rows.length === 0) {
@@ -147,7 +147,7 @@ router.get('/:id/historial', verificarToken, async (req, res) => {
 })
 
 // Transferencia de un codigo entre almacenes, sin perder su identidad ni su historial (seccion 14 punto 7)
-router.post('/:id/transferir', verificarToken, soloRoles('admin', 'supervisor', 'operador'),
+router.post('/:id/transferir', verificarToken, soloRoles('admin', 'almacen'),
   log('TRANSFERIR_ETIQUETA', req => `Codigo id ${req.params.id} a almacen ${req.body.almacen_destino_id}`),
   async (req, res) => {
   const { almacen_destino_id } = req.body

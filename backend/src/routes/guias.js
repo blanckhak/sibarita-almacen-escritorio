@@ -5,7 +5,7 @@ const { verificarToken, soloRoles } = require('../middlewares/authMiddleware')
 const { ajustarInventario } = require('../utils/inventario')
 const log = require('../middlewares/logMiddleware')
 
-const DESTINOS = ['ALMACEN', 'OFICINA', 'LABORATORIO']
+const DESTINOS = ['ALMACEN', 'OFICINA', 'LABORATORIO', 'OTRO']
 
 // Consulta por almacen, producto o guia, de forma independiente o combinada (seccion 5.6, CU-04)
 router.get('/consulta/productos', verificarToken, async (req, res) => {
@@ -84,7 +84,7 @@ router.get('/:id', verificarToken, async (req, res) => {
     }
 
     const items = await pool.query(`
-      SELECT gi.id, gi.producto_id, gi.cantidad, gi.destino, gi.recogido,
+      SELECT gi.id, gi.producto_id, gi.cantidad, gi.destino, gi.destino_detalle, gi.recogido,
              p.nombre as producto_nombre,
              um.nombre as unidad_medida_nombre, um.abreviatura as unidad_medida_abreviatura,
              e.id as etiqueta_id, e.codigo as etiqueta_codigo, e.estado as etiqueta_estado
@@ -102,7 +102,7 @@ router.get('/:id', verificarToken, async (req, res) => {
   }
 })
 
-router.post('/', verificarToken, soloRoles('admin', 'supervisor', 'operador'),
+router.post('/', verificarToken, soloRoles('admin', 'almacen'),
   log('CREAR_GUIA', req => `Guia ${req.body.numero_guia}, almacen ${req.body.almacen_id}, ${Array.isArray(req.body.items) ? req.body.items.length : 0} linea(s)`),
   async (req, res) => {
   const { numero_guia, almacen_id, fecha, items, proveedor, numero_oc, direccion, guia_remision, factura } = req.body
@@ -122,6 +122,9 @@ router.post('/', verificarToken, soloRoles('admin', 'supervisor', 'operador'),
     }
     if (!DESTINOS.includes(it.destino)) {
       return res.status(400).json({ error: 'Destino invalido en una de las lineas' })
+    }
+    if (it.destino === 'OTRO' && !(it.destino_detalle && it.destino_detalle.trim())) {
+      return res.status(400).json({ error: 'Debes especificar el destino cuando eliges "Otro"' })
     }
     if (!Number(it.cantidad) || Number(it.cantidad) <= 0) {
       return res.status(400).json({ error: 'La cantidad debe ser mayor a 0 en todas las lineas' })
@@ -203,8 +206,8 @@ router.post('/', verificarToken, soloRoles('admin', 'supervisor', 'operador'),
       const recogidoValor = it.destino === 'ALMACEN' ? null : (it.recogido !== false)
 
       const itemResult = await client.query(
-        `INSERT INTO guia_items (guia_id, producto_id, cantidad, destino, recogido) VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-        [guia.id, productoId, it.cantidad, it.destino, recogidoValor]
+        `INSERT INTO guia_items (guia_id, producto_id, cantidad, destino, destino_detalle, recogido) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+        [guia.id, productoId, it.cantidad, it.destino, it.destino === 'OTRO' ? it.destino_detalle.trim() : null, recogidoValor]
       )
       const guiaItemId = itemResult.rows[0].id
 
@@ -269,7 +272,7 @@ router.post('/', verificarToken, soloRoles('admin', 'supervisor', 'operador'),
 // Edicion de cabecera (Fase A): solo datos de proveedor/O.C./direccion y
 // estado. Los items ya generados (etiquetas, inventario) nunca se tocan
 // desde aqui para no arriesgar lo que ya salio/quedo en stock.
-router.put('/:id', verificarToken, soloRoles('admin', 'supervisor', 'operador'),
+router.put('/:id', verificarToken, soloRoles('admin', 'almacen'),
   log('EDITAR_GUIA', req => `Guia ${req.params.id}: ${JSON.stringify(req.body)}`),
   async (req, res) => {
   const { proveedor, numero_oc, direccion, estado, guia_remision, factura } = req.body

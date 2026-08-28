@@ -9,12 +9,15 @@ CREATE TABLE roles (
   nombre VARCHAR(50) NOT NULL UNIQUE
 );
 
+-- 4 perfiles reales de la empresa: admin (todo), almacen (opera el dia a
+-- dia: guias, notas de salida, inventario, movimientos, atiende solicitudes),
+-- mantenimiento (crea Solicitudes de Materiales, ve lo que le entregan),
+-- compras (solo lectura sobre guias/reportes/historial).
 INSERT INTO roles (nombre) VALUES
   ('admin'),
-  ('supervisor'),
-  ('operador'),
-  ('auditor'),
-  ('transportista');
+  ('almacen'),
+  ('mantenimiento'),
+  ('compras');
 
 -- Tabla de almacenes
 CREATE TABLE almacenes (
@@ -142,11 +145,14 @@ CREATE TABLE guia_items (
   guia_id INTEGER REFERENCES guias(id),
   producto_id INTEGER REFERENCES productos(id),
   cantidad INTEGER NOT NULL,
-  destino VARCHAR(20) NOT NULL CHECK (destino IN ('ALMACEN', 'OFICINA', 'LABORATORIO')),
-  -- Solo aplica cuando destino es OFICINA/LABORATORIO: si ya lo recogieron (true)
-  -- sale automatico sin etiqueta; si no (false), se queda en almacen etiquetado
-  -- hasta que lo recojan, igual que un item con destino ALMACEN.
-  recogido BOOLEAN
+  destino VARCHAR(20) NOT NULL CHECK (destino IN ('ALMACEN', 'OFICINA', 'LABORATORIO', 'OTRO')),
+  -- Solo aplica cuando destino es OFICINA/LABORATORIO/OTRO: si ya lo recogieron
+  -- (true) sale automatico sin etiqueta; si no (false), se queda en almacen
+  -- etiquetado hasta que lo recojan, igual que un item con destino ALMACEN.
+  recogido BOOLEAN,
+  -- Obligatorio cuando destino = 'OTRO' (Bloque 5, mismo patron que
+  -- categoria/categoria_detalle de Solicitud de Materiales).
+  destino_detalle VARCHAR(200)
 );
 
 -- Codigo unico por producto que se queda en almacen (Fase 2 seccion 5.2)

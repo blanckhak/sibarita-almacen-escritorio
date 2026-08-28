@@ -19,7 +19,7 @@ export default function SolicitudMaterialesDetalle() {
   const [motivoRechazo, setMotivoRechazo] = useState('')
   const [procesando, setProcesando] = useState(false)
 
-  const puedeGestionar = ['admin', 'supervisor'].includes(usuario?.rol)
+  const puedeGestionar = ['admin', 'almacen'].includes(usuario?.rol)
 
   const cargar = () => {
     api.get(`/api/solicitudes-materiales/${id}`)

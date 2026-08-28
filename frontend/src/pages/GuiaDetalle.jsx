@@ -3,11 +3,13 @@ import { useParams, Link } from 'react-router-dom'
 import api from '../utils/api'
 import { useAuth } from '../context/AuthContext'
 import CodigoBarras from '../components/CodigoBarras'
+import { extraerProveedoresConocidos } from '../utils/proveedores'
 
 const colorDestino = {
   ALMACEN:     'bg-blue-100 text-blue-700',
   OFICINA:     'bg-green-100 text-green-700',
   LABORATORIO: 'bg-purple-100 text-purple-700',
+  OTRO:        'bg-amber-100 text-amber-700',
 }
 
 const colorEstado = {
@@ -26,9 +28,11 @@ export default function GuiaDetalle() {
   const [editando, setEditando]   = useState(false)
   const [formEdicion, setFormEdicion] = useState(null)
   const [guardandoEdicion, setGuardandoEdicion] = useState(false)
+  const [proveedoresConocidos, setProveedoresConocidos] = useState([])
+  const [proveedorOtro, setProveedorOtro] = useState(false)
 
-  const puedeImprimir = ['admin', 'supervisor', 'operador'].includes(usuario?.rol)
-  const puedeEditar = ['admin', 'supervisor', 'operador'].includes(usuario?.rol)
+  const puedeImprimir = ['admin', 'almacen'].includes(usuario?.rol)
+  const puedeEditar = ['admin', 'almacen'].includes(usuario?.rol)
 
   const cargar = () => {
     api.get(`/api/guias/${id}`)
@@ -37,6 +41,12 @@ export default function GuiaDetalle() {
   }
 
   useEffect(() => { cargar() }, [id])
+
+  useEffect(() => {
+    api.get('/api/guias')
+      .then(res => setProveedoresConocidos(extraerProveedoresConocidos(res.data)))
+      .catch(() => {})
+  }, [])
 
   const abrirEdicion = () => {
     setFormEdicion({
@@ -47,7 +57,18 @@ export default function GuiaDetalle() {
       guia_remision: guia.guia_remision || '',
       factura: guia.factura || '',
     })
+    setProveedorOtro(!!guia.proveedor && !proveedoresConocidos.includes(guia.proveedor))
     setEditando(true)
+  }
+
+  const seleccionarProveedor = (valorSelect) => {
+    if (valorSelect === '__otro__') {
+      setProveedorOtro(true)
+      setFormEdicion(f => ({ ...f, proveedor: '' }))
+    } else {
+      setProveedorOtro(false)
+      setFormEdicion(f => ({ ...f, proveedor: valorSelect }))
+    }
   }
 
   const guardarEdicion = async (e) => {
@@ -184,11 +205,24 @@ export default function GuiaDetalle() {
               <div className="grid grid-cols-2 gap-4 mb-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-600 mb-1">Proveedor</label>
-                  <input
-                    value={formEdicion.proveedor}
-                    onChange={e => setFormEdicion(f => ({ ...f, proveedor: e.target.value }))}
+                  <select
+                    value={proveedorOtro ? '__otro__' : formEdicion.proveedor}
+                    onChange={e => seleccionarProveedor(e.target.value)}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+                  >
+                    <option value="">Sin proveedor / seleccionar...</option>
+                    {proveedoresConocidos.map(p => <option key={p} value={p}>{p}</option>)}
+                    <option value="__otro__">+ Otro proveedor (escribir)</option>
+                  </select>
+                  {proveedorOtro && (
+                    <input
+                      autoFocus
+                      value={formEdicion.proveedor}
+                      onChange={e => setFormEdicion(f => ({ ...f, proveedor: e.target.value }))}
+                      placeholder="Nombre del proveedor nuevo..."
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm mt-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-600 mb-1">N° de Orden de Compra</label>
@@ -282,6 +316,9 @@ export default function GuiaDetalle() {
                     <span className={`px-2 py-1 rounded-full text-xs font-bold ${colorDestino[it.destino]}`}>
                       {it.destino}
                     </span>
+                    {it.destino === 'OTRO' && it.destino_detalle && (
+                      <div className="text-xs text-gray-500 mt-1">{it.destino_detalle}</div>
+                    )}
                   </td>
                   <td className="px-6 py-3 font-mono text-gray-700">
                     {it.etiqueta_id

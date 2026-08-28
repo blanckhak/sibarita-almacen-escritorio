@@ -1,7 +1,7 @@
 const express = require('express')
 const router = express.Router()
 const pool = require('../config/db')
-const { verificarToken } = require('../middlewares/authMiddleware')
+const { verificarToken, soloRoles } = require('../middlewares/authMiddleware')
 const log = require('../middlewares/logMiddleware')
 
 router.get('/', verificarToken, async (req, res) => {
@@ -24,7 +24,7 @@ router.get('/', verificarToken, async (req, res) => {
   }
 })
 
-router.post('/', verificarToken,
+router.post('/', verificarToken, soloRoles('admin', 'almacen'),
   log('CREAR_MOVIMIENTO', req => `Producto ${req.body.producto_id}, cantidad ${req.body.cantidad}, almacen ${req.body.almacen_origen_id} -> ${req.body.almacen_destino_id}`),
   async (req, res) => {
   const { almacen_origen_id, almacen_destino_id, producto_id, tipo, cantidad, descripcion } = req.body

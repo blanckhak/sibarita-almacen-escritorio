@@ -1,0 +1,85 @@
+FASE 3 — Aclaracion de los bloques ambiguos (sin codigo)
+========================================================
+Fecha: 28/08/2026
+
+QUE SE HIZO
+-----------
+Se recorrieron con el usuario, bloque por bloque, todos los
+requerimientos de para giarse/Cambios_del_Sistema_Requerimientos.txt
+que estaban marcados como ambiguos en el plan
+(C:\Users\DRGATO\.claude\plans\twinkly-knitting-jellyfish.md) y en la
+seccion 20 de NOTAS_PROYECTO_SIBARITA.txt. No se toco codigo: esta fase
+era solo definir la regla de negocio de cada punto antes de disenar.
+
+Se hicieron 3 tandas de preguntas (AskUserQuestion). Respuestas:
+
+BLOQUE 2 - GESTION DE GUIAS
+- Metrica ENTERO / EN PARTIDA: es un atributo FIJO del producto, se
+  define EN EL CATALOGO DE PRODUCTOS (no por linea ni por guia).
+- EN PARTIDA abre: una sub-tabla de "partidas parciales" que suman la
+  cantidad total de la linea (ej. 3 cajas de 12 = 36). No pidio lote ni
+  vencimiento, solo el desglose cantidad + referencia/paquete.
+- Editar guia CERRADA: en estado CERRADA solo se puede modificar la
+  CANTIDAD de cada linea y el NUMERO DE O.C. Nada mas (ni producto, ni
+  destino, ni agregar/quitar lineas).
+
+BLOQUE 3 - MOTIVOS, STOCK Y CODIGOS
+- "Stock consolidado en el campo Motivo": es un REPORTE DE SALIDAS POR
+  MOTIVO -> suma cuanto salio por cada motivo (uso interno, prestamo,
+  reparacion, desecho, otro), por almacen y por periodo. No es marcar el
+  inventario con motivo.
+- "Asignar un codigo nuevo en Nombre usado": NO es un requerimiento
+  aparte -> es lo mismo que la devolucion con estado "Usado" del Bloque
+  4 (el codigo nuevo se genera cuando un item devuelto se marca usado).
+- "Parametros de stock a 10 dias, total y remanentes": es una ALERTA DE
+  STOCK SIN MOVIMIENTO -> marcar productos/etiquetas que llevan 10+ dias
+  en almacen sin salir, para revision.
+
+BLOQUE 4 - DEVOLUCIONES Y PRODUCTOS USADOS
+- Item devuelto a Mesa marcado "Usado": REINGRESA al inventario
+  disponible pero con una ETIQUETA / CODIGO NUEVO que lo identifica como
+  usado, separado del stock nuevo. IMPORTANTE: aunque va separado del
+  stock nuevo, SI debe contar para el "stock consolidado".
+- (del documento, no requirio aclaracion: ingreso de devolucion por
+  unidad, punto de recepcion "Mesa", Nota de devolucion imprimible.)
+
+BLOQUE 5 - DESTINOS Y COMPRAS DIARIAS
+- Destino "Otro" en lineas de guia: YA HECHO en Fase 2 (destino_detalle).
+- "Compras diarias": es un MODULO NUEVO APARTE (registro de compras del
+  dia: fecha, oficina, proveedor, montos), ligado OPCIONALMENTE a una
+  Solicitud de Materiales existente. No es extension del modulo actual
+  ni un simple reporte.
+
+BLOQUE 6 - SEGUNDO PLANO E IMPRESION
+- "Servicios de modificacion sin salida de stock" / "servicios de
+  limpieza en 2do plano al firmar": se resuelve con una GUIA (o LINEA)
+  DE TIPO "SERVICIO" -> se registra e imprime, pero NO genera etiqueta
+  ni toca inventario.
+- Impresion matricial Epson FX-890 II: es la Fase 1 del plan, sigue
+  bloqueada esperando que el usuario mida el talonario fisico.
+
+BLOQUE 7 - SALIDAS, RED Y VALIDACIONES
+- "Mostrar cuanto stock queda" en la Orden/Nota de Salida: mostrar LOS
+  DOS -> total agregado por producto (tabla inventario) + conteo de
+  etiquetas individuales disponibles EN_ALMACEN.
+- "Alerta para que los productos no se crucen": es CONTROL DE
+  CONCURRENCIA sobre la MISMA ETIQUETA -> avisar/bloquear si dos
+  usuarios intentan sacar / mover / devolver el mismo codigo a la vez.
+- "Pestana de alcance / mantener flujo de Ingreso Normal": es solo una
+  ADVERTENCIA del cliente -> ninguno de estos cambios debe romper el
+  flujo de ingreso de guias actual. NO hay nada que construir.
+- Resiliencia de red offline: es la Fase 4, se deja para el final por
+  ser la de mayor riesgo/arquitectura.
+
+RESULTADO
+---------
+Ya no queda ningun bloque ambiguo. Con estas respuestas se puede
+disenar el detalle de implementacion de las fases que siguen. Ver la
+seccion 20 de NOTAS_PROYECTO_SIBARITA.txt (subseccion FASE 3) para el
+mismo resumen y el nuevo desglose de fases de implementacion propuesto.
+
+PENDIENTE
+---------
+- Fase 1 (calibracion impresion matricial) sigue esperando las medidas
+  del talonario fisico de parte del usuario.
+- Nada de las fases 0/2 esta commiteado a git todavia.

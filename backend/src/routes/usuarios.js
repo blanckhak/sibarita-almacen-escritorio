@@ -5,6 +5,15 @@ const bcrypt = require('bcryptjs')
 const { verificarToken, soloRoles } = require('../middlewares/authMiddleware')
 const log = require('../middlewares/logMiddleware')
 
+router.get('/roles', verificarToken, soloRoles('admin'), async (req, res) => {
+  try {
+    const result = await pool.query('SELECT id, nombre FROM roles ORDER BY id')
+    res.json(result.rows)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 router.get('/', verificarToken, soloRoles('admin'), async (req, res) => {
   try {
     const result = await pool.query(

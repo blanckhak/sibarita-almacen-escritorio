@@ -1,0 +1,54 @@
+FASE 2 — Ajustes de bajo riesgo (patron ya probado)
+====================================================
+Fecha: 27/08/2026
+
+QUE SE HIZO
+-----------
+1. Guias.jsx: la lista de guias ahora muestra solo las CARGADA por
+   defecto (requerimiento "Ingreso de guias: solo ver cargadas").
+   Aparece un checkbox "Mostrar tambien las cerradas (N)" — solo
+   cuando existe al menos una CERRADA — que las trae de vuelta sin
+   sacarlas del sistema. Nada se borra ni se oculta de forma
+   permanente, es un filtro de vista.
+
+2. Destino "Otro" en las lineas de una guia (requerimiento del Bloque
+   5). Mismo patron que categoria/categoria_detalle de Solicitud de
+   Materiales:
+   - backend/src/config/database.sql y setup.js: nueva columna
+     guia_items.destino_detalle (VARCHAR 200) + CHECK del destino
+     ampliado a incluir 'OTRO'. Migracion idempotente (DROP/ADD
+     CONSTRAINT) para la base que ya existia.
+   - backend/src/routes/guias.js: DESTINOS incluye 'OTRO'; se exige
+     destino_detalle cuando destino='OTRO' (400 si falta); se guarda
+     en el INSERT; se agrego al SELECT del detalle de guia.
+   - frontend/src/pages/Guias.jsx: opcion "Otro (especificar)" en el
+     select de Destino de cada linea, con input de texto libre que
+     aparece solo si se elige esa opcion.
+   - frontend/src/pages/GuiaDetalle.jsx y ConsultaProductos.jsx:
+     colorDestino con estilo ambar para OTRO; GuiaDetalle.jsx tambien
+     muestra el texto de destino_detalle debajo del badge.
+   - Un item con destino OTRO se comporta igual que OFICINA/
+     LABORATORIO (sale automatico, no genera etiqueta, salvo que se
+     marque "aun no lo recogieron") porque el codigo ya trataba esos
+     dos destinos de forma generica (destino !== 'ALMACEN'), sin
+     necesidad de logica nueva.
+
+PROBADO
+-------
+- tsc sin errores.
+- Backend reiniciado, migracion de destino_detalle aplicada sin error.
+- Filtro CARGADA: se cerro la guia X-20234 de prueba, desaparecio de
+  la lista, aparecio el toggle "(1)", se marco y volvio a aparecer.
+  Se revirtio a CARGADA despues (via API, el boton Editar del navegador
+  tuvo un problema de doble-click al automatizarlo, no relacionado con
+  el cambio — se resolvio llamando el PUT directo).
+- Destino Otro: probado contra la API real -> sin destino_detalle
+  responde 400 ("Debes especificar el destino..."); con detalle
+  responde 201 y lo guarda correctamente. Verificado visualmente en
+  GuiaDetalle.jsx (badge ambar + texto del detalle). Guia y producto
+  de prueba (TEST-OTRO-OK / "Producto Test Otro") borrados despues.
+
+PENDIENTE / A TENER EN CUENTA
+------------------------------
+- Nada de esta fase esta commiteado a git todavia.
+- No paso por /code-review.

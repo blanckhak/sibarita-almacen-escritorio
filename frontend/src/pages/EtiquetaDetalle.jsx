@@ -26,7 +26,7 @@ export default function EtiquetaDetalle() {
   const [almacenDestino, setAlmacenDestino] = useState('')
   const [transfiriendo, setTransfiriendo]   = useState(false)
 
-  const puedeGestionar = ['admin', 'supervisor', 'operador'].includes(usuario?.rol)
+  const puedeGestionar = ['admin', 'almacen'].includes(usuario?.rol)
 
   const cargar = () => {
     Promise.all([

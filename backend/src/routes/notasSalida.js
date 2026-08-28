@@ -89,7 +89,7 @@ router.get('/:id', verificarToken, async (req, res) => {
   }
 })
 
-router.post('/', verificarToken, soloRoles('admin', 'supervisor', 'operador'),
+router.post('/', verificarToken, soloRoles('admin', 'almacen'),
   log('CREAR_NOTA_SALIDA', req => `Responsable ${req.body.persona_responsable}, motivo ${req.body.motivo}, ${Array.isArray(req.body.lineas) ? req.body.lineas.length : 0} codigo(s)`),
   async (req, res) => {
   const { seccion, persona_responsable, motivo, requiere_devolucion, observaciones, lineas } = req.body
@@ -196,7 +196,7 @@ router.post('/', verificarToken, soloRoles('admin', 'supervisor', 'operador'),
 })
 
 // CU-05: el supervisor/admin aprueba una nota que quedo retenida por superar el umbral configurado
-router.post('/:id/aprobar', verificarToken, soloRoles('admin', 'supervisor'),
+router.post('/:id/aprobar', verificarToken, soloRoles('admin', 'almacen'),
   log('APROBAR_NOTA_SALIDA', req => `Nota de salida id ${req.params.id}`),
   async (req, res) => {
   const client = await pool.connect()
@@ -249,7 +249,7 @@ router.post('/:id/aprobar', verificarToken, soloRoles('admin', 'supervisor'),
 })
 
 // CU-05 (rechazo): el producto nunca salio, la nota queda cerrada con el motivo del rechazo
-router.post('/:id/rechazar', verificarToken, soloRoles('admin', 'supervisor'),
+router.post('/:id/rechazar', verificarToken, soloRoles('admin', 'almacen'),
   log('RECHAZAR_NOTA_SALIDA', req => `Nota de salida id ${req.params.id}, motivo: ${req.body.motivo || 'sin indicar'}`),
   async (req, res) => {
   const { motivo } = req.body
@@ -276,7 +276,7 @@ router.post('/:id/rechazar', verificarToken, soloRoles('admin', 'supervisor'),
 })
 
 // CU-03: la devolucion solo puede registrarse contra una nota de salida valida y vigente
-router.post('/:id/devolucion', verificarToken, soloRoles('admin', 'supervisor', 'operador'),
+router.post('/:id/devolucion', verificarToken, soloRoles('admin', 'almacen'),
   log('REGISTRAR_DEVOLUCION', req => `Nota de salida id ${req.params.id}, ${Array.isArray(req.body.etiqueta_ids) ? req.body.etiqueta_ids.length : 0} codigo(s)`),
   async (req, res) => {
   const { etiqueta_ids } = req.body
@@ -371,7 +371,7 @@ router.post('/:id/devolucion', verificarToken, soloRoles('admin', 'supervisor', 
 // Registra que se reviso un codigo y todavia NO lo han devuelto: no cambia
 // ningun estado (la etiqueta sigue SALIO, la nota sigue PENDIENTE), solo
 // queda anotado en la auditoria para seguimiento.
-router.post('/:id/lineas/:etiquetaId/no-devuelto', verificarToken, soloRoles('admin', 'supervisor', 'operador'),
+router.post('/:id/lineas/:etiquetaId/no-devuelto', verificarToken, soloRoles('admin', 'almacen'),
   log('MARCAR_NO_DEVUELTO', req => `Nota de salida id ${req.params.id}, etiqueta id ${req.params.etiquetaId}`),
   async (req, res) => {
   try {

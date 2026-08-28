@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import api from '../utils/api'
 import { useAuth } from '../context/AuthContext'
+import { extraerProveedoresConocidos } from '../utils/proveedores'
 
 const hoy = () => new Date().toISOString().slice(0, 10)
-const LINEA_VACIA = () => ({ producto_id: '', producto_nombre: '', nuevo: false, cantidad: '', destino: 'ALMACEN', unidad_medida_id: '', recogido: true })
+const LINEA_VACIA = () => ({ producto_id: '', producto_nombre: '', nuevo: false, cantidad: '', destino: 'ALMACEN', destino_detalle: '', unidad_medida_id: '', recogido: true })
 
 export default function Guias() {
   const { usuario } = useAuth()
@@ -17,8 +18,19 @@ export default function Guias() {
   const [guardando, setGuardando] = useState(false)
   const [mensaje, setMensaje]     = useState(null)
   const [form, setForm] = useState({ numero_guia: '', almacen_id: '', fecha: hoy(), proveedor: '', numero_oc: '', direccion: '', guia_remision: '', factura: '', items: [LINEA_VACIA()] })
+  const [proveedorOtro, setProveedorOtro] = useState(false)
+  const [mostrarCerradas, setMostrarCerradas] = useState(false)
 
-  const puedeRegistrar = ['admin', 'supervisor', 'operador'].includes(usuario?.rol)
+  const puedeRegistrar = ['admin', 'almacen'].includes(usuario?.rol)
+  const proveedoresConocidos = useMemo(() => extraerProveedoresConocidos(guias), [guias])
+  // Por defecto solo se ven las guias CARGADA (las que todavia se estan
+  // trabajando); las CERRADA quedan disponibles con el toggle de abajo
+  // en vez de desaparecer de la pantalla.
+  const guiasVisibles = useMemo(
+    () => mostrarCerradas ? guias : guias.filter(g => (g.estado || 'CARGADA') !== 'CERRADA'),
+    [guias, mostrarCerradas]
+  )
+  const totalCerradas = useMemo(() => guias.filter(g => g.estado === 'CERRADA').length, [guias])
 
   const cargarDatos = async () => {
     const [g, a, p, u] = await Promise.all([
@@ -38,7 +50,18 @@ export default function Guias() {
 
   const abrirNuevo = () => {
     setForm({ numero_guia: '', almacen_id: '', fecha: hoy(), proveedor: '', numero_oc: '', direccion: '', guia_remision: '', factura: '', items: [LINEA_VACIA()] })
+    setProveedorOtro(false)
     setMostrarForm(true)
+  }
+
+  const seleccionarProveedor = (valorSelect) => {
+    if (valorSelect === '__otro__') {
+      setProveedorOtro(true)
+      setForm(f => ({ ...f, proveedor: '' }))
+    } else {
+      setProveedorOtro(false)
+      setForm(f => ({ ...f, proveedor: valorSelect }))
+    }
   }
 
   const actualizarLinea = (i, campo, valor) => {
@@ -133,12 +156,12 @@ export default function Guias() {
           <form onSubmit={handleSubmit}>
             <div className="grid grid-cols-3 gap-4 mb-5">
               <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">N° de guia</label>
+                <label className="block text-sm font-medium text-gray-600 mb-1">N° de Guia / Factura / Boleta</label>
                 <input
                   required
                   value={form.numero_guia}
                   onChange={e => setForm({ ...form, numero_guia: e.target.value })}
-                  placeholder="Ej: G-04521"
+                  placeholder="Ej: G-04521, F-001-123, B-045"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
@@ -165,12 +188,24 @@ export default function Guias() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-600 mb-1">Proveedor <span className="text-gray-400 font-normal">(opcional)</span></label>
-                <input
-                  value={form.proveedor}
-                  onChange={e => setForm({ ...form, proveedor: e.target.value })}
-                  placeholder="Puede variar por guia, escribir libremente"
+                <select
+                  value={proveedorOtro ? '__otro__' : form.proveedor}
+                  onChange={e => seleccionarProveedor(e.target.value)}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+                >
+                  <option value="">Sin proveedor / seleccionar...</option>
+                  {proveedoresConocidos.map(p => <option key={p} value={p}>{p}</option>)}
+                  <option value="__otro__">+ Otro proveedor (escribir)</option>
+                </select>
+                {proveedorOtro && (
+                  <input
+                    autoFocus
+                    value={form.proveedor}
+                    onChange={e => setForm({ ...form, proveedor: e.target.value })}
+                    placeholder="Nombre del proveedor nuevo..."
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm mt-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-600 mb-1">N° de Orden de Compra <span className="text-gray-400 font-normal">(opcional, se puede agregar despues)</span></label>
@@ -178,30 +213,6 @@ export default function Guias() {
                   value={form.numero_oc}
                   onChange={e => setForm({ ...form, numero_oc: e.target.value })}
                   placeholder="Ej: OC-1234"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">Direccion <span className="text-gray-400 font-normal">(opcional)</span></label>
-                <input
-                  value={form.direccion}
-                  onChange={e => setForm({ ...form, direccion: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">Guia de Remision <span className="text-gray-400 font-normal">(opcional, la del proveedor)</span></label>
-                <input
-                  value={form.guia_remision}
-                  onChange={e => setForm({ ...form, guia_remision: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">Factura <span className="text-gray-400 font-normal">(opcional)</span></label>
-                <input
-                  value={form.factura}
-                  onChange={e => setForm({ ...form, factura: e.target.value })}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
@@ -259,7 +270,18 @@ export default function Guias() {
                           <option value="ALMACEN">✗ Almacen (genera codigo)</option>
                           <option value="OFICINA">✓ Oficina</option>
                           <option value="LABORATORIO">✓ Laboratorio</option>
+                          <option value="OTRO">✓ Otro (especificar)</option>
                         </select>
+                        {it.destino === 'OTRO' && (
+                          <input
+                            required
+                            autoFocus
+                            value={it.destino_detalle}
+                            onChange={e => actualizarLinea(i, 'destino_detalle', e.target.value)}
+                            placeholder="Ej: Cliente, evento..."
+                            className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm mt-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        )}
                       </div>
                       <div className="col-span-2">
                         <label className="block text-xs font-medium text-gray-500 mb-1">Unidad de medida</label>
@@ -329,6 +351,18 @@ export default function Guias() {
         </div>
       )}
 
+      {!cargando && totalCerradas > 0 && (
+        <label className="flex items-center gap-2 text-sm text-gray-600 mb-3 cursor-pointer w-fit">
+          <input
+            type="checkbox"
+            checked={mostrarCerradas}
+            onChange={e => setMostrarCerradas(e.target.checked)}
+            className="rounded border-gray-300"
+          />
+          Mostrar tambien las cerradas ({totalCerradas})
+        </label>
+      )}
+
       {cargando ? (
         <div className="text-center py-12 text-gray-400">Cargando guias...</div>
       ) : (
@@ -348,7 +382,7 @@ export default function Guias() {
               </tr>
             </thead>
             <tbody>
-              {guias.map((g, i) => (
+              {guiasVisibles.map((g, i) => (
                 <tr key={g.id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                   <td className="px-6 py-3 font-semibold text-gray-800">{g.numero_guia}</td>
                   <td className="px-6 py-3 text-gray-700">{g.almacen_nombre}</td>
@@ -371,8 +405,10 @@ export default function Guias() {
               ))}
             </tbody>
           </table>
-          {guias.length === 0 && (
-            <p className="text-center text-gray-400 py-8">No hay guias registradas todavia</p>
+          {guiasVisibles.length === 0 && (
+            <p className="text-center text-gray-400 py-8">
+              {guias.length === 0 ? 'No hay guias registradas todavia' : 'No hay guias cargadas — todas estan cerradas'}
+            </p>
           )}
         </div>
       )}

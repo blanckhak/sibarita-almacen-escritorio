@@ -61,7 +61,7 @@ router.get('/:id', verificarToken, async (req, res) => {
   }
 })
 
-router.post('/', verificarToken, soloRoles('admin', 'supervisor', 'operador'),
+router.post('/', verificarToken, soloRoles('admin', 'mantenimiento'),
   log('CREAR_SOLICITUD_MATERIALES', req => `Responsable ${req.body.persona_responsable}, categoria ${req.body.categoria}, ${Array.isArray(req.body.lineas) ? req.body.lineas.length : 0} linea(s)`),
   async (req, res) => {
   const { almacen_id, seccion, persona_responsable, categoria, categoria_detalle, periodo, observaciones, lineas } = req.body
@@ -130,7 +130,7 @@ router.post('/', verificarToken, soloRoles('admin', 'supervisor', 'operador'),
   }
 })
 
-router.post('/:id/atender', verificarToken, soloRoles('admin', 'supervisor'),
+router.post('/:id/atender', verificarToken, soloRoles('admin', 'almacen'),
   log('ATENDER_SOLICITUD_MATERIALES', req => `Solicitud id ${req.params.id}`),
   async (req, res) => {
   const client = await pool.connect()
@@ -159,7 +159,7 @@ router.post('/:id/atender', verificarToken, soloRoles('admin', 'supervisor'),
   }
 })
 
-router.post('/:id/rechazar', verificarToken, soloRoles('admin', 'supervisor'),
+router.post('/:id/rechazar', verificarToken, soloRoles('admin', 'almacen'),
   log('RECHAZAR_SOLICITUD_MATERIALES', req => `Solicitud id ${req.params.id}, motivo: ${req.body.motivo || 'sin indicar'}`),
   async (req, res) => {
   const { motivo } = req.body

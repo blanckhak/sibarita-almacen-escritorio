@@ -29,7 +29,7 @@ export default function SolicitudesMateriales() {
   const [mensaje, setMensaje]         = useState(null)
   const [form, setForm]               = useState(FORM_VACIO())
 
-  const puedeRegistrar = ['admin', 'supervisor', 'operador'].includes(usuario?.rol)
+  const puedeRegistrar = ['admin', 'mantenimiento'].includes(usuario?.rol)
 
   const cargarDatos = async () => {
     try {

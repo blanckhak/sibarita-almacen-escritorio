@@ -107,10 +107,21 @@ async function setup() {
       guia_id INTEGER REFERENCES guias(id),
       producto_id INTEGER REFERENCES productos(id),
       cantidad INTEGER NOT NULL,
-      destino VARCHAR(20) NOT NULL CHECK (destino IN ('ALMACEN', 'OFICINA', 'LABORATORIO'))
+      destino VARCHAR(20) NOT NULL CHECK (destino IN ('ALMACEN', 'OFICINA', 'LABORATORIO', 'OTRO'))
     );
 
     ALTER TABLE guia_items ADD COLUMN IF NOT EXISTS recogido BOOLEAN;
+
+    -- Destino "Otro" (Bloque 5, Cambios_del_Sistema_Requerimientos.txt):
+    -- mismo patron que categoria/categoria_detalle de Solicitud de
+    -- Materiales. Se recrea el CHECK porque no tiene nombre propio -> el
+    -- DROP/ADD es idempotente (en instalaciones nuevas el CHECK ya sale
+    -- con OTRO incluido desde el CREATE TABLE de arriba, aca solo aplica
+    -- a las que ya existian).
+    ALTER TABLE guia_items ADD COLUMN IF NOT EXISTS destino_detalle VARCHAR(200);
+    ALTER TABLE guia_items DROP CONSTRAINT IF EXISTS guia_items_destino_check;
+    ALTER TABLE guia_items ADD CONSTRAINT guia_items_destino_check
+      CHECK (destino IN ('ALMACEN', 'OFICINA', 'LABORATORIO', 'OTRO'));
 
     CREATE TABLE IF NOT EXISTS etiquetas (
       id SERIAL PRIMARY KEY,
@@ -218,9 +229,42 @@ async function setup() {
   if (parseInt(rolesExist.rows[0].count) === 0) {
     await pool.query(`
       INSERT INTO roles (nombre) VALUES
-        ('admin'),('supervisor'),('operador'),('auditor'),('transportista')
+        ('admin'),('almacen'),('mantenimiento'),('compras')
     `)
     console.log('Roles creados')
+  }
+
+  // Migracion: el set de roles paso de admin/supervisor/operador/auditor/
+  // transportista a los 4 perfiles reales de la empresa (admin/almacen/
+  // mantenimiento/compras). Se renombra en vez de recrear para no perder
+  // usuarios existentes. Idempotente: cada UPDATE deja de encontrar filas
+  // despues de la primera corrida, asi que corre sin condicion en cada
+  // arranque.
+  await pool.query(`UPDATE roles SET nombre = 'almacen' WHERE nombre = 'supervisor'`)
+  await pool.query(`
+    UPDATE usuarios SET rol_id = (SELECT id FROM roles WHERE nombre = 'almacen')
+    WHERE rol_id = (SELECT id FROM roles WHERE nombre = 'operador')
+  `)
+  await pool.query(`DELETE FROM roles WHERE nombre = 'operador'`)
+  await pool.query(`UPDATE roles SET nombre = 'compras' WHERE nombre = 'auditor'`)
+  await pool.query(`UPDATE roles SET nombre = 'mantenimiento' WHERE nombre = 'transportista'`)
+
+  // Alinea las cuentas de demo pre-existentes con los nuevos emails/roles
+  // (idempotente por el mismo motivo: la busqueda por email viejo deja de
+  // encontrar filas despues de la primera corrida). La cuenta vieja de
+  // 'operador' no se renombra ni se borra -> queda con rol 'almacen' (ya
+  // migrado arriba), simplemente duplicada con la nueva cuenta 'almacen@'.
+  const renombresDemo = [
+    { emailViejo: 'supervisor@sibarita.com', nombre: 'Almacen MALSA',       email: 'almacen@sibarita.com',       pass: 'almac123' },
+    { emailViejo: 'auditor@sibarita.com',    nombre: 'Compras MALSA',       email: 'compras@sibarita.com',       pass: 'compras123' },
+    { emailViejo: 'transporte@sibarita.com', nombre: 'Mantenimiento MALSA', email: 'mantenimiento@sibarita.com', pass: 'mant123' },
+  ]
+  for (const r of renombresDemo) {
+    const hash = await bcrypt.hash(r.pass, 10)
+    await pool.query(
+      `UPDATE usuarios SET nombre = $1, email = $2, password = $3 WHERE email = $4`,
+      [r.nombre, r.email, hash, r.emailViejo]
+    )
   }
 
   const unidadesExist = await pool.query('SELECT COUNT(*) FROM unidades_medida')
@@ -265,11 +309,10 @@ async function setup() {
   const usuariosExist = await pool.query('SELECT COUNT(*) FROM usuarios')
   if (parseInt(usuariosExist.rows[0].count) === 0) {
     const usuarios = [
-      { nombre: 'Administrador',      email: 'admin@sibarita.com',      pass: 'admin123', rol: 1, almacen: null },
-      { nombre: 'Supervisor MALSA',   email: 'supervisor@sibarita.com', pass: 'super123', rol: 2, almacen: 1   },
-      { nombre: 'Operador JOPISA',    email: 'operador@sibarita.com',   pass: 'oper123',  rol: 3, almacen: 2   },
-      { nombre: 'Auditor General',    email: 'auditor@sibarita.com',    pass: 'audit123', rol: 4, almacen: null },
-      { nombre: 'Transportista Juan', email: 'transporte@sibarita.com', pass: 'trans123', rol: 5, almacen: null },
+      { nombre: 'Administrador',        email: 'admin@sibarita.com',         pass: 'admin123',  rol: 1, almacen: null },
+      { nombre: 'Almacen MALSA',        email: 'almacen@sibarita.com',       pass: 'almac123',  rol: 2, almacen: 1   },
+      { nombre: 'Mantenimiento MALSA',  email: 'mantenimiento@sibarita.com', pass: 'mant123',   rol: 3, almacen: 1   },
+      { nombre: 'Compras MALSA',        email: 'compras@sibarita.com',       pass: 'compras123', rol: 4, almacen: null },
     ]
     for (const u of usuarios) {
       const hash = await bcrypt.hash(u.pass, 10)
