@@ -44,6 +44,14 @@ async function setup() {
     ALTER TABLE productos ADD COLUMN IF NOT EXISTS unidad_medida_id INTEGER REFERENCES unidades_medida(id);
     ALTER TABLE productos ADD COLUMN IF NOT EXISTS codigo_interno VARCHAR(50);
 
+    -- Metrica del producto (Bloque 2, Fase 7): ENTERO (default) / EN_PARTIDA.
+    -- El CHECK tiene nombre propio -> DROP/ADD idempotente (en instalaciones
+    -- nuevas ya sale del CREATE TABLE de database.sql).
+    ALTER TABLE productos ADD COLUMN IF NOT EXISTS metrica VARCHAR(10) NOT NULL DEFAULT 'ENTERO';
+    ALTER TABLE productos DROP CONSTRAINT IF EXISTS productos_metrica_check;
+    ALTER TABLE productos ADD CONSTRAINT productos_metrica_check
+      CHECK (metrica IN ('ENTERO', 'EN_PARTIDA'));
+
     CREATE UNIQUE INDEX IF NOT EXISTS productos_codigo_interno_unique
       ON productos (codigo_interno) WHERE codigo_interno IS NOT NULL;
 
@@ -111,6 +119,14 @@ async function setup() {
     );
 
     ALTER TABLE guia_items ADD COLUMN IF NOT EXISTS recogido BOOLEAN;
+
+    -- Desglose de partidas parciales de una linea EN_PARTIDA (Fase 7).
+    CREATE TABLE IF NOT EXISTS guia_item_partidas (
+      id SERIAL PRIMARY KEY,
+      guia_item_id INTEGER REFERENCES guia_items(id),
+      cantidad INTEGER NOT NULL,
+      referencia VARCHAR(200)
+    );
 
     -- Destino "Otro" (Bloque 5, Cambios_del_Sistema_Requerimientos.txt):
     -- mismo patron que categoria/categoria_detalle de Solicitud de

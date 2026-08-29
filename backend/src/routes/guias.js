@@ -7,6 +7,11 @@ const log = require('../middlewares/logMiddleware')
 
 const DESTINOS = ['ALMACEN', 'OFICINA', 'LABORATORIO', 'OTRO']
 
+// guia_items.cantidad y guia_item_partidas.cantidad son columnas INTEGER:
+// un decimal (ej. "1.5") reventaria como error crudo de Postgres (500), asi
+// que se rechaza aca con un 400 limpio.
+const esEnteroPositivo = (v) => Number.isInteger(Number(v)) && Number(v) > 0
+
 // Consulta por almacen, producto o guia, de forma independiente o combinada (seccion 5.6, CU-04)
 router.get('/consulta/productos', verificarToken, async (req, res) => {
   const { almacen_id, producto_id, numero_guia } = req.query
@@ -88,7 +93,7 @@ router.get('/:id', verificarToken, async (req, res) => {
 
     const items = await pool.query(`
       SELECT gi.id, gi.producto_id, gi.cantidad, gi.destino, gi.destino_detalle, gi.recogido,
-             p.nombre as producto_nombre,
+             p.nombre as producto_nombre, p.metrica as producto_metrica,
              um.nombre as unidad_medida_nombre, um.abreviatura as unidad_medida_abreviatura,
              e.id as etiqueta_id, e.codigo as etiqueta_codigo, e.estado as etiqueta_estado,
              e.condicion as etiqueta_condicion
@@ -100,7 +105,22 @@ router.get('/:id', verificarToken, async (req, res) => {
       ORDER BY gi.id
     `, [req.params.id])
 
-    res.json({ ...guia.rows[0], items: items.rows })
+    // Partidas parciales de las lineas EN_PARTIDA (Fase 7)
+    const itemIds = items.rows.map(r => r.id)
+    const partidasPorItem = {}
+    if (itemIds.length > 0) {
+      const partidas = await pool.query(
+        `SELECT id, guia_item_id, cantidad, referencia
+         FROM guia_item_partidas WHERE guia_item_id = ANY($1::int[]) ORDER BY id`,
+        [itemIds]
+      )
+      for (const pt of partidas.rows) {
+        (partidasPorItem[pt.guia_item_id] ||= []).push(pt)
+      }
+    }
+    const itemsConPartidas = items.rows.map(r => ({ ...r, partidas: partidasPorItem[r.id] || [] }))
+
+    res.json({ ...guia.rows[0], items: itemsConPartidas })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -130,8 +150,18 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
     if (it.destino === 'OTRO' && !(it.destino_detalle && it.destino_detalle.trim())) {
       return res.status(400).json({ error: 'Debes especificar el destino cuando eliges "Otro"' })
     }
-    if (!Number(it.cantidad) || Number(it.cantidad) <= 0) {
-      return res.status(400).json({ error: 'La cantidad debe ser mayor a 0 en todas las lineas' })
+    // Linea EN_PARTIDA (Fase 7): la cantidad sale de la suma de partidas, no
+    // se exige el campo cantidad. Se valida cada partida por separado. La
+    // metrica real del producto se comprueba dentro de la transaccion.
+    const tienePartidas = Array.isArray(it.partidas) && it.partidas.length > 0
+    if (tienePartidas) {
+      for (const pt of it.partidas) {
+        if (!esEnteroPositivo(pt.cantidad)) {
+          return res.status(400).json({ error: 'Cada partida debe tener una cantidad entera mayor a 0' })
+        }
+      }
+    } else if (!esEnteroPositivo(it.cantidad)) {
+      return res.status(400).json({ error: 'La cantidad debe ser un entero mayor a 0 en todas las lineas' })
     }
   }
 
@@ -166,14 +196,18 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
 
     for (const it of items) {
       let productoId = it.producto_id
+      // Metrica del producto (Fase 7): decide si la linea usa el campo
+      // cantidad (ENTERO) o el desglose de partidas (EN_PARTIDA).
+      let productoMetrica = 'ENTERO'
       if (!productoId) {
         const nombre = it.producto_nombre.trim()
         const existente = await client.query(
-          'SELECT id FROM productos WHERE LOWER(nombre) = LOWER($1)',
+          'SELECT id, metrica FROM productos WHERE LOWER(nombre) = LOWER($1)',
           [nombre]
         )
         if (existente.rows.length > 0) {
           productoId = existente.rows[0].id
+          productoMetrica = existente.rows[0].metrica
         } else {
           // Upsert atomico: si dos guias concurrentes registran el mismo
           // producto nuevo al mismo tiempo, el check de arriba puede pasar
@@ -185,14 +219,22 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
           // chequeo de arriba (linea 162) tambien es case-insensitive -
           // un indice case-sensitive no habria evitado que "Tornillo" y
           // "TORNILLO" creados al mismo tiempo generen dos productos.
+          // Producto nuevo dado de alta desde la guia: la metrica se toma del
+          // formulario (por defecto ENTERO). El ON CONFLICT devuelve la
+          // metrica ya existente si otra transaccion lo creo primero.
+          const metricaNueva = ['ENTERO', 'EN_PARTIDA'].includes(it.metrica) ? it.metrica : 'ENTERO'
           const creado = await client.query(
-            `INSERT INTO productos (nombre, unidad_medida_id) VALUES ($1, $2)
+            `INSERT INTO productos (nombre, unidad_medida_id, metrica) VALUES ($1, $2, $3)
              ON CONFLICT ((LOWER(nombre))) DO UPDATE SET nombre = productos.nombre
-             RETURNING id`,
-            [nombre, it.unidad_medida_id || null]
+             RETURNING id, metrica`,
+            [nombre, it.unidad_medida_id || null, metricaNueva]
           )
           productoId = creado.rows[0].id
+          productoMetrica = creado.rows[0].metrica
         }
+      } else {
+        const prodRow = await client.query('SELECT metrica FROM productos WHERE id = $1', [productoId])
+        productoMetrica = prodRow.rows[0]?.metrica || 'ENTERO'
       }
 
       if (it.unidad_medida_id) {
@@ -200,6 +242,23 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
           `UPDATE productos SET unidad_medida_id = $1 WHERE id = $2 AND unidad_medida_id IS NULL`,
           [it.unidad_medida_id, productoId]
         )
+      }
+
+      // Fase 7: para un producto EN_PARTIDA la cantidad de la linea es la suma
+      // de las partidas (fuente unica de verdad, se ignora lo que mande el
+      // cliente en it.cantidad). Un producto ENTERO ignora cualquier partida.
+      const partidas = Array.isArray(it.partidas) ? it.partidas : []
+      const usaPartidas = productoMetrica === 'EN_PARTIDA'
+      if (usaPartidas) {
+        if (partidas.length === 0) {
+          await client.query('ROLLBACK')
+          return res.status(400).json({ error: `El producto "${it.producto_nombre || 'seleccionado'}" se maneja EN PARTIDA: agrega al menos una partida` })
+        }
+        it.cantidad = partidas.reduce((suma, pt) => suma + Number(pt.cantidad), 0)
+      }
+      if (!esEnteroPositivo(it.cantidad)) {
+        await client.query('ROLLBACK')
+        return res.status(400).json({ error: 'La cantidad debe ser un entero mayor a 0 en todas las lineas' })
       }
 
       // Solo aplica a OFICINA/LABORATORIO: si aun no lo recogen (recogido=false),
@@ -214,6 +273,15 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
         [guia.id, productoId, it.cantidad, it.destino, it.destino === 'OTRO' ? it.destino_detalle.trim() : null, recogidoValor]
       )
       const guiaItemId = itemResult.rows[0].id
+
+      if (usaPartidas) {
+        for (const pt of partidas) {
+          await client.query(
+            `INSERT INTO guia_item_partidas (guia_item_id, cantidad, referencia) VALUES ($1, $2, $3)`,
+            [guiaItemId, Number(pt.cantidad), (pt.referencia || '').trim() || null]
+          )
+        }
+      }
 
       if (it.destino === 'ALMACEN' || pendienteDeRecoger) {
         const codigoResult = await client.query(`SELECT nextval('etiquetas_codigo_seq') as codigo`)

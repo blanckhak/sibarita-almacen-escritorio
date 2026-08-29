@@ -68,6 +68,11 @@ CREATE TABLE productos (
   categoria VARCHAR(100),
   unidad_medida_id INTEGER REFERENCES unidades_medida(id),
   codigo_interno VARCHAR(50),
+  -- Metrica (Bloque 2, Fase 7): atributo FIJO del producto en el catalogo.
+  -- ENTERO = comportamiento normal (se ingresa una cantidad). EN_PARTIDA =
+  -- al ingresarlo en una guia se desglosa en partidas parciales
+  -- (cantidad + referencia) que suman la cantidad total de la linea.
+  metrica VARCHAR(10) NOT NULL DEFAULT 'ENTERO' CHECK (metrica IN ('ENTERO', 'EN_PARTIDA')),
   creado_en TIMESTAMP DEFAULT NOW()
 );
 
@@ -144,6 +149,8 @@ CREATE TABLE guia_items (
   id SERIAL PRIMARY KEY,
   guia_id INTEGER REFERENCES guias(id),
   producto_id INTEGER REFERENCES productos(id),
+  -- Para lineas de producto EN_PARTIDA (Fase 7), esta cantidad es la suma
+  -- de las filas de guia_item_partidas; para ENTERO se ingresa directo.
   cantidad INTEGER NOT NULL,
   destino VARCHAR(20) NOT NULL CHECK (destino IN ('ALMACEN', 'OFICINA', 'LABORATORIO', 'OTRO')),
   -- Solo aplica cuando destino es OFICINA/LABORATORIO/OTRO: si ya lo recogieron
@@ -153,6 +160,16 @@ CREATE TABLE guia_items (
   -- Obligatorio cuando destino = 'OTRO' (Bloque 5, mismo patron que
   -- categoria/categoria_detalle de Solicitud de Materiales).
   destino_detalle VARCHAR(200)
+);
+
+-- Desglose de una linea de guia cuyo producto se maneja EN_PARTIDA
+-- (Bloque 2, Fase 7): p. ej. "3 cajas de 12" se cargan como 3 partidas.
+-- La suma de cantidad de las partidas es la cantidad de la linea.
+CREATE TABLE guia_item_partidas (
+  id SERIAL PRIMARY KEY,
+  guia_item_id INTEGER REFERENCES guia_items(id),
+  cantidad INTEGER NOT NULL,
+  referencia VARCHAR(200)
 );
 
 -- Codigo unico por producto que se queda en almacen (Fase 2 seccion 5.2)

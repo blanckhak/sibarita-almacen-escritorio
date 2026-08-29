@@ -3,7 +3,9 @@ import api from '../utils/api'
 import { useAuth } from '../context/AuthContext'
 import { exportarCSV, exportarPDF } from '../utils/exportar'
 
-const FORM_VACIO = { nombre: '', categoria: '', unidad_medida_id: '', codigo_interno: '' }
+const FORM_VACIO = { nombre: '', categoria: '', unidad_medida_id: '', codigo_interno: '', metrica: 'ENTERO' }
+
+const METRICA_LABEL = { ENTERO: 'Entero', EN_PARTIDA: 'En partida' }
 
 export default function Productos() {
   const { usuario } = useAuth()
@@ -54,6 +56,7 @@ export default function Productos() {
       categoria: p.categoria || '',
       unidad_medida_id: p.unidad_medida_id || '',
       codigo_interno: p.codigo_interno || '',
+      metrica: p.metrica || 'ENTERO',
     })
     setMostrarForm(true)
   }
@@ -66,6 +69,7 @@ export default function Productos() {
       categoria: form.categoria || null,
       unidad_medida_id: form.unidad_medida_id || null,
       codigo_interno: form.codigo_interno || null,
+      metrica: form.metrica || 'ENTERO',
     }
     try {
       if (editando) {
@@ -90,6 +94,7 @@ export default function Productos() {
     { titulo: 'Categoria',       campo: 'categoria' },
     { titulo: 'Unidad de medida', campo: 'unidad_medida_nombre' },
     { titulo: 'Codigo interno',  campo: 'codigo_interno' },
+    { titulo: 'Metrica',         campo: 'metrica' },
   ]
 
   return (
@@ -179,6 +184,20 @@ export default function Productos() {
                 className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-600 mb-1">Metrica</label>
+              <select
+                value={form.metrica}
+                onChange={e => setForm({ ...form, metrica: e.target.value })}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="ENTERO">Entero (se ingresa una cantidad)</option>
+                <option value="EN_PARTIDA">En partida (se desglosa al ingresar en una guia)</option>
+              </select>
+              <p className="text-xs text-gray-400 mt-1">
+                "En partida": al cargarlo en una guia se abre un desglose de partidas (ej. 3 cajas de 12) que suman la cantidad total.
+              </p>
+            </div>
             <div className="col-span-2 flex justify-end gap-3">
               <button type="button" onClick={() => setMostrarForm(false)} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">Cancelar</button>
               <button type="submit" disabled={guardando} className="px-6 py-2 text-sm bg-blue-700 text-white rounded-lg hover:bg-blue-800 disabled:opacity-50">
@@ -222,6 +241,7 @@ export default function Productos() {
                 <th className="px-6 py-3 text-left">Categoria</th>
                 <th className="px-6 py-3 text-left">Unidad de medida</th>
                 <th className="px-6 py-3 text-left">Codigo interno</th>
+                <th className="px-6 py-3 text-left">Metrica</th>
                 {esAdmin && <th className="px-6 py-3 text-right">Acciones</th>}
               </tr>
             </thead>
@@ -237,6 +257,13 @@ export default function Productos() {
                       : '—'}
                   </td>
                   <td className="px-6 py-3 text-gray-500">{p.codigo_interno || '—'}</td>
+                  <td className="px-6 py-3">
+                    <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                      p.metrica === 'EN_PARTIDA' ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      {METRICA_LABEL[p.metrica] || 'Entero'}
+                    </span>
+                  </td>
                   {esAdmin && (
                     <td className="px-6 py-3 text-right">
                       <button

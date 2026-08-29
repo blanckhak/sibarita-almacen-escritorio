@@ -5,7 +5,9 @@ import { useAuth } from '../context/AuthContext'
 import { extraerProveedoresConocidos } from '../utils/proveedores'
 
 const hoy = () => new Date().toISOString().slice(0, 10)
-const LINEA_VACIA = () => ({ producto_id: '', producto_nombre: '', nuevo: false, cantidad: '', destino: 'ALMACEN', destino_detalle: '', unidad_medida_id: '', recogido: true })
+const LINEA_VACIA = () => ({ producto_id: '', producto_nombre: '', nuevo: false, cantidad: '', destino: 'ALMACEN', destino_detalle: '', unidad_medida_id: '', recogido: true, metrica: 'ENTERO', partidas: [] })
+const PARTIDA_VACIA = () => ({ cantidad: '', referencia: '' })
+const sumaPartidas = (partidas) => (partidas || []).reduce((s, p) => s + (Number(p.cantidad) || 0), 0)
 
 export default function Guias() {
   const { usuario } = useAuth()
@@ -78,16 +80,56 @@ export default function Guias() {
     setForm(f => {
       const items = [...f.items]
       if (valorSelect === '__nuevo__') {
-        items[i] = { ...items[i], producto_id: '', producto_nombre: '', nuevo: true, unidad_medida_id: '' }
+        items[i] = { ...items[i], producto_id: '', producto_nombre: '', nuevo: true, unidad_medida_id: '', metrica: 'ENTERO', partidas: [] }
       } else if (valorSelect === '') {
-        items[i] = { ...items[i], producto_id: '', producto_nombre: '', nuevo: false, unidad_medida_id: '' }
+        items[i] = { ...items[i], producto_id: '', producto_nombre: '', nuevo: false, unidad_medida_id: '', metrica: 'ENTERO', partidas: [] }
       } else {
         const prod = productos.find(p => p.id === Number(valorSelect))
-        items[i] = { ...items[i], producto_id: Number(valorSelect), producto_nombre: prod?.nombre || '', nuevo: false, unidad_medida_id: '' }
+        const metrica = prod?.metrica || 'ENTERO'
+        items[i] = {
+          ...items[i],
+          producto_id: Number(valorSelect), producto_nombre: prod?.nombre || '', nuevo: false, unidad_medida_id: '',
+          metrica,
+          partidas: metrica === 'EN_PARTIDA' ? [PARTIDA_VACIA()] : [],
+          cantidad: metrica === 'EN_PARTIDA' ? '' : items[i].cantidad,
+        }
       }
       return { ...f, items }
     })
   }
+
+  // Metrica de un producto nuevo dado de alta desde la guia (se define en el
+  // catalogo; aca se elige al vuelo porque el producto se crea en este alta).
+  const cambiarMetricaNuevo = (i, metrica) => {
+    setForm(f => {
+      const items = [...f.items]
+      items[i] = {
+        ...items[i],
+        metrica,
+        partidas: metrica === 'EN_PARTIDA' ? (items[i].partidas.length ? items[i].partidas : [PARTIDA_VACIA()]) : [],
+        cantidad: metrica === 'EN_PARTIDA' ? '' : items[i].cantidad,
+      }
+      return { ...f, items }
+    })
+  }
+
+  const agregarPartida = (i) => setForm(f => {
+    const items = [...f.items]
+    items[i] = { ...items[i], partidas: [...items[i].partidas, PARTIDA_VACIA()] }
+    return { ...f, items }
+  })
+  const quitarPartida = (i, j) => setForm(f => {
+    const items = [...f.items]
+    items[i] = { ...items[i], partidas: items[i].partidas.filter((_, idx) => idx !== j) }
+    return { ...f, items }
+  })
+  const actualizarPartida = (i, j, campo, valor) => setForm(f => {
+    const items = [...f.items]
+    const partidas = [...items[i].partidas]
+    partidas[j] = { ...partidas[j], [campo]: valor }
+    items[i] = { ...items[i], partidas }
+    return { ...f, items }
+  })
 
   const agregarLinea = () => setForm(f => ({ ...f, items: [...f.items, LINEA_VACIA()] }))
   const quitarLinea = (i) => setForm(f => ({ ...f, items: f.items.filter((_, idx) => idx !== i) }))
@@ -96,15 +138,37 @@ export default function Guias() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+
+    const lineaEnPartidaInvalida = form.items.some(it => {
+      if (it.metrica !== 'EN_PARTIDA') return false
+      const nums = it.partidas.map(p => Number(p.cantidad)).filter(n => n > 0)
+      return nums.length === 0 || nums.some(n => !Number.isInteger(n))
+    })
+    if (lineaEnPartidaInvalida) {
+      setMensaje({ tipo: 'error', texto: 'Hay una linea "en partida" con partidas invalidas: cada partida debe ser un entero mayor a 0 y debe haber al menos una.' })
+      setTimeout(() => setMensaje(null), 5000)
+      return
+    }
+
     setGuardando(true)
     try {
       const payload = {
         ...form,
-        items: form.items.map(it => ({
-          ...it,
-          producto_id: it.producto_id || null,
-          producto_nombre: it.producto_id ? '' : it.producto_nombre.trim(),
-        })),
+        items: form.items.map(it => {
+          const enPartida = it.metrica === 'EN_PARTIDA'
+          const partidas = enPartida
+            ? it.partidas
+                .filter(p => Number(p.cantidad) > 0)
+                .map(p => ({ cantidad: Number(p.cantidad), referencia: p.referencia.trim() }))
+            : []
+          return {
+            ...it,
+            producto_id: it.producto_id || null,
+            producto_nombre: it.producto_id ? '' : it.producto_nombre.trim(),
+            partidas,
+            cantidad: enPartida ? sumaPartidas(it.partidas) : it.cantidad,
+          }
+        }),
       }
       const { data } = await api.post('/api/guias', payload)
       setMensaje({
@@ -224,6 +288,8 @@ export default function Guias() {
                 const necesitaUnidad = !prod || !prod.unidad_medida_id
                 const selectValue = it.nuevo ? '__nuevo__' : (it.producto_id ? String(it.producto_id) : '')
                 const esProductoNuevo = it.nuevo
+                const enPartida = it.metrica === 'EN_PARTIDA'
+                const totalPartidas = sumaPartidas(it.partidas)
                 return (
                   <div key={i} className="bg-gray-50 border border-gray-200 rounded-lg p-3">
                     <div className="grid grid-cols-12 gap-3 items-start">
@@ -240,25 +306,42 @@ export default function Guias() {
                           <option value="__nuevo__">+ Producto nuevo (escribir)</option>
                         </select>
                         {esProductoNuevo && (
-                          <input
-                            required
-                            autoFocus
-                            value={it.producto_nombre}
-                            onChange={e => actualizarLinea(i, 'producto_nombre', e.target.value)}
-                            placeholder="Nombre del producto nuevo..."
-                            className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm mt-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          />
+                          <>
+                            <input
+                              required
+                              autoFocus
+                              value={it.producto_nombre}
+                              onChange={e => actualizarLinea(i, 'producto_nombre', e.target.value)}
+                              placeholder="Nombre del producto nuevo..."
+                              className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm mt-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                            <select
+                              value={it.metrica}
+                              onChange={e => cambiarMetricaNuevo(i, e.target.value)}
+                              className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm mt-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                              <option value="ENTERO">Metrica: Entero</option>
+                              <option value="EN_PARTIDA">Metrica: En partida</option>
+                            </select>
+                          </>
                         )}
                       </div>
                       <div className="col-span-2">
                         <label className="block text-xs font-medium text-gray-500 mb-1">Cantidad</label>
-                        <input
-                          required
-                          type="number" min="1"
-                          value={it.cantidad}
-                          onChange={e => actualizarLinea(i, 'cantidad', e.target.value)}
-                          className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
+                        {enPartida ? (
+                          <div className="border border-gray-200 bg-gray-100 rounded-lg px-2.5 py-2 text-sm text-gray-700">
+                            {totalPartidas || 0}
+                            <span className="block text-xs text-gray-400">suma de partidas</span>
+                          </div>
+                        ) : (
+                          <input
+                            required
+                            type="number" min="1"
+                            value={it.cantidad}
+                            onChange={e => actualizarLinea(i, 'cantidad', e.target.value)}
+                            className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        )}
                       </div>
                       <div className="col-span-3">
                         <label className="block text-xs font-medium text-gray-500 mb-1">Destino</label>
@@ -313,6 +396,52 @@ export default function Guias() {
                         )}
                       </div>
                     </div>
+
+                    {enPartida && (
+                      <div className="mt-3 border border-indigo-200 bg-indigo-50 rounded-lg p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-semibold text-indigo-700 uppercase tracking-wide">
+                            Partidas (producto en partida)
+                          </span>
+                          <span className="text-xs text-indigo-600">Total: {totalPartidas || 0}</span>
+                        </div>
+                        <div className="space-y-2">
+                          {it.partidas.map((pt, j) => (
+                            <div key={j} className="grid grid-cols-12 gap-2 items-center">
+                              <input
+                                type="number" min="1" step="1"
+                                value={pt.cantidad}
+                                onChange={e => actualizarPartida(i, j, 'cantidad', e.target.value)}
+                                placeholder="Cantidad"
+                                className="col-span-3 border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                              />
+                              <input
+                                value={pt.referencia}
+                                onChange={e => actualizarPartida(i, j, 'referencia', e.target.value)}
+                                placeholder="Referencia / paquete (ej. Caja 3 de 12)"
+                                className="col-span-8 border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => quitarPartida(i, j)}
+                                disabled={it.partidas.length <= 1}
+                                className="col-span-1 text-red-500 hover:text-red-700 text-xs disabled:opacity-30"
+                              >
+                                Quitar
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => agregarPartida(i)}
+                          className="mt-2 text-xs border border-indigo-300 rounded-lg px-2.5 py-1.5 text-indigo-700 hover:bg-indigo-100"
+                        >
+                          + Agregar partida
+                        </button>
+                      </div>
+                    )}
+
                     {it.destino !== 'ALMACEN' && (
                       <label className="flex items-center gap-2 mt-3 text-sm text-gray-600">
                         <input

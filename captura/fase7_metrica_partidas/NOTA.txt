@@ -1,0 +1,118 @@
+FASE 7 - Metrica de producto (ENTERO / EN_PARTIDA) + partidas parciales
+======================================================================
+Fecha: 28/08/2026
+
+REGLA DE NEGOCIO (definida en Fase 3)
+------------------------------------
+- La "metrica" es un atributo FIJO del producto, se define EN EL CATALOGO
+  (no por linea ni por guia). Valores:
+  * ENTERO     -> comportamiento actual: se ingresa una cantidad directa.
+  * EN_PARTIDA -> al cargar ese producto en una linea de guia se abre una
+    sub-tabla de "partidas parciales" (cantidad + referencia/paquete).
+    La suma de las partidas ES la cantidad total de la linea
+    (ej. 12 + 8 = 20). No pidio lote ni vencimiento, solo el desglose.
+- Editar guia CERRADA (cantidad / N de O.C.) es Fase 8, NO se toco aca.
+
+CAMBIOS DE ESQUEMA (migraciones idempotentes en setup.js + database.sql)
+----------------------------------------------------------------------
+- productos + columna metrica VARCHAR(10) NOT NULL DEFAULT 'ENTERO'
+  CHECK (metrica IN ('ENTERO','EN_PARTIDA')). CHECK con nombre propio,
+  recreado con DROP/ADD (idempotente).
+- Tabla nueva guia_item_partidas (id, guia_item_id FK, cantidad, referencia).
+Ninguna migracion borra datos. Ya aplicadas en sibarita_db local.
+
+BACKEND
+-------
+- routes/productos.js: POST y PUT aceptan `metrica` (validada contra
+  ['ENTERO','EN_PARTIDA'], default ENTERO). GET ya la devuelve (SELECT p.*).
+- routes/guias.js POST /:
+  * cada item puede traer `partidas: [{cantidad, referencia}]` y, para
+    producto nuevo dado de alta desde la guia, `metrica`.
+  * la metrica REAL se resuelve dentro de la transaccion (del catalogo si
+    el producto existe; del form si es nuevo). Para un producto EN_PARTIDA:
+    - si no hay partidas -> 400 con ROLLBACK.
+    - la cantidad de la linea se DERIVA de la suma de partidas (fuente
+      unica de verdad; se ignora it.cantidad que mande el cliente).
+    - se insertan las filas en guia_item_partidas despues del guia_item.
+  * producto ENTERO: ignora cualquier `partidas` que llegue.
+  * validacion pre-transaccion: cada partida con cantidad > 0; si la linea
+    trae partidas no se exige el campo cantidad.
+- routes/guias.js GET /:id: el detalle de items trae `producto_metrica` y
+  un array `partidas` por linea (query aparte a guia_item_partidas,
+  agrupada por guia_item_id).
+
+FRONTEND
+--------
+- pages/Productos.jsx: select "Metrica" en el form (Entero / En partida)
+  con nota explicativa, columna "Metrica" en la tabla (badge indigo para
+  "En partida"), y en el export Excel/PDF.
+- pages/Guias.jsx (Nuevo Ingreso):
+  * cada linea arranca metrica ENTERO / partidas [].
+  * al elegir un producto del catalogo se copia su metrica; si es
+    EN_PARTIDA aparece el editor de partidas (filas cantidad + referencia,
+    "+ Agregar partida", quitar) y el campo Cantidad pasa a solo-lectura
+    mostrando la suma ("suma de partidas").
+  * producto nuevo inline: select de metrica al vuelo (se crea en el
+    catalogo con esa metrica).
+  * submit: envia `partidas` (solo EN_PARTIDA) y `metrica` (productos
+    nuevos); cantidad = suma de partidas. Guarda contra enviar una linea
+    "en partida" sin partidas validas.
+- pages/GuiaDetalle.jsx: en la tabla de items y en la vista de impresion
+  "Nota de Ingreso", las lineas EN_PARTIDA muestran badge "EN PARTIDA" y
+  el desglose de partidas bajo el nombre del producto.
+- ConsultaProductos.jsx: sin cambios (trabaja a nivel agregado).
+
+PROBADO (contra sibarita_db local, datos de la Fase 0)
+-----------------------------------------------------
+Test end-to-end por API (scratchpad/test-fase7.mjs), todo OK:
+- POST /api/productos con metrica EN_PARTIDA -> 201, metrica correcta.
+  metrica invalida -> 400.
+- POST /api/guias con 1 linea EN_PARTIDA (partidas 3 + 2) + 1 linea
+  ENTERO (4): 201. GET /:id -> linea EN_PARTIDA cantidad DERIVADA = 5,
+  producto_metrica = EN_PARTIDA, 2 partidas con su referencia; linea
+  ENTERO sin partidas; se genero etiqueta; inventario del producto += 5.
+- POST /api/guias con producto EN_PARTIDA y sin partidas -> 400.
+- POST /api/guias con una partida cantidad 0 -> 400.
+- PUT /api/productos conserva metrica.
+- Limpieza: todas las filas de prueba borradas, secuencia de codigo
+  restaurada.
+Verificacion visual en la app (capturas 01-04) con un producto
+"Tornillo Autorroscante 8x1 (caja)" EN_PARTIDA y la guia DEMO-F7-01
+(partidas 12 + 8 = 20). Datos demo borrados despues; codigo 9024
+devuelto a la secuencia. Build de frontend limpio (tsc + vite),
+frontend-dist actualizado.
+
+CAPTURAS
+--------
+01_producto_form_metrica.jpg     - form de producto con el select Metrica
+02_catalogo_badge_en_partida.jpg - catalogo con la columna Metrica / badge
+03_guia_editor_partidas.jpg      - Nuevo Ingreso: editor de partidas, suma 20
+04_guia_detalle_partidas.jpg     - detalle de guia con el desglose de partidas
+
+/CODE-REVIEW (medium, 28/08) - 1 hallazgo, corregido
+---------------------------------------------------
+1. Las cantidades de partida (y la cantidad de linea ENTERO) solo se
+   validaban como > 0, nunca como enteras, pero guia_items.cantidad y
+   guia_item_partidas.cantidad son columnas INTEGER -> una cantidad
+   decimal ("1.5") pasaba las validaciones y reventaba con un error
+   crudo de Postgres devuelto como 500.
+   -> guias.js: helper esEnteroPositivo(v) (Number.isInteger + > 0),
+      usado en la validacion pre-transaccion de partidas y de cantidad,
+      y en el chequeo dentro de la transaccion. Se endurecio de paso el
+      camino ENTERO que ya existia (mismo hueco latente).
+   -> Guias.jsx: input de partida con step="1"; el guard de submit ahora
+      rechaza partidas no enteras / <= 0 / linea sin partidas validas.
+   Re-probado (test-fase7.mjs, 16/16 OK): partida decimal -> 400 limpio,
+   linea ENTERO decimal -> 400 limpio. Build de frontend limpio.
+
+PENDIENTE / A TENER EN CUENTA
+----------------------------
+- Sin commitear todavia (pendiente commit).
+- Instalador .exe no regenerado; `npm start` sirve la version nueva
+  porque se actualizo backend/frontend-dist.
+- Env: ninguna nueva.
+- Fase 1 (calibracion matricial) sigue esperando medidas del usuario;
+  el desglose de partidas en la Nota de Ingreso impresa habra que
+  encajarlo en esa calibracion cuando llegue.
+- Fase 8 (guia/linea tipo Servicio + editar guia CERRADA restringida a
+  cantidad y N de O.C.) es la siguiente.

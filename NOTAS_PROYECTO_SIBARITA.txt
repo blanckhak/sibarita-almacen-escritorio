@@ -1099,6 +1099,38 @@ de que el usuario confirme el orden antes de arrancar):
 - Fase 10: Modulo nuevo "Compras diarias".
   (Fase 1 = calibracion impresion, Fase 4 = offline, siguen igual.)
 
+FASE 7 CERRADA (28/08/2026, code-review OK con 1 fix): metrica de
+producto ENTERO / EN_PARTIDA (Bloque 2) + partidas parciales en las
+lineas de guia. Detalle y capturas en
+captura/fase7_metrica_partidas/NOTA.txt. Resumen:
+- Esquema (migraciones idempotentes): productos +columna metrica
+  (ENTERO default / EN_PARTIDA, CHECK con nombre propio); tabla nueva
+  guia_item_partidas (guia_item_id, cantidad, referencia). Sin borrar
+  datos, ya aplicadas en sibarita_db local.
+- productos.js: POST/PUT aceptan y validan `metrica`.
+- guias.js POST /: la metrica real del producto se resuelve dentro de la
+  transaccion. Para EN_PARTIDA: exige partidas (si no -> 400 ROLLBACK) y
+  la cantidad de la linea se DERIVA de la suma de partidas (se ignora
+  it.cantidad del cliente); se insertan las filas en guia_item_partidas.
+  Producto ENTERO ignora cualquier `partidas`. Helper esEnteroPositivo()
+  rechaza cantidades decimales con 400 en vez de 500 (fix del
+  code-review; tambien cubre el camino ENTERO que ya existia).
+- guias.js GET /:id: cada linea del detalle trae producto_metrica y un
+  array `partidas`.
+- Frontend: Productos.jsx (select Metrica + columna/badge + export);
+  Guias.jsx (editor de partidas cantidad+referencia cuando el producto
+  es EN_PARTIDA, campo Cantidad solo-lectura = suma; select de metrica
+  al crear producto nuevo inline); GuiaDetalle.jsx (badge EN PARTIDA +
+  desglose de partidas en tabla y en la Nota de Ingreso impresa).
+  ConsultaProductos.jsx sin cambios (nivel agregado).
+- Probado end-to-end por API contra sibarita_db (test-fase7.mjs, 16/16):
+  cantidad derivada 3+2=5, inventario +5, producto_metrica y partidas en
+  el GET, negativos (sin partidas / cantidad 0 / decimal / ENTERO
+  decimal) todos 400. Verificacion visual en la app (capturas 01-04) con
+  un producto EN_PARTIDA y la guia DEMO-F7-01 (12+8=20); datos demo
+  borrados despues, secuencia de codigo restaurada. Build de frontend
+  limpio, frontend-dist actualizado.
+
 FASE 6 CERRADA (28/08/2026, code-review OK + commiteada): los dos
 puntos del Bloque 3 que en la Fase 3 se definieron como "reporte" y
 "alerta" (sin cambios de esquema). Detalle y capturas en
@@ -1160,7 +1192,8 @@ ESTADO DEL PLAN DE FASES (se actualiza al cerrar cada fase)
     (CERRADA 28/08, code-review OK con 4 fixes, commit 530d888)
 [x] Fase 6 - Reportes: salidas por motivo + alerta stock sin movimiento
     (CERRADA 28/08, code-review OK con 3 fixes, commit da4a6c1)
-[ ] Fase 7 - Metrica ENTERO/EN PARTIDA + partidas parciales
+[x] Fase 7 - Metrica ENTERO/EN PARTIDA + partidas parciales
+    (CERRADA 28/08, code-review OK con 1 fix, commiteada 29/08)
 [ ] Fase 8 - Guia/linea tipo Servicio + edicion guia CERRADA
 [ ] Fase 9 - Stock en Orden de Salida + control de concurrencia
 [ ] Fase 10 - Modulo Compras diarias
@@ -1173,6 +1206,10 @@ commiteado en master en 3 commits:
 - da4a6c1 "Fase 6: reportes de salidas por motivo y alerta de stock sin
   movimiento".
 - 530d888 "Fase 5: devoluciones con estado Usado (Bloque 4)".
+ESTADO GIT (29/08/2026): la Fase 7 completa (metrica ENTERO/EN_PARTIDA +
+guia_item_partidas) quedo commiteada en master - backend (database.sql,
+setup.js, routes/guias.js, routes/productos.js), frontend (Productos.jsx,
+Guias.jsx, GuiaDetalle.jsx), NOTAS y captura/fase7_metrica_partidas/.
 Sigue SIN commitear (a proposito): la carpeta "para giarse/" (documentos
 de referencia del cliente, no codigo). El repo original
 (sistemas/sibarita - pryecto de almacen) sigue congelado; nada de esto se

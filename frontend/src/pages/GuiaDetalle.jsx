@@ -301,7 +301,21 @@ export default function GuiaDetalle() {
             <tbody>
               {guia.items.map((it, i) => (
                 <tr key={it.id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                  <td className="px-6 py-3 font-semibold text-gray-800">{it.producto_nombre}</td>
+                  <td className="px-6 py-3 font-semibold text-gray-800">
+                    {it.producto_nombre}
+                    {it.producto_metrica === 'EN_PARTIDA' && (
+                      <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-700 align-middle">
+                        EN PARTIDA
+                      </span>
+                    )}
+                    {it.partidas?.length > 0 && (
+                      <ul className="mt-1 text-xs font-normal text-gray-500 list-disc list-inside">
+                        {it.partidas.map(pt => (
+                          <li key={pt.id}>{pt.cantidad}{pt.referencia ? ` — ${pt.referencia}` : ''}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </td>
                   <td className="px-6 py-3 text-right">{it.cantidad}</td>
                   <td className="px-6 py-3 text-gray-500">
                     {it.unidad_medida_nombre
@@ -410,8 +424,15 @@ export default function GuiaDetalle() {
           </thead>
           <tbody>
             {guia.items.map(it => (
-              <tr key={it.id} className="border-b border-gray-200">
-                <td className="py-1">{it.producto_nombre}</td>
+              <tr key={it.id} className="border-b border-gray-200 align-top">
+                <td className="py-1">
+                  {it.producto_nombre}
+                  {it.partidas?.length > 0 && (
+                    <span className="block text-[10px] text-gray-500">
+                      {it.partidas.map(pt => `${pt.cantidad}${pt.referencia ? ` (${pt.referencia})` : ''}`).join(' · ')}
+                    </span>
+                  )}
+                </td>
                 <td className="py-1 text-right">
                   {it.cantidad}{it.unidad_medida_abreviatura ? ` ${it.unidad_medida_abreviatura}` : ''}
                 </td>
