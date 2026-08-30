@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { extraerProveedoresConocidos } from '../utils/proveedores'
 
 const hoy = () => new Date().toISOString().slice(0, 10)
-const LINEA_VACIA = () => ({ producto_id: '', producto_nombre: '', nuevo: false, cantidad: '', destino: 'ALMACEN', destino_detalle: '', unidad_medida_id: '', recogido: true, metrica: 'ENTERO', partidas: [] })
+const LINEA_VACIA = () => ({ producto_id: '', producto_nombre: '', nuevo: false, tipo: 'PRODUCTO', cantidad: '', destino: 'ALMACEN', destino_detalle: '', unidad_medida_id: '', recogido: true, metrica: 'ENTERO', partidas: [] })
 const PARTIDA_VACIA = () => ({ cantidad: '', referencia: '' })
 const sumaPartidas = (partidas) => (partidas || []).reduce((s, p) => s + (Number(p.cantidad) || 0), 0)
 
@@ -113,6 +113,32 @@ export default function Guias() {
     })
   }
 
+  // Tipo de linea PRODUCTO / SERVICIO (Fase 8). Una linea SERVICIO no lleva
+  // destino, partidas ni metrica; solo producto/descripcion + cantidad.
+  const cambiarTipoLinea = (i, tipo) => setForm(f => {
+    const items = [...f.items]
+    const base = { ...items[i], tipo }
+    if (tipo === 'SERVICIO') {
+      // Un servicio no usa el catalogo: se describe en texto libre. Se
+      // conserva producto_nombre por si venia escrito, se sueltan id/nuevo.
+      base.producto_id = ''
+      base.nuevo = false
+      base.unidad_medida_id = ''
+      base.destino = 'ALMACEN'
+      base.destino_detalle = ''
+      base.recogido = true
+      base.metrica = 'ENTERO'
+      base.partidas = []
+    } else {
+      const prod = productos.find(p => p.id === Number(base.producto_id))
+      const metrica = prod?.metrica || 'ENTERO'
+      base.metrica = metrica
+      base.partidas = metrica === 'EN_PARTIDA' ? (base.partidas?.length ? base.partidas : [PARTIDA_VACIA()]) : []
+    }
+    items[i] = base
+    return { ...f, items }
+  })
+
   const agregarPartida = (i) => setForm(f => {
     const items = [...f.items]
     items[i] = { ...items[i], partidas: [...items[i].partidas, PARTIDA_VACIA()] }
@@ -140,7 +166,7 @@ export default function Guias() {
     e.preventDefault()
 
     const lineaEnPartidaInvalida = form.items.some(it => {
-      if (it.metrica !== 'EN_PARTIDA') return false
+      if (it.tipo === 'SERVICIO' || it.metrica !== 'EN_PARTIDA') return false
       const nums = it.partidas.map(p => Number(p.cantidad)).filter(n => n > 0)
       return nums.length === 0 || nums.some(n => !Number.isInteger(n))
     })
@@ -155,7 +181,7 @@ export default function Guias() {
       const payload = {
         ...form,
         items: form.items.map(it => {
-          const enPartida = it.metrica === 'EN_PARTIDA'
+          const enPartida = it.tipo !== 'SERVICIO' && it.metrica === 'EN_PARTIDA'
           const partidas = enPartida
             ? it.partidas
                 .filter(p => Number(p.cantidad) > 0)
@@ -288,45 +314,75 @@ export default function Guias() {
                 const necesitaUnidad = !prod || !prod.unidad_medida_id
                 const selectValue = it.nuevo ? '__nuevo__' : (it.producto_id ? String(it.producto_id) : '')
                 const esProductoNuevo = it.nuevo
-                const enPartida = it.metrica === 'EN_PARTIDA'
+                const esServicio = it.tipo === 'SERVICIO'
+                const enPartida = !esServicio && it.metrica === 'EN_PARTIDA'
                 const totalPartidas = sumaPartidas(it.partidas)
                 return (
                   <div key={i} className="bg-gray-50 border border-gray-200 rounded-lg p-3">
-                    <div className="grid grid-cols-12 gap-3 items-start">
-                      <div className="col-span-4">
-                        <label className="block text-xs font-medium text-gray-500 mb-1">Producto</label>
-                        <select
-                          required
-                          value={selectValue}
-                          onChange={e => seleccionarProducto(i, e.target.value)}
-                          className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    <div className="flex gap-2 mb-3">
+                      {['PRODUCTO', 'SERVICIO'].map(t => (
+                        <button
+                          type="button"
+                          key={t}
+                          onClick={() => cambiarTipoLinea(i, t)}
+                          className={`px-3 py-1 rounded-full text-xs font-semibold border transition ${
+                            it.tipo === t ? 'bg-blue-700 text-white border-blue-700' : 'bg-white text-gray-500 border-gray-300 hover:bg-gray-50'
+                          }`}
                         >
-                          <option value="">Seleccionar del catalogo...</option>
-                          {productos.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-                          <option value="__nuevo__">+ Producto nuevo (escribir)</option>
-                        </select>
-                        {esProductoNuevo && (
+                          {t === 'PRODUCTO' ? 'Producto' : 'Servicio'}
+                        </button>
+                      ))}
+                      {esServicio && (
+                        <span className="text-xs text-gray-400 self-center">Se registra e imprime · no genera codigo ni mueve inventario</span>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-12 gap-3 items-start">
+                      <div className={esServicio ? 'col-span-8' : 'col-span-4'}>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">{esServicio ? 'Servicio / descripcion' : 'Producto'}</label>
+                        {esServicio ? (
+                          <input
+                            required
+                            value={it.producto_nombre}
+                            onChange={e => actualizarLinea(i, 'producto_nombre', e.target.value)}
+                            placeholder="Ej: Mantenimiento de torno, servicio de limpieza..."
+                            className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        ) : (
                           <>
-                            <input
-                              required
-                              autoFocus
-                              value={it.producto_nombre}
-                              onChange={e => actualizarLinea(i, 'producto_nombre', e.target.value)}
-                              placeholder="Nombre del producto nuevo..."
-                              className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm mt-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
                             <select
-                              value={it.metrica}
-                              onChange={e => cambiarMetricaNuevo(i, e.target.value)}
-                              className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm mt-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              required
+                              value={selectValue}
+                              onChange={e => seleccionarProducto(i, e.target.value)}
+                              className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                             >
-                              <option value="ENTERO">Metrica: Entero</option>
-                              <option value="EN_PARTIDA">Metrica: En partida</option>
+                              <option value="">Seleccionar del catalogo...</option>
+                              {productos.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                              <option value="__nuevo__">+ Producto nuevo (escribir)</option>
                             </select>
+                            {esProductoNuevo && (
+                              <>
+                                <input
+                                  required
+                                  autoFocus
+                                  value={it.producto_nombre}
+                                  onChange={e => actualizarLinea(i, 'producto_nombre', e.target.value)}
+                                  placeholder="Nombre del producto nuevo..."
+                                  className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm mt-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                                <select
+                                  value={it.metrica}
+                                  onChange={e => cambiarMetricaNuevo(i, e.target.value)}
+                                  className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm mt-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                >
+                                  <option value="ENTERO">Metrica: Entero</option>
+                                  <option value="EN_PARTIDA">Metrica: En partida</option>
+                                </select>
+                              </>
+                            )}
                           </>
                         )}
                       </div>
-                      <div className="col-span-2">
+                      <div className={esServicio ? 'col-span-3' : 'col-span-2'}>
                         <label className="block text-xs font-medium text-gray-500 mb-1">Cantidad</label>
                         {enPartida ? (
                           <div className="border border-gray-200 bg-gray-100 rounded-lg px-2.5 py-2 text-sm text-gray-700">
@@ -343,47 +399,51 @@ export default function Guias() {
                           />
                         )}
                       </div>
-                      <div className="col-span-3">
-                        <label className="block text-xs font-medium text-gray-500 mb-1">Destino</label>
-                        <select
-                          value={it.destino}
-                          onChange={e => actualizarLinea(i, 'destino', e.target.value)}
-                          className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                          <option value="ALMACEN">✗ Almacen (genera codigo)</option>
-                          <option value="OFICINA">✓ Oficina</option>
-                          <option value="LABORATORIO">✓ Laboratorio</option>
-                          <option value="OTRO">✓ Otro (especificar)</option>
-                        </select>
-                        {it.destino === 'OTRO' && (
-                          <input
-                            required
-                            autoFocus
-                            value={it.destino_detalle}
-                            onChange={e => actualizarLinea(i, 'destino_detalle', e.target.value)}
-                            placeholder="Ej: Cliente, evento..."
-                            className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm mt-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          />
-                        )}
-                      </div>
-                      <div className="col-span-2">
-                        <label className="block text-xs font-medium text-gray-500 mb-1">Unidad de medida</label>
-                        {necesitaUnidad ? (
+                      {!esServicio && (
+                        <div className="col-span-3">
+                          <label className="block text-xs font-medium text-gray-500 mb-1">Destino</label>
                           <select
-                            required
-                            value={it.unidad_medida_id}
-                            onChange={e => actualizarLinea(i, 'unidad_medida_id', e.target.value)}
+                            value={it.destino}
+                            onChange={e => actualizarLinea(i, 'destino', e.target.value)}
                             className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                           >
-                            <option value="">Definir...</option>
-                            {unidades.map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}
+                            <option value="ALMACEN">✗ Almacen (genera codigo)</option>
+                            <option value="OFICINA">✓ Oficina</option>
+                            <option value="LABORATORIO">✓ Laboratorio</option>
+                            <option value="OTRO">✓ Otro (especificar)</option>
                           </select>
-                        ) : (
-                          <div className="text-sm text-gray-500 px-2.5 py-2">
-                            {prod.unidad_medida_nombre || 'Sin definir'}
-                          </div>
-                        )}
-                      </div>
+                          {it.destino === 'OTRO' && (
+                            <input
+                              required
+                              autoFocus
+                              value={it.destino_detalle}
+                              onChange={e => actualizarLinea(i, 'destino_detalle', e.target.value)}
+                              placeholder="Ej: Cliente, evento..."
+                              className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm mt-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          )}
+                        </div>
+                      )}
+                      {!esServicio && (
+                        <div className="col-span-2">
+                          <label className="block text-xs font-medium text-gray-500 mb-1">Unidad de medida</label>
+                          {necesitaUnidad ? (
+                            <select
+                              required
+                              value={it.unidad_medida_id}
+                              onChange={e => actualizarLinea(i, 'unidad_medida_id', e.target.value)}
+                              className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                              <option value="">Definir...</option>
+                              {unidades.map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}
+                            </select>
+                          ) : (
+                            <div className="text-sm text-gray-500 px-2.5 py-2">
+                              {prod.unidad_medida_nombre || 'Sin definir'}
+                            </div>
+                          )}
+                        </div>
+                      )}
                       <div className="col-span-1 flex items-end justify-center h-full pt-5">
                         {form.items.length > 1 && (
                           <button
@@ -442,7 +502,7 @@ export default function Guias() {
                       </div>
                     )}
 
-                    {it.destino !== 'ALMACEN' && (
+                    {!esServicio && it.destino !== 'ALMACEN' && (
                       <label className="flex items-center gap-2 mt-3 text-sm text-gray-600">
                         <input
                           type="checkbox"
@@ -467,7 +527,7 @@ export default function Guias() {
                 onClick={agregarLinea}
                 className="text-sm border border-gray-300 rounded-lg px-3 py-2 text-gray-600 hover:bg-gray-50"
               >
-                + Agregar producto
+                + Agregar linea (producto o servicio)
               </button>
               <div className="flex gap-3">
                 <button type="button" onClick={() => setMostrarForm(false)} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">Cancelar</button>

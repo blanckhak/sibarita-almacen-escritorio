@@ -148,11 +148,20 @@ CREATE UNIQUE INDEX guias_numero_almacen_unique ON guias (numero_guia, almacen_i
 CREATE TABLE guia_items (
   id SERIAL PRIMARY KEY,
   guia_id INTEGER REFERENCES guias(id),
+  -- NULL en lineas SERVICIO (Fase 8): un servicio no usa el catalogo de
+  -- productos, se describe en texto libre en `descripcion`.
   producto_id INTEGER REFERENCES productos(id),
   -- Para lineas de producto EN_PARTIDA (Fase 7), esta cantidad es la suma
   -- de las filas de guia_item_partidas; para ENTERO se ingresa directo.
   cantidad INTEGER NOT NULL,
-  destino VARCHAR(20) NOT NULL CHECK (destino IN ('ALMACEN', 'OFICINA', 'LABORATORIO', 'OTRO')),
+  -- Tipo de linea (Bloque 6, Fase 8): PRODUCTO = ingreso normal (puede generar
+  -- etiqueta y mover inventario). SERVICIO = solo se registra e imprime
+  -- (mantenimiento, limpieza, etc.), nunca genera etiqueta ni toca inventario.
+  tipo VARCHAR(20) NOT NULL DEFAULT 'PRODUCTO' CHECK (tipo IN ('PRODUCTO', 'SERVICIO')),
+  -- Texto libre del servicio; solo se usa cuando tipo = 'SERVICIO'.
+  descripcion VARCHAR(200),
+  -- destino es NULL en lineas SERVICIO (no van a ningun almacen fisico).
+  destino VARCHAR(20) CHECK (destino IS NULL OR destino IN ('ALMACEN', 'OFICINA', 'LABORATORIO', 'OTRO')),
   -- Solo aplica cuando destino es OFICINA/LABORATORIO/OTRO: si ya lo recogieron
   -- (true) sale automatico sin etiqueta; si no (false), se queda en almacen
   -- etiquetado hasta que lo recojan, igual que un item con destino ALMACEN.

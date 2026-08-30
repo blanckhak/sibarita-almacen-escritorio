@@ -14,6 +14,7 @@ router.get('/fase2', verificarToken, async (req, res) => {
         SELECT p.nombre as producto_nombre, SUM(gi.cantidad)::int as total_movido
         FROM guia_items gi
         JOIN productos p ON gi.producto_id = p.id
+        WHERE gi.tipo = 'PRODUCTO'
         GROUP BY p.nombre
         ORDER BY total_movido DESC
         LIMIT 5

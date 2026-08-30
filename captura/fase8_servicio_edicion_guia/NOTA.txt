@@ -1,0 +1,156 @@
+FASE 8 - Lineas tipo SERVICIO + edicion restringida de guia (cantidad + N de O.C.)
+================================================================================
+Fecha: 29/08/2026
+
+REGLA DE NEGOCIO (definida en Fase 3, con 3 aclaraciones nuevas del 29/08)
+------------------------------------------------------------------------
+Fase 3 dejo dos puntos para esta fase:
+- Bloque 6: "guia o linea de TIPO SERVICIO -> se registra e imprime, NO genera
+  etiqueta ni toca inventario".
+- Bloque 2: "editar guia CERRADA: solo se puede cambiar la CANTIDAD de las
+  lineas y el NUMERO DE O.C. Nada mas".
+
+Aclaraciones tomadas con el usuario antes de tocar el esquema (AskUserQuestion):
+1. SERVICIO se modela POR LINEA (guia_items.tipo = PRODUCTO / SERVICIO), no por
+   guia completa. Permite guias mixtas; una guia 100% de servicios se arma
+   marcando todas las lineas como servicio.
+2. Al editar la CANTIDAD de una linea que ya movio inventario: se AJUSTA el
+   inventario del almacen por la diferencia y se BLOQUEA la edicion si el
+   codigo de esa linea ya salio (etiqueta en estado SALIO o REEMPLAZADA).
+3. El editor de cantidad + N de O.C. se habilita para CUALQUIER guia (CARGADA y
+   CERRADA). En CERRADA queda restringido a esos dos campos; en CARGADA convive
+   con la edicion normal de cabecera.
+
+CAMBIOS DE ESQUEMA (migraciones idempotentes en setup.js + database.sql)
+----------------------------------------------------------------------
+- guia_items + columna `tipo VARCHAR(20) NOT NULL DEFAULT 'PRODUCTO'`
+  CHECK con nombre propio (guia_items_tipo_check) IN ('PRODUCTO','SERVICIO').
+- guia_items + columna `descripcion VARCHAR(200)` -> texto libre del servicio;
+  solo se usa cuando tipo='SERVICIO'. Una linea SERVICIO NO usa el catalogo de
+  productos: su producto_id queda NULL.
+- guia_items.destino pasa a ser NULLABLE (las lineas SERVICIO lo dejan en NULL)
+  y su CHECK con nombre propio (guia_items_destino_check) se recrea admitiendo
+  NULL: CHECK (destino IS NULL OR destino IN ('ALMACEN','OFICINA','LABORATORIO','OTRO')).
+Ninguna migracion borra datos. Ya aplicadas en sibarita_db local (verificado:
+las 19 filas existentes quedaron con tipo='PRODUCTO', 0 con destino NULL,
+producto_id sigue nullable).
+
+BACKEND
+-------
+routes/guias.js
+- POST /: cada item admite `tipo`. Una linea SERVICIO se valida solo por
+  cantidad (entero > 0) y se inserta con producto_id=NULL,
+  descripcion=it.producto_nombre, destino/destino_detalle/recogido=NULL. NO
+  genera etiqueta, NO llama a ajustarInventario, NO procesa partidas, NO crea
+  ninguna fila en `productos` (fix del code-review: antes un servicio nuevo se
+  daba de alta en el catalogo). El resto del flujo PRODUCTO queda igual; el
+  INSERT de guia_items PRODUCTO fija tipo='PRODUCTO' explicito.
+- GET /:id: el detalle de items trae `gi.tipo`; `producto_nombre` sale de
+  COALESCE(p.nombre, gi.descripcion) y el JOIN a productos pasa a LEFT JOIN.
+- PUT /:id (reescrito, ahora transaccional):
+  * Cabecera: igual que antes (proveedor/numero_oc/direccion/guia_remision/
+    factura/estado, campo presente y vacio -> NULL).
+  * `items: [{ id, cantidad }]` corrige la cantidad de lineas ya registradas.
+    - Bloquea EN_PARTIDA (su cantidad sale del desglose de partidas) -> 400.
+    - Bloquea si la linea tiene etiqueta y su estado != EN_ALMACEN -> 409.
+    - Bloquea si la etiqueta viva de la linea tiene condicion='USADO' (Fase 5:
+      su stock esta en el bucket DEVOLUCION, no NUEVO) -> 409. (fix code-review)
+    - Si la linea tiene etiqueta EN_ALMACEN condicion NUEVO: ajusta el
+      inventario del almacen por (nueva - vieja) via ajustarInventario (bucket
+      NUEVO, mismo delta que el ingreso).
+    - Linea que no pertenece a la guia -> 400.
+  * Guia CERRADA: rechaza con 400 cualquier campo de cabecera que no sea
+    numero_oc o estado (para reabrirla). El resto sigue permitido: numero_oc,
+    estado e items.
+  * SELECT ... FOR UPDATE sobre la guia y FOR UPDATE OF gi sobre cada linea;
+    LEFT JOIN a productos (una linea SERVICIO no tiene producto).
+- consulta/productos: agrega `gi.tipo = 'PRODUCTO'` -> las lineas SERVICIO no
+  aparecen en la consulta de productos por almacen/guia (no son stock fisico).
+routes/dashboard.js
+- El "top productos que mas rotan" (GET /api/dashboard/fase2) agrega
+  `WHERE gi.tipo = 'PRODUCTO'`.
+
+FRONTEND
+--------
+pages/Guias.jsx (Nuevo Ingreso)
+- Cada linea arranca tipo 'PRODUCTO'. Toggle "Producto / Servicio" arriba de la
+  linea. En SERVICIO: el campo Producto pasa a ser un INPUT de texto libre
+  ("Servicio / descripcion"), y se ocultan Destino, Unidad de medida, el
+  checkbox "ya lo recogieron" y el editor de partidas. Al pasar a SERVICIO se
+  suelta producto_id/nuevo/unidad_medida_id.
+- Boton "+ Agregar linea (producto o servicio)".
+- handleSubmit envia `tipo`; las validaciones de partidas ignoran las lineas
+  SERVICIO.
+pages/GuiaDetalle.jsx
+- Tabla de items: badge "SERVICIO" junto al nombre; la columna Destino muestra
+  "—" cuando es NULL; la columna Estado muestra "Servicio" en vez de "Salida
+  automatica" para esas lineas. La Nota de Ingreso impresa marca "(servicio)".
+- Formulario "Editar guia":
+  * Guia CARGADA: cabecera completa como antes + seccion nueva "Cantidad por
+    linea".
+  * Guia CERRADA: solo N de O.C. + Estado + "Cantidad por linea", con aviso
+    en amarillo.
+  * "Cantidad por linea": un input por linea, deshabilitado (con el motivo)
+    para lineas EN_PARTIDA y para lineas cuyo codigo ya salio. Al guardar se
+    manda solo `items` con las lineas que cambiaron y se recarga el detalle.
+
+PROBADO (contra sibarita_db local, backend en :3000, scratchpad/test-fase8.mjs)
+---------------------------------------------------------------------------
+34/34 asserts OK:
+- Guia mixta PRODUCTO(ALMACEN,5) + SERVICIO(2): 201, 1 sola etiqueta; la linea
+  SERVICIO con destino NULL, producto_id NULL, sin etiqueta, y NO se creo fila
+  en productos; producto_nombre = la descripcion libre; inventario del producto
+  PRODUCTO = 5.
+- SERVICIO cantidad 0 y decimal -> 400.
+- PUT cantidad 5->8 (CARGADA): inventario 5->8 (+3), guia_items.cantidad=8.
+- PUT cantidad 8->4: inventario -> 4.
+- PUT cantidad de la linea SERVICIO: 200, guia_items.cantidad=9, no toco ningun
+  inventario.
+- PUT estado CERRADA: 200.
+- CERRADA: PUT numero_oc + cantidad -> 200, inventario 4->6.
+- CERRADA: PUT proveedor / direccion -> 400 (bloqueado).
+- Linea EN_PARTIDA (3+2=5): PUT cantidad -> 400 (bloqueado).
+- Etiqueta forzada a SALIO: PUT cantidad -> 409, inventario intacto.
+- Etiqueta viva forzada a condicion USADO: PUT cantidad -> 409, inventario
+  intacto.
+- PUT con id de linea de otra guia -> 400.
+Todos los datos de prueba borrados despues; secuencia etiquetas_codigo_seq
+restaurada. Build de frontend limpio (tsc + vite). frontend-dist re-sincronizado.
+
+/CODE-REVIEW (medium, 29/08) - 4 hallazgos, los 4 resueltos
+--------------------------------------------------------
+1. PUT ajustaba siempre el bucket NUEVO del inventario -> una linea cuya
+   etiqueta viva venia de una devolucion USADA (stock en bucket DEVOLUCION)
+   quedaba descuadrada. -> se agrega e.condicion al query y se BLOQUEA con 409
+   la edicion de cantidad de esas lineas.
+2. Las lineas SERVICIO forzaban una fila en `productos` por cada descripcion
+   libre. -> guia_items.descripcion + producto_id NULL para SERVICIO; el
+   catalogo ya no se ensucia. GET /:id usa LEFT JOIN + COALESCE.
+3. Chequeo duplicado muerto de la cantidad SERVICIO dentro de la transaccion.
+   -> eliminado (la validacion pre-transaccion ya cubre el caso).
+4. Una linea SERVICIO apuntando a un producto EN_PARTIDA se mostraba editable
+   pero el backend la rechazaba. -> ya no aplica: una linea SERVICIO no tiene
+   producto_id, no puede quedar asociada a un producto EN_PARTIDA.
+
+INCIDENTE DE DATOS (resuelto en la misma sesion)
+-----------------------------------------------
+Un script de limpieza manual de datos de prueba uso un patron `LIKE 'X-%'`
+demasiado amplio y borro la guia real id 16 "X-20234" (almacen MALSA,
+producto 8, 8 u., etiqueta 9007) junto con su guia_item, etiqueta e historial.
+Se restauro fila por fila desde el backup automatico
+backups/sibarita_db_20260829_093159.sql (09:32) sin re-ejecutar el ajuste de
+inventario (el -8 nunca se habia aplicado). Verificado: guias=10, guia_items=19,
+etiquetas=17, etiqueta_historial=36, inventario=22 filas / 5882 total,
+productos=14 -> identico al backup. Tambien se borraron 4 entradas huerfanas
+de actividad_log que referenciaban guias de prueba ya inexistentes.
+Leccion: los scripts de limpieza de prueba deben borrar por ID capturado al
+inicio del test, nunca por patron LIKE sobre numero_guia.
+
+PENDIENTE / A TENER EN CUENTA
+----------------------------
+- Capturas visuales de la app: NO se pudieron tomar en esta sesion (el Chrome
+  de la extension no alcanza localhost:3000 desde este entorno). El flujo esta
+  cubierto por el test end-to-end por API (34/34). `npm start` sirve la
+  version nueva.
+- Instalador .exe no regenerado; deploy Vercel/Render sin tocar (repo congelado).
+- Env: ninguna nueva.

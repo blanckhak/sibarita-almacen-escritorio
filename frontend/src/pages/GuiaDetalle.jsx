@@ -52,6 +52,24 @@ export default function GuiaDetalle() {
       estado: guia.estado || 'CARGADA',
       guia_remision: guia.guia_remision || '',
       factura: guia.factura || '',
+      // Fase 8: correccion de cantidad por linea. Una linea no se puede editar
+      // si su producto es EN_PARTIDA (cantidad = suma de partidas) o si su
+      // codigo ya salio del almacen.
+      items: guia.items.map(it => {
+        const bloqueadaPartida = it.producto_metrica === 'EN_PARTIDA' && it.tipo !== 'SERVICIO'
+        const bloqueadaSalida = it.etiqueta_id && it.etiqueta_estado !== 'EN_ALMACEN'
+        return {
+          id: it.id,
+          producto_nombre: it.producto_nombre,
+          tipo: it.tipo,
+          cantidad: String(it.cantidad),
+          cantidadOriginal: it.cantidad,
+          editable: !bloqueadaPartida && !bloqueadaSalida,
+          motivo: bloqueadaPartida
+            ? 'cantidad por partidas'
+            : bloqueadaSalida ? `codigo ${it.etiqueta_codigo} ya salio` : null,
+        }
+      }),
     })
     setProveedorOtro(!!guia.proveedor && !proveedoresConocidos.includes(guia.proveedor))
     setEditando(true)
@@ -67,14 +85,32 @@ export default function GuiaDetalle() {
     }
   }
 
+  const cerrada = (guia?.estado || 'CARGADA') === 'CERRADA'
+
   const guardarEdicion = async (e) => {
     e.preventDefault()
     setGuardandoEdicion(true)
     try {
-      const { data } = await api.put(`/api/guias/${id}`, formEdicion)
-      setGuia(g => ({ ...g, ...data }))
+      const itemsCambiados = formEdicion.items
+        .filter(li => li.editable && Number(li.cantidad) > 0 && Number(li.cantidad) !== li.cantidadOriginal)
+        .map(li => ({ id: li.id, cantidad: Number(li.cantidad) }))
+
+      // Guia CERRADA: el backend solo admite numero_oc / estado / items.
+      const body = cerrada
+        ? { numero_oc: formEdicion.numero_oc, estado: formEdicion.estado, items: itemsCambiados }
+        : {
+            proveedor: formEdicion.proveedor,
+            numero_oc: formEdicion.numero_oc,
+            direccion: formEdicion.direccion,
+            estado: formEdicion.estado,
+            guia_remision: formEdicion.guia_remision,
+            factura: formEdicion.factura,
+            items: itemsCambiados,
+          }
+      await api.put(`/api/guias/${id}`, body)
       setEditando(false)
       setMensaje({ tipo: 'ok', texto: 'Guia actualizada correctamente.' })
+      cargar()
     } catch (err) {
       setMensaje({ tipo: 'error', texto: err.response?.data?.error || 'No se pudo actualizar la guia' })
     } finally {
@@ -198,28 +234,36 @@ export default function GuiaDetalle() {
           <div className="bg-white rounded-xl shadow-md p-6 mb-6 border border-blue-100">
             <h2 className="text-lg font-semibold text-gray-700 mb-4">Editar guia</h2>
             <form onSubmit={guardarEdicion}>
+              {cerrada && (
+                <p className="mb-4 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  Guia CERRADA: solo se puede corregir la cantidad de las lineas y el N° de O.C.
+                  Para editar el resto, cambiala a CARGADA primero.
+                </p>
+              )}
               <div className="grid grid-cols-2 gap-4 mb-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-600 mb-1">Proveedor</label>
-                  <select
-                    value={proveedorOtro ? '__otro__' : formEdicion.proveedor}
-                    onChange={e => seleccionarProveedor(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Sin proveedor / seleccionar...</option>
-                    {proveedoresConocidos.map(p => <option key={p} value={p}>{p}</option>)}
-                    <option value="__otro__">+ Otro proveedor (escribir)</option>
-                  </select>
-                  {proveedorOtro && (
-                    <input
-                      autoFocus
-                      value={formEdicion.proveedor}
-                      onChange={e => setFormEdicion(f => ({ ...f, proveedor: e.target.value }))}
-                      placeholder="Nombre del proveedor nuevo..."
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm mt-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  )}
-                </div>
+                {!cerrada && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-1">Proveedor</label>
+                    <select
+                      value={proveedorOtro ? '__otro__' : formEdicion.proveedor}
+                      onChange={e => seleccionarProveedor(e.target.value)}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">Sin proveedor / seleccionar...</option>
+                      {proveedoresConocidos.map(p => <option key={p} value={p}>{p}</option>)}
+                      <option value="__otro__">+ Otro proveedor (escribir)</option>
+                    </select>
+                    {proveedorOtro && (
+                      <input
+                        autoFocus
+                        value={formEdicion.proveedor}
+                        onChange={e => setFormEdicion(f => ({ ...f, proveedor: e.target.value }))}
+                        placeholder="Nombre del proveedor nuevo..."
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm mt-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    )}
+                  </div>
+                )}
                 <div>
                   <label className="block text-sm font-medium text-gray-600 mb-1">N° de Orden de Compra</label>
                   <input
@@ -229,30 +273,36 @@ export default function GuiaDetalle() {
                     className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-600 mb-1">Direccion</label>
-                  <input
-                    value={formEdicion.direccion}
-                    onChange={e => setFormEdicion(f => ({ ...f, direccion: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-600 mb-1">Guia de Remision</label>
-                  <input
-                    value={formEdicion.guia_remision}
-                    onChange={e => setFormEdicion(f => ({ ...f, guia_remision: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-600 mb-1">Factura</label>
-                  <input
-                    value={formEdicion.factura}
-                    onChange={e => setFormEdicion(f => ({ ...f, factura: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
+                {!cerrada && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-1">Direccion</label>
+                    <input
+                      value={formEdicion.direccion}
+                      onChange={e => setFormEdicion(f => ({ ...f, direccion: e.target.value }))}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                )}
+                {!cerrada && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-1">Guia de Remision</label>
+                    <input
+                      value={formEdicion.guia_remision}
+                      onChange={e => setFormEdicion(f => ({ ...f, guia_remision: e.target.value }))}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                )}
+                {!cerrada && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-1">Factura</label>
+                    <input
+                      value={formEdicion.factura}
+                      onChange={e => setFormEdicion(f => ({ ...f, factura: e.target.value }))}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                )}
                 <div>
                   <label className="block text-sm font-medium text-gray-600 mb-1">Estado</label>
                   <select
@@ -265,6 +315,41 @@ export default function GuiaDetalle() {
                   </select>
                 </div>
               </div>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-600 mb-2">Cantidad por linea</label>
+                <div className="space-y-2 border border-gray-200 rounded-lg p-3">
+                  {formEdicion.items.map((li, idx) => (
+                    <div key={li.id} className="flex items-center gap-3 text-sm">
+                      <span className="flex-1 text-gray-700">
+                        {li.producto_nombre}
+                        {li.tipo === 'SERVICIO' && <span className="ml-2 text-[10px] font-bold text-slate-500">SERVICIO</span>}
+                      </span>
+                      {li.editable ? (
+                        <input
+                          type="number" min="1" step="1"
+                          value={li.cantidad}
+                          onChange={e => setFormEdicion(f => {
+                            const items = [...f.items]
+                            items[idx] = { ...items[idx], cantidad: e.target.value }
+                            return { ...f, items }
+                          })}
+                          className="w-24 border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      ) : (
+                        <span className="text-gray-400 text-xs text-right">
+                          {li.cantidad} · {li.motivo}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-400 mt-2">
+                  Cambiar la cantidad de una linea con codigo ajusta tambien el inventario del almacen.
+                  Las lineas cuyo codigo ya salio no se pueden modificar.
+                </p>
+              </div>
+
               <div className="flex justify-end gap-3">
                 <button type="button" onClick={() => setEditando(false)} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">Cancelar</button>
                 <button type="submit" disabled={guardandoEdicion} className="px-6 py-2 text-sm bg-blue-700 text-white rounded-lg hover:bg-blue-800 disabled:opacity-50">
@@ -303,7 +388,12 @@ export default function GuiaDetalle() {
                 <tr key={it.id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                   <td className="px-6 py-3 font-semibold text-gray-800">
                     {it.producto_nombre}
-                    {it.producto_metrica === 'EN_PARTIDA' && (
+                    {it.tipo === 'SERVICIO' && (
+                      <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-700 align-middle">
+                        SERVICIO
+                      </span>
+                    )}
+                    {it.producto_metrica === 'EN_PARTIDA' && it.tipo !== 'SERVICIO' && (
                       <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-700 align-middle">
                         EN PARTIDA
                       </span>
@@ -323,11 +413,17 @@ export default function GuiaDetalle() {
                       : '—'}
                   </td>
                   <td className="px-6 py-3">
-                    <span className={`px-2 py-1 rounded-full text-xs font-bold ${colorDestino[it.destino]}`}>
-                      {it.destino}
-                    </span>
-                    {it.destino === 'OTRO' && it.destino_detalle && (
-                      <div className="text-xs text-gray-500 mt-1">{it.destino_detalle}</div>
+                    {it.destino ? (
+                      <>
+                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${colorDestino[it.destino]}`}>
+                          {it.destino}
+                        </span>
+                        {it.destino === 'OTRO' && it.destino_detalle && (
+                          <div className="text-xs text-gray-500 mt-1">{it.destino_detalle}</div>
+                        )}
+                      </>
+                    ) : (
+                      <span className="text-gray-400 text-xs">—</span>
                     )}
                   </td>
                   <td className="px-6 py-3 font-mono text-gray-700">
@@ -338,7 +434,7 @@ export default function GuiaDetalle() {
                   <td className="px-6 py-3">
                     {it.etiqueta_estado
                       ? <span className={`px-2 py-1 rounded-full text-xs font-bold ${colorEtiquetaEstado(it.etiqueta_estado)}`}>{it.etiqueta_estado}</span>
-                      : <span className="text-gray-400 text-xs">Salida automatica</span>}
+                      : <span className="text-gray-400 text-xs">{it.tipo === 'SERVICIO' ? 'Servicio' : 'Salida automatica'}</span>}
                   </td>
                   {puedeImprimir && (
                     <td className="px-6 py-3 text-right">
@@ -427,6 +523,7 @@ export default function GuiaDetalle() {
               <tr key={it.id} className="border-b border-gray-200 align-top">
                 <td className="py-1">
                   {it.producto_nombre}
+                  {it.tipo === 'SERVICIO' && <span className="text-[10px] text-gray-500"> (servicio)</span>}
                   {it.partidas?.length > 0 && (
                     <span className="block text-[10px] text-gray-500">
                       {it.partidas.map(pt => `${pt.cantidad}${pt.referencia ? ` (${pt.referencia})` : ''}`).join(' · ')}

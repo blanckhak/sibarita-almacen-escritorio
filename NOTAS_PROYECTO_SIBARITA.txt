@@ -1179,6 +1179,54 @@ captura/fase5_devoluciones_usado/NOTA.txt. Resumen:
   colores de estado de etiqueta -usado en 4 paginas-; fecha de la nota
   de devolucion desde devuelto_en, no new Date()).
 
+FASE 8 CERRADA (29/08/2026): lineas de guia tipo SERVICIO (Bloque 6) +
+edicion restringida de guia a cantidad de linea y N de O.C. (Bloque 2).
+Detalle, reglas y lo probado en captura/fase8_servicio_edicion_guia/NOTA.txt.
+Antes de tocar esquema se aclararon 3 puntos con el usuario: SERVICIO se
+modela POR LINEA (guia_items.tipo PRODUCTO/SERVICIO, permite guia mixta);
+editar la cantidad de una linea ajusta el inventario por la diferencia y
+se BLOQUEA si el codigo ya salio (etiqueta SALIO/REEMPLAZADA); el editor
+de cantidad + N de O.C. se habilita para CARGADA y CERRADA (en CERRADA
+solo esos dos campos). Resumen tecnico:
+- Esquema (migraciones idempotentes): guia_items +columna tipo
+  (PRODUCTO default / SERVICIO, CHECK con nombre propio) +columna
+  descripcion (texto libre del servicio); destino pasa a NULLABLE y su
+  CHECK admite NULL (las lineas SERVICIO lo dejan en NULL). Sin borrar
+  datos; las 19 filas previas quedaron tipo='PRODUCTO'.
+- guias.js POST /: una linea SERVICIO se valida solo por cantidad, se
+  guarda con producto_id NULL + descripcion, sin etiqueta, sin inventario,
+  sin partidas, y SIN crear fila en el catalogo de productos. GET /:id
+  trae gi.tipo y COALESCE(p.nombre, gi.descripcion).
+- guias.js PUT /:id reescrito y transaccional: ademas de la cabecera
+  acepta items:[{id,cantidad}] -> ajusta inventario (bucket NUEVO) por el
+  delta si la linea tiene etiqueta EN_ALMACEN condicion NUEVO; 400 si es
+  EN_PARTIDA, 409 si el codigo ya salio, 409 si la etiqueta viva es una
+  devolucion USADA, 400 si la linea no es de esa guia. Guia CERRADA:
+  rechaza con 400 todo campo de cabecera que no sea numero_oc o estado.
+- consulta/productos y el "top productos" del dashboard excluyen tipo
+  SERVICIO.
+- Frontend: Guias.jsx (toggle Producto/Servicio por linea; en servicio el
+  producto es un input de texto libre y se ocultan destino/unidad/
+  partidas); GuiaDetalle.jsx (badge SERVICIO, destino "—", seccion
+  "Cantidad por linea" en el form de edicion, form recortado cuando la
+  guia esta CERRADA).
+- /code-review medium: 4 hallazgos, los 4 resueltos (bucket de inventario
+  DEVOLUCION vs NUEVO al editar una linea con devolucion USADA -> se
+  bloquea; servicios ya no crean fila en `productos` -> columna
+  descripcion + producto_id NULL; chequeo muerto eliminado; linea
+  SERVICIO+EN_PARTIDA ya imposible).
+- Probado end-to-end por API (scratchpad/test-fase8.mjs, 34/34) y
+  limpiado despues; secuencia de codigo restaurada. Build de frontend
+  limpio, frontend-dist re-sincronizado.
+- INCIDENTE: un script manual de limpieza de datos de prueba con un LIKE
+  'X-%' demasiado amplio borro la guia real "X-20234" (id 16); se
+  restauro fila por fila desde backups/sibarita_db_20260829_093159.sql y
+  se verifico que todas las tablas quedaron identicas al backup. Detalle
+  en captura/fase8_servicio_edicion_guia/NOTA.txt.
+- Capturas visuales de la app pendientes (el navegador de la extension no
+  alcanzo localhost en esta sesion; el flujo queda cubierto por el test
+  por API).
+
 --------------------------------------------------
 ESTADO DEL PLAN DE FASES (se actualiza al cerrar cada fase)
 --------------------------------------------------
@@ -1194,7 +1242,8 @@ ESTADO DEL PLAN DE FASES (se actualiza al cerrar cada fase)
     (CERRADA 28/08, code-review OK con 3 fixes, commit da4a6c1)
 [x] Fase 7 - Metrica ENTERO/EN PARTIDA + partidas parciales
     (CERRADA 28/08, code-review OK con 1 fix, commiteada 29/08)
-[ ] Fase 8 - Guia/linea tipo Servicio + edicion guia CERRADA
+[x] Fase 8 - Guia/linea tipo Servicio + edicion guia CERRADA
+    (CERRADA 29/08, code-review OK con 4 fixes, pendiente commit)
 [ ] Fase 9 - Stock en Orden de Salida + control de concurrencia
 [ ] Fase 10 - Modulo Compras diarias
 

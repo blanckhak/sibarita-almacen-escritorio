@@ -115,7 +115,9 @@ async function setup() {
       guia_id INTEGER REFERENCES guias(id),
       producto_id INTEGER REFERENCES productos(id),
       cantidad INTEGER NOT NULL,
-      destino VARCHAR(20) NOT NULL CHECK (destino IN ('ALMACEN', 'OFICINA', 'LABORATORIO', 'OTRO'))
+      tipo VARCHAR(20) NOT NULL DEFAULT 'PRODUCTO' CHECK (tipo IN ('PRODUCTO', 'SERVICIO')),
+      descripcion VARCHAR(200),
+      destino VARCHAR(20) CHECK (destino IS NULL OR destino IN ('ALMACEN', 'OFICINA', 'LABORATORIO', 'OTRO'))
     );
 
     ALTER TABLE guia_items ADD COLUMN IF NOT EXISTS recogido BOOLEAN;
@@ -135,9 +137,26 @@ async function setup() {
     -- con OTRO incluido desde el CREATE TABLE de arriba, aca solo aplica
     -- a las que ya existian).
     ALTER TABLE guia_items ADD COLUMN IF NOT EXISTS destino_detalle VARCHAR(200);
+
+    -- Tipo de linea PRODUCTO / SERVICIO (Bloque 6, Fase 8). Una linea SERVICIO
+    -- solo se registra e imprime: nunca genera etiqueta ni toca inventario, y
+    -- no tiene destino fisico. En instalaciones nuevas ya sale del CREATE TABLE
+    -- de database.sql; aca solo aplica a las que ya existian.
+    ALTER TABLE guia_items ADD COLUMN IF NOT EXISTS tipo VARCHAR(20) NOT NULL DEFAULT 'PRODUCTO';
+    ALTER TABLE guia_items DROP CONSTRAINT IF EXISTS guia_items_tipo_check;
+    ALTER TABLE guia_items ADD CONSTRAINT guia_items_tipo_check
+      CHECK (tipo IN ('PRODUCTO', 'SERVICIO'));
+
+    -- Texto libre de la linea SERVICIO (Fase 8): un servicio no va al catalogo
+    -- de productos, se guarda su descripcion aca y producto_id queda NULL.
+    ALTER TABLE guia_items ADD COLUMN IF NOT EXISTS descripcion VARCHAR(200);
+
+    -- destino pasa a ser NULLABLE (las lineas SERVICIO lo dejan en NULL). El
+    -- CHECK se recrea admitiendo NULL. Idempotente (DROP/ADD).
+    ALTER TABLE guia_items ALTER COLUMN destino DROP NOT NULL;
     ALTER TABLE guia_items DROP CONSTRAINT IF EXISTS guia_items_destino_check;
     ALTER TABLE guia_items ADD CONSTRAINT guia_items_destino_check
-      CHECK (destino IN ('ALMACEN', 'OFICINA', 'LABORATORIO', 'OTRO'));
+      CHECK (destino IS NULL OR destino IN ('ALMACEN', 'OFICINA', 'LABORATORIO', 'OTRO'));
 
     CREATE TABLE IF NOT EXISTS etiquetas (
       id SERIAL PRIMARY KEY,

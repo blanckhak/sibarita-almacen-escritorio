@@ -30,7 +30,10 @@ router.get('/consulta/productos', verificarToken, async (req, res) => {
     valores.push(`%${numero_guia}%`)
     condiciones.push(`g.numero_guia ILIKE $${valores.length}`)
   }
-  const where = condiciones.length > 0 ? `WHERE ${condiciones.join(' AND ')}` : ''
+  // Las lineas SERVICIO (Fase 8) no representan stock fisico: quedan fuera de
+  // la consulta de productos por almacen/guia.
+  condiciones.unshift(`gi.tipo = 'PRODUCTO'`)
+  const where = `WHERE ${condiciones.join(' AND ')}`
 
   try {
     const result = await pool.query(`
@@ -92,13 +95,13 @@ router.get('/:id', verificarToken, async (req, res) => {
     }
 
     const items = await pool.query(`
-      SELECT gi.id, gi.producto_id, gi.cantidad, gi.destino, gi.destino_detalle, gi.recogido,
-             p.nombre as producto_nombre, p.metrica as producto_metrica,
+      SELECT gi.id, gi.producto_id, gi.cantidad, gi.tipo, gi.destino, gi.destino_detalle, gi.recogido,
+             COALESCE(p.nombre, gi.descripcion) as producto_nombre, p.metrica as producto_metrica,
              um.nombre as unidad_medida_nombre, um.abreviatura as unidad_medida_abreviatura,
              e.id as etiqueta_id, e.codigo as etiqueta_codigo, e.estado as etiqueta_estado,
              e.condicion as etiqueta_condicion
       FROM guia_items gi
-      JOIN productos p ON gi.producto_id = p.id
+      LEFT JOIN productos p ON gi.producto_id = p.id
       LEFT JOIN unidades_medida um ON p.unidad_medida_id = um.id
       LEFT JOIN etiquetas e ON e.guia_item_id = gi.id AND e.estado <> 'REEMPLAZADA'
       WHERE gi.guia_id = $1
@@ -142,7 +145,15 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
   }
   for (const it of items) {
     if (!it.producto_id && !(it.producto_nombre && it.producto_nombre.trim())) {
-      return res.status(400).json({ error: 'Cada linea debe tener un producto' })
+      return res.status(400).json({ error: 'Cada linea debe tener un producto o servicio' })
+    }
+    // Linea SERVICIO (Fase 8): solo se registra e imprime -> sin destino, sin
+    // partidas, sin etiqueta. Solo se valida la cantidad.
+    if (it.tipo === 'SERVICIO') {
+      if (!esEnteroPositivo(it.cantidad)) {
+        return res.status(400).json({ error: 'La cantidad debe ser un entero mayor a 0 en todas las lineas' })
+      }
+      continue
     }
     if (!DESTINOS.includes(it.destino)) {
       return res.status(400).json({ error: 'Destino invalido en una de las lineas' })
@@ -195,6 +206,18 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
     const etiquetasGeneradas = []
 
     for (const it of items) {
+      // Linea SERVICIO (Fase 8): no usa el catalogo de productos. Se guarda la
+      // descripcion libre y nada mas: producto_id NULL, sin etiqueta, sin
+      // inventario, sin partidas ni destino.
+      if (it.tipo === 'SERVICIO') {
+        await client.query(
+          `INSERT INTO guia_items (guia_id, producto_id, descripcion, cantidad, tipo, destino, destino_detalle, recogido)
+           VALUES ($1, NULL, $2, $3, 'SERVICIO', NULL, NULL, NULL)`,
+          [guia.id, (it.producto_nombre || '').trim(), it.cantidad]
+        )
+        continue
+      }
+
       let productoId = it.producto_id
       // Metrica del producto (Fase 7): decide si la linea usa el campo
       // cantidad (ENTERO) o el desglose de partidas (EN_PARTIDA).
@@ -269,7 +292,7 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
       const recogidoValor = it.destino === 'ALMACEN' ? null : (it.recogido !== false)
 
       const itemResult = await client.query(
-        `INSERT INTO guia_items (guia_id, producto_id, cantidad, destino, destino_detalle, recogido) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+        `INSERT INTO guia_items (guia_id, producto_id, cantidad, destino, destino_detalle, recogido, tipo) VALUES ($1, $2, $3, $4, $5, $6, 'PRODUCTO') RETURNING id`,
         [guia.id, productoId, it.cantidad, it.destino, it.destino === 'OTRO' ? it.destino_detalle.trim() : null, recogidoValor]
       )
       const guiaItemId = itemResult.rows[0].id
@@ -341,65 +364,143 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
   }
 })
 
-// Edicion de cabecera (Fase A): solo datos de proveedor/O.C./direccion y
-// estado. Los items ya generados (etiquetas, inventario) nunca se tocan
-// desde aqui para no arriesgar lo que ya salio/quedo en stock.
+// Edicion de guia (Fase A + Fase 8):
+// - Cabecera: proveedor/O.C./direccion/guia_remision/factura/estado.
+// - `items`: [{ id, cantidad }] corrige la CANTIDAD de lineas ya registradas.
+//   Si la linea tiene etiqueta EN_ALMACEN, el inventario se ajusta por la
+//   diferencia. Si esa etiqueta ya salio (SALIO/REEMPLAZADA) la linea queda
+//   bloqueada. Las lineas EN_PARTIDA no se editan aqui (su cantidad sale del
+//   desglose de partidas). No se agregan/quitan lineas ni se cambia el
+//   producto o el destino.
+// - Guia CERRADA: solo se admite `numero_oc`, `estado` (para reabrirla) e
+//   `items`. El resto de la cabecera queda bloqueado hasta pasarla a CARGADA.
 router.put('/:id', verificarToken, soloRoles('admin', 'almacen'),
   log('EDITAR_GUIA', req => `Guia ${req.params.id}: ${JSON.stringify(req.body)}`),
   async (req, res) => {
-  const { proveedor, numero_oc, direccion, estado, guia_remision, factura } = req.body
+  const { proveedor, numero_oc, direccion, estado, guia_remision, factura, items } = req.body
   const ESTADOS = ['CARGADA', 'CERRADA']
 
   if (estado !== undefined && !ESTADOS.includes(estado)) {
     return res.status(400).json({ error: 'Estado invalido' })
   }
 
-  // Solo se actualizan los campos presentes en el body (undefined = no
-  // tocar). Un campo presente pero vacio SI limpia el valor a NULL -
-  // por eso no se puede usar COALESCE(param, columna): eso impediria
-  // borrar un proveedor/O.C./direccion ya cargado.
-  const cambios = []
-  const valores = []
-  if (proveedor !== undefined) {
-    valores.push((proveedor || '').trim() || null)
-    cambios.push(`proveedor = $${valores.length}`)
+  const editItems = Array.isArray(items) ? items : []
+  for (const it of editItems) {
+    if (!it || it.id === undefined || !esEnteroPositivo(it.cantidad)) {
+      return res.status(400).json({ error: 'Cada linea a editar necesita un id y una cantidad entera mayor a 0' })
+    }
   }
-  if (numero_oc !== undefined) {
-    valores.push((numero_oc || '').trim() || null)
-    cambios.push(`numero_oc = $${valores.length}`)
-  }
-  if (direccion !== undefined) {
-    valores.push((direccion || '').trim() || null)
-    cambios.push(`direccion = $${valores.length}`)
-  }
-  if (estado !== undefined) {
-    valores.push(estado)
-    cambios.push(`estado = $${valores.length}`)
-  }
-  if (guia_remision !== undefined) {
-    valores.push((guia_remision || '').trim() || null)
-    cambios.push(`guia_remision = $${valores.length}`)
-  }
-  if (factura !== undefined) {
-    valores.push((factura || '').trim() || null)
-    cambios.push(`factura = $${valores.length}`)
-  }
-  if (cambios.length === 0) {
+
+  const sinCabecera = [proveedor, numero_oc, direccion, estado, guia_remision, factura].every(v => v === undefined)
+  if (sinCabecera && editItems.length === 0) {
     return res.status(400).json({ error: 'No se envio ningun campo para editar' })
   }
 
+  const client = await pool.connect()
   try {
-    valores.push(req.params.id)
-    const result = await pool.query(
-      `UPDATE guias SET ${cambios.join(', ')} WHERE id = $${valores.length} RETURNING *`,
-      valores
-    )
-    if (result.rows.length === 0) {
+    await client.query('BEGIN')
+
+    const actual = await client.query('SELECT * FROM guias WHERE id = $1 FOR UPDATE', [req.params.id])
+    if (actual.rows.length === 0) {
+      await client.query('ROLLBACK')
       return res.status(404).json({ error: 'Guia no encontrada' })
     }
-    res.json(result.rows[0])
+    const guiaActual = actual.rows[0]
+
+    // Guia CERRADA: solo cantidad de lineas + N de O.C. (y reabrir con estado).
+    if (guiaActual.estado === 'CERRADA') {
+      const bloqueados = { proveedor, direccion, guia_remision, factura }
+      for (const [campo, valor] of Object.entries(bloqueados)) {
+        if (valor !== undefined) {
+          await client.query('ROLLBACK')
+          return res.status(400).json({ error: `La guia esta CERRADA: solo se puede editar la cantidad de las lineas y el N de O.C. (campo bloqueado: ${campo})` })
+        }
+      }
+    }
+
+    // --- Cabecera (solo los campos presentes; vacio = limpiar a NULL) ---
+    const cambios = []
+    const valores = []
+    const push = (campo, valor) => { valores.push(valor); cambios.push(`${campo} = $${valores.length}`) }
+    if (proveedor !== undefined)     push('proveedor', (proveedor || '').trim() || null)
+    if (numero_oc !== undefined)     push('numero_oc', (numero_oc || '').trim() || null)
+    if (direccion !== undefined)     push('direccion', (direccion || '').trim() || null)
+    if (estado !== undefined)        push('estado', estado)
+    if (guia_remision !== undefined) push('guia_remision', (guia_remision || '').trim() || null)
+    if (factura !== undefined)       push('factura', (factura || '').trim() || null)
+
+    let guiaFinal = guiaActual
+    if (cambios.length > 0) {
+      valores.push(req.params.id)
+      const upd = await client.query(
+        `UPDATE guias SET ${cambios.join(', ')} WHERE id = $${valores.length} RETURNING *`,
+        valores
+      )
+      guiaFinal = upd.rows[0]
+    }
+
+    // --- Cantidad por linea (Fase 8) ---
+    for (const edit of editItems) {
+      const linea = await client.query(`
+        SELECT gi.id, gi.cantidad, gi.producto_id, gi.tipo, p.metrica AS producto_metrica,
+               e.id AS etiqueta_id, e.estado AS etiqueta_estado, e.codigo AS etiqueta_codigo,
+               e.condicion AS etiqueta_condicion
+        FROM guia_items gi
+        LEFT JOIN productos p ON gi.producto_id = p.id
+        LEFT JOIN etiquetas e ON e.guia_item_id = gi.id AND e.estado <> 'REEMPLAZADA'
+        WHERE gi.id = $1 AND gi.guia_id = $2
+        FOR UPDATE OF gi
+      `, [edit.id, req.params.id])
+      if (linea.rows.length === 0) {
+        await client.query('ROLLBACK')
+        return res.status(400).json({ error: `La linea ${edit.id} no pertenece a esta guia` })
+      }
+      const l = linea.rows[0]
+      const nuevaCantidad = Number(edit.cantidad)
+      const delta = nuevaCantidad - l.cantidad
+      if (delta === 0) continue
+
+      if (l.producto_metrica === 'EN_PARTIDA') {
+        await client.query('ROLLBACK')
+        return res.status(400).json({ error: 'Una linea EN PARTIDA toma su cantidad del desglose de partidas: no se edita aqui' })
+      }
+      // Si la linea genero etiqueta y esa etiqueta ya salio o fue reemplazada,
+      // el inventario ya se movio con la salida -> cambiar la cantidad aqui lo
+      // dejaria inconsistente. Se bloquea.
+      if (l.etiqueta_id && l.etiqueta_estado !== 'EN_ALMACEN') {
+        await client.query('ROLLBACK')
+        return res.status(409).json({ error: `No se puede cambiar la cantidad de la linea "${l.etiqueta_codigo}": ese codigo ya salio del almacen (estado ${l.etiqueta_estado})` })
+      }
+      // Si la etiqueta viva de la linea es una devolucion USADA (Fase 5), su
+      // stock esta en el bucket DEVOLUCION del inventario, no NUEVO, y su
+      // relacion con guia_items.cantidad ya no es 1:1. Ajustar la cantidad
+      // aqui descuadraria los buckets -> se bloquea.
+      if (l.etiqueta_id && l.etiqueta_condicion === 'USADO') {
+        await client.query('ROLLBACK')
+        return res.status(409).json({ error: `No se puede cambiar la cantidad de la linea "${l.etiqueta_codigo}": tiene una devolucion USADA asociada` })
+      }
+
+      await client.query('UPDATE guia_items SET cantidad = $1 WHERE id = $2', [nuevaCantidad, l.id])
+
+      // Solo las lineas con etiqueta EN_ALMACEN movieron inventario al
+      // ingresar; se replica el mismo delta sobre el stock del almacen.
+      if (l.etiqueta_id) {
+        await ajustarInventario(client, {
+          almacenId: guiaFinal.almacen_id,
+          productoId: l.producto_id,
+          delta,
+          descripcion: `Ajuste guia ${guiaFinal.numero_guia} (edicion de cantidad)`,
+        })
+      }
+    }
+
+    await client.query('COMMIT')
+    res.json(guiaFinal)
   } catch (err) {
+    await client.query('ROLLBACK')
     res.status(500).json({ error: err.message })
+  } finally {
+    client.release()
   }
 })
 
