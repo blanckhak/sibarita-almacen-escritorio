@@ -1243,7 +1243,7 @@ ESTADO DEL PLAN DE FASES (se actualiza al cerrar cada fase)
 [x] Fase 7 - Metrica ENTERO/EN PARTIDA + partidas parciales
     (CERRADA 28/08, code-review OK con 1 fix, commiteada 29/08)
 [x] Fase 8 - Guia/linea tipo Servicio + edicion guia CERRADA
-    (CERRADA 29/08, code-review OK con 4 fixes, pendiente commit)
+    (CERRADA 29/08, code-review OK con 4 fixes, commit c9c409b)
 [ ] Fase 9 - Stock en Orden de Salida + control de concurrencia
 [ ] Fase 10 - Modulo Compras diarias
 
@@ -1259,6 +1259,10 @@ ESTADO GIT (29/08/2026): la Fase 7 completa (metrica ENTERO/EN_PARTIDA +
 guia_item_partidas) quedo commiteada en master - backend (database.sql,
 setup.js, routes/guias.js, routes/productos.js), frontend (Productos.jsx,
 Guias.jsx, GuiaDetalle.jsx), NOTAS y captura/fase7_metrica_partidas/.
+ESTADO GIT (29/08/2026, mas tarde): Fase 8 (lineas SERVICIO + edicion
+restringida de guia) commiteada en master - commit c9c409b - backend
+(database.sql, setup.js, routes/guias.js, routes/dashboard.js), frontend
+(Guias.jsx, GuiaDetalle.jsx), NOTAS y captura/fase8_servicio_edicion_guia/.
 Sigue SIN commitear (a proposito): la carpeta "para giarse/" (documentos
 de referencia del cliente, no codigo). El repo original
 (sistemas/sibarita - pryecto de almacen) sigue congelado; nada de esto se
