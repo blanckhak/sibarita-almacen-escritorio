@@ -79,6 +79,7 @@ router.get('/:id', verificarToken, async (req, res) => {
       SELECT d.*, e.codigo as etiqueta_codigo, e.estado as etiqueta_estado,
              e.condicion as etiqueta_condicion, e.almacen_id,
              p.nombre as producto_nombre, a.nombre as almacen_nombre,
+             um.abreviatura as unidad_medida_abreviatura,
              en.codigo as etiqueta_devuelta_codigo,
              -- Stock actual del producto en ese almacen (Fase 9, Bloque 7):
              -- lo que queda hoy, no una foto al momento de la salida.
@@ -91,6 +92,7 @@ router.get('/:id', verificarToken, async (req, res) => {
       JOIN etiquetas e ON d.etiqueta_id = e.id
       JOIN productos p ON e.producto_id = p.id
       JOIN almacenes a ON e.almacen_id = a.id
+      LEFT JOIN unidades_medida um ON p.unidad_medida_id = um.id
       LEFT JOIN etiquetas en ON d.etiqueta_devuelta_id = en.id
       WHERE d.nota_salida_id = $1
       ORDER BY d.id
@@ -365,7 +367,7 @@ router.post('/:id/devolucion', verificarToken, soloRoles('admin', 'almacen'),
 
     const detalle = await client.query(`
       SELECT d.id as detalle_id, d.etiqueta_id, d.cantidad,
-             e.estado, e.almacen_id, e.producto_id, e.codigo, e.guia_item_id
+             e.estado, e.almacen_id, e.producto_id, e.codigo, e.guia_item_id, e.condicion
       FROM notas_salida_detalle d
       JOIN etiquetas e ON d.etiqueta_id = e.id
       WHERE d.nota_salida_id = $1
@@ -456,11 +458,14 @@ router.post('/:id/devolucion', verificarToken, soloRoles('admin', 'almacen'),
           [eid, linea.almacen_id, req.usuario.id, `Devolucion nota ${numeroNota}`]
         )
 
+        // Un codigo que ya era USADO (devolucion previa) mantiene su stock en el
+        // bucket DEVOLUCION al volver; uno normal, en el NUEVO.
         await ajustarInventario(client, {
           almacenId: linea.almacen_id,
           productoId: linea.producto_id,
           delta: linea.cantidad,
           descripcion: 'Devolucion nota de salida',
+          tipo: linea.condicion === 'USADO' ? 'DEVOLUCION' : 'NUEVO',
         })
 
         await client.query(

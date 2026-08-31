@@ -96,7 +96,7 @@ router.get('/:id', verificarToken, async (req, res) => {
     const result = await pool.query(`
       SELECT e.*, p.nombre as producto_nombre,
              um.nombre as unidad_medida_nombre, um.abreviatura as unidad_medida_abreviatura,
-             a.nombre as almacen_nombre, COALESCE(e.cantidad, gi.cantidad) as cantidad, g.numero_guia
+             a.nombre as almacen_nombre, gi.cantidad as gi_cantidad, g.numero_guia
       FROM etiquetas e
       JOIN productos p ON e.producto_id = p.id
       LEFT JOIN unidades_medida um ON p.unidad_medida_id = um.id
@@ -108,7 +108,9 @@ router.get('/:id', verificarToken, async (req, res) => {
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Etiqueta no encontrada' })
     }
-    res.json(result.rows[0])
+    const row = result.rows[0]
+    // Cantidad efectiva: override propio del codigo (USADO parcial) o la del guia_item.
+    res.json({ ...row, cantidad: row.cantidad != null ? row.cantidad : row.gi_cantidad })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -176,7 +178,7 @@ router.post('/:id/transferir', verificarToken, soloRoles('admin', 'almacen'),
     await client.query('BEGIN')
 
     const etiquetaResult = await client.query(`
-      SELECT e.*, COALESCE(e.cantidad, gi.cantidad) as cantidad
+      SELECT e.*, gi.cantidad as gi_cantidad
       FROM etiquetas e
       JOIN guia_items gi ON e.guia_item_id = gi.id
       WHERE e.id = $1
@@ -187,6 +189,11 @@ router.post('/:id/transferir', verificarToken, soloRoles('admin', 'almacen'),
       return res.status(404).json({ error: 'Etiqueta no encontrada' })
     }
     const etiqueta = etiquetaResult.rows[0]
+    // Cantidad efectiva del codigo: su override propio (codigos USADO de una
+    // devolucion parcial) o la del guia_item.
+    const cantidad = etiqueta.cantidad != null ? etiqueta.cantidad : etiqueta.gi_cantidad
+    // Un codigo USADO tiene su stock en el bucket DEVOLUCION.
+    const bucket = etiqueta.condicion === 'USADO' ? 'DEVOLUCION' : 'NUEVO'
 
     if (etiqueta.estado !== 'EN_ALMACEN') {
       await client.query('ROLLBACK')
@@ -202,13 +209,15 @@ router.post('/:id/transferir', verificarToken, soloRoles('admin', 'almacen'),
     await ajustarInventario(client, {
       almacenId: origenId,
       productoId: etiqueta.producto_id,
-      delta: -etiqueta.cantidad,
+      delta: -cantidad,
+      tipo: bucket,
     })
     await ajustarInventario(client, {
       almacenId: almacen_destino_id,
       productoId: etiqueta.producto_id,
-      delta: etiqueta.cantidad,
+      delta: cantidad,
       descripcion: 'Transferencia de codigo entre almacenes',
+      tipo: bucket,
     })
 
     const actualizada = await client.query(

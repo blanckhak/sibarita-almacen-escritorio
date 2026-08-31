@@ -61,6 +61,19 @@ peso negativo); USADA sin panel -> vuelve el 100% (compatible); NUEVA ignora
 los campos. Migracion aplicada en sibarita_db (columnas creadas, datos
 intactos). Build de frontend limpio.
 
+IMPRIMIR LA ETIQUETA DEL CODIGO NUEVO (agregado 31/08)
+----------------------------------------------------
+La devolucion USADA ya generaba el codigo nuevo, pero no habia forma de
+imprimir su etiqueta fisica desde la nota. Ahora:
+- En el detalle de la nota, junto a "-> cod. NNNN (usado)" hay un boton
+  "Imprimir etiqueta" (solo admin/almacen).
+- Saca la etiqueta con codigo de barras (jsbarcode), encabezado
+  "<producto> · USADO" y la cantidad devuelta.
+- Registra la (re)impresion en etiqueta_historial, igual que el boton de
+  GuiaDetalle (aparece en el reporte de reimpresiones).
+- backend: el detalle de la nota (GET /:id) ahora trae
+  unidad_medida_abreviatura para la etiqueta.
+
 CAPTURAS
 --------
 - 01_panel_devolucion_usada.png  -> el modal con el panel (cantidad 7 de 10,
@@ -68,3 +81,7 @@ CAPTURAS
 - 02_detalle_tras_devolucion.png -> el detalle despues: codigo 9055 ->
   cod. 9056 (usado), "Devuelta usada / volvieron 7 de 10 · 32.5 de peso /
   Vuelve rayado, con algo de oxido", stock actual 32 u.
+- 04_boton_imprimir_etiqueta_usada.png -> el boton "Imprimir etiqueta" en el
+  detalle, junto al codigo nuevo.
+- 05_etiqueta_usada_impresion.png -> la etiqueta que sale: "Taladro Percutor
+  800W · USADO", codigo 9051, cantidad 3, codigo de barras.

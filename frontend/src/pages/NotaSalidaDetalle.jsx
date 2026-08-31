@@ -4,6 +4,7 @@ import api from '../utils/api'
 import { useAuth } from '../context/AuthContext'
 import { colorEtiquetaEstado } from '../utils/etiquetaEstados'
 import { textoStock } from '../utils/stockResumen'
+import CodigoBarras from '../components/CodigoBarras'
 
 const colorEstado = {
   PENDIENTE:     'bg-orange-100 text-orange-700',
@@ -56,6 +57,8 @@ export default function NotaSalidaDetalle() {
   const [marcandoNoDevuelto, setMarcandoNoDevuelto] = useState(null)
   const [modoImpresion, setModoImpresion] = useState('salida')
   const [imprimirTick, setImprimirTick] = useState(0)
+  // Linea cuya etiqueta USADA (codigo nuevo de la devolucion) se va a imprimir.
+  const [lineaEtiquetaUsada, setLineaEtiquetaUsada] = useState(null)
 
   const puedeGestionar = ['admin', 'almacen'].includes(usuario?.rol)
   const puedeAprobar    = ['admin', 'almacen'].includes(usuario?.rol)
@@ -134,6 +137,17 @@ export default function NotaSalidaDetalle() {
   const imprimir = (modo) => {
     setModoImpresion(modo)
     setImprimirTick(t => t + 1)
+  }
+
+  // Imprime la etiqueta fisica del codigo nuevo que genero una devolucion usada
+  // (con codigo de barras, marcada USADO). Registra la (re)impresion como en
+  // GuiaDetalle.
+  const imprimirEtiquetaUsada = async (d) => {
+    if (d.etiqueta_devuelta_id) {
+      await api.post(`/api/etiquetas/${d.etiqueta_devuelta_id}/imprimir`).catch(() => {})
+    }
+    setLineaEtiquetaUsada(d)
+    imprimir('etiqueta_usada')
   }
 
   const marcarNoDevuelto = async (linea) => {
@@ -306,7 +320,18 @@ export default function NotaSalidaDetalle() {
                   <td className="px-6 py-3 font-mono font-semibold text-gray-800">
                     <Link to={`/etiquetas/${d.etiqueta_id}`} className="text-blue-700 hover:underline">{d.etiqueta_codigo}</Link>
                     {d.etiqueta_devuelta_codigo && (
-                      <div className="text-xs text-amber-700 font-normal mt-0.5">&rarr; cod. {d.etiqueta_devuelta_codigo} (usado)</div>
+                      <div className="text-xs text-amber-700 font-normal mt-0.5 flex items-center gap-2">
+                        <span>&rarr; cod. {d.etiqueta_devuelta_codigo} (usado)</span>
+                        {puedeGestionar && (
+                          <button
+                            type="button"
+                            onClick={() => imprimirEtiquetaUsada(d)}
+                            className="text-[11px] border border-amber-300 text-amber-700 rounded px-1.5 py-0.5 hover:bg-amber-50 print:hidden"
+                          >
+                            Imprimir etiqueta
+                          </button>
+                        )}
+                      </div>
                     )}
                   </td>
                   <td className="px-6 py-3 text-gray-700">{d.producto_nombre}</td>
@@ -539,6 +564,34 @@ export default function NotaSalidaDetalle() {
           <span>FT-GE-17 ED.-01</span>
           <span className="text-right">c.c. Almacen {nota.detalle[0]?.almacen_nombre || '—'}<br />c.c. Compras</span>
         </div>
+      </div>
+
+      {/* Etiqueta fisica del codigo nuevo de una devolucion usada */}
+      <div className={modoImpresion === 'etiqueta_usada' ? 'hidden print:block' : 'hidden'}>
+        {lineaEtiquetaUsada && (
+          <div className="border border-gray-800 rounded inline-block">
+            <div className="bg-gray-100 text-center font-semibold text-sm py-1.5 border-b border-gray-800 px-4">
+              {lineaEtiquetaUsada.producto_nombre} · USADO
+            </div>
+            <div className="flex">
+              <div className="bg-amber-500 text-white font-bold text-2xl flex items-center justify-center px-4 min-w-[70px]">
+                {lineaEtiquetaUsada.etiqueta_devuelta_codigo}
+              </div>
+              <div className="flex-1 border-l border-r border-gray-800 px-3 py-2 text-sm flex items-center">
+                {lineaEtiquetaUsada.producto_nombre}
+              </div>
+              <div className="px-3 py-2 text-sm flex items-center justify-center">
+                {lineaEtiquetaUsada.unidad_medida_abreviatura || ''}
+              </div>
+              <div className="bg-amber-500 text-white font-bold flex items-center justify-center px-4 min-w-[40px]">
+                {lineaEtiquetaUsada.devuelto_cantidad != null ? lineaEtiquetaUsada.devuelto_cantidad : lineaEtiquetaUsada.cantidad}
+              </div>
+            </div>
+            <div className="flex justify-center py-1.5 border-t border-gray-800">
+              <CodigoBarras valor={lineaEtiquetaUsada.etiqueta_devuelta_codigo} height={28} />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
