@@ -1288,7 +1288,7 @@ PENDIENTE Fase 9:
   capturas de Fase 8 (PNG 05-09) y Fase 9.
 - Instalador .exe no regenerado; deploy Vercel/Render sin tocar.
 
-FASE 10 CERRADA (31/08/2026, code-review medium OK con 3 fixes): modulo nuevo
+FASE 10 CERRADA (31/08/2026, code-review medium OK con 3 fixes, commit 5f7ca47): modulo nuevo
 "Compras Diarias" (Bloque 5). Detalle, decisiones y lo probado en
 captura/fase10_compras_diarias/NOTA.txt. Confirmado con el usuario antes de
 construir: cabecera (fecha/oficina/proveedor/solicitud opcional) + lineas con
@@ -1323,7 +1323,7 @@ de escritura del perfil "compras"); con vista de impresion. Resumen tecnico:
   Capturas 01-04 con Chrome headless via puppeteer.
 
 PENDIENTE Fase 10:
-- Commit PENDIENTE al cerrar esta nota.
+- Commiteada en master (5f7ca47).
 - La pantalla no expone todavia el filtro por fecha (?desde/?hasta ya existe
   en el backend). Sin edicion ni borrado de una compra (mismo criterio que
   Solicitudes / Notas de Salida).
@@ -1350,7 +1350,7 @@ ESTADO DEL PLAN DE FASES (se actualiza al cerrar cada fase)
 [x] Fase 9 - Stock en Orden de Salida + control de concurrencia
     (CERRADA 31/08, code-review medium OK con 5 fixes, commit 1f9ee04)
 [x] Fase 10 - Modulo nuevo "Compras Diarias"
-    (CERRADA 31/08, code-review medium OK con 3 fixes, commit PENDIENTE)
+    (CERRADA 31/08, code-review medium OK con 3 fixes, commit 5f7ca47)
 
 ESTADO GIT (28/08/2026): todo lo pendiente de las sesiones 25-28/08 quedo
 commiteado en master en 3 commits:
@@ -1386,8 +1386,8 @@ frontend/src/components/Navbar.jsx, frontend/src/pages/{ComprasDiarias.jsx,
 CompraDiariaDetalle.jsx} (nuevas), frontend/src/utils/fecha.js (nuevo) +
 frontend/src/pages/{Guias.jsx,SolicitudesMateriales.jsx} (usan fecha.js),
 NOTAS y captura/fase10_compras_diarias/. La migracion (2 tablas nuevas +
-secuencia) ya se aplico en sibarita_db (0 filas, resto intacto). Commit
-pendiente.
+secuencia) ya se aplico en sibarita_db (0 filas, resto intacto).
+Commiteada en master (5f7ca47).
 
 --------------------------------------------------
 FIN DE LA NOTA
