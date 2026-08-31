@@ -1242,7 +1242,7 @@ solo esos dos campos). Resumen tecnico:
   campos de una, en su propio mini-pase de validacion; NO parchear solo
   descripcion (dejaria el codigo inconsistente).
 
-FASE 9 CERRADA (31/08/2026, code-review medium OK con 5 fixes): stock visible
+FASE 9 CERRADA (31/08/2026, code-review medium OK con 5 fixes, commit 1f9ee04): stock visible
 en la Orden de Salida + control de concurrencia sobre la misma etiqueta
 (Bloque 7). Detalle, decisiones y lo probado en
 captura/fase9_stock_orden_salida/NOTA.txt. Antes de tocar codigo se confirmo
@@ -1284,8 +1284,8 @@ cambios de esquema. Resumen tecnico:
   agregadas ahora se refresca; fallback muerto en la impresion eliminado.
 
 PENDIENTE Fase 9:
-- NO commiteada todavia (working tree). Junto en el diff van tambien las
-  ediciones de NOTAS y las capturas de Fase 8 y 9.
+- Commiteada en master (1f9ee04), junto con las ediciones de NOTAS y las
+  capturas de Fase 8 (PNG 05-09) y Fase 9.
 - Instalador .exe no regenerado; deploy Vercel/Render sin tocar.
 
 --------------------------------------------------
@@ -1307,7 +1307,7 @@ ESTADO DEL PLAN DE FASES (se actualiza al cerrar cada fase)
     (CERRADA 29/08, code-review OK con 4 fixes, commit c9c409b)
     + capturas 05-09 agregadas 31/08 (ver NOTA de esa fase)
 [x] Fase 9 - Stock en Orden de Salida + control de concurrencia
-    (CERRADA 31/08, code-review medium OK con 5 fixes, SIN commitear todavia)
+    (CERRADA 31/08, code-review medium OK con 5 fixes, commit 1f9ee04)
 [ ] Fase 10 - Modulo Compras diarias
 
 ESTADO GIT (28/08/2026): todo lo pendiente de las sesiones 25-28/08 quedo
@@ -1331,12 +1331,12 @@ de referencia del cliente, no codigo). El repo original
 (sistemas/sibarita - pryecto de almacen) sigue congelado; nada de esto se
 desplego a Vercel/Render. El instalador .exe tampoco se regenero.
 ESTADO GIT (31/08/2026): Fase 9 (stock en Orden de Salida + aviso de
-concurrencia) TERMINADA pero SIN COMMITEAR. Working tree: backend
+concurrencia) commiteada en master - commit 1f9ee04 - backend
 (routes/etiquetas.js, routes/notasSalida.js), frontend (utils/stockResumen.js
 nuevo, pages/NotasSalida.jsx, pages/NotaSalidaDetalle.jsx), NOTAS, y las
 carpetas de capturas captura/fase8_servicio_edicion_guia/ (PNG 05-09) y
-captura/fase9_stock_orden_salida/. Sin cambios de esquema -> no hace falta
-migrar sibarita_db. Falta: commit + regenerar .exe si se quiere.
+captura/fase9_stock_orden_salida/. Sin cambios de esquema -> no hizo falta
+migrar sibarita_db. El instalador .exe no se regenero.
 
 --------------------------------------------------
 FIN DE LA NOTA
