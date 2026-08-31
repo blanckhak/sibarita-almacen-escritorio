@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import api from '../utils/api'
 import { useAuth } from '../context/AuthContext'
 import { CATEGORIAS_MATERIALES } from '../utils/categoriasMateriales'
+import { enPaginas } from '../utils/paginarImpresion'
 
 const colorEstado = {
   PENDIENTE: 'bg-orange-100 text-orange-700',
@@ -162,70 +163,88 @@ export default function SolicitudMaterialesDetalle() {
         </div>
       </div>
 
-      {/* Vista de impresion: replica el formato fisico real "Solicitud de
-          Materiales" (reverso del talonario FT-GE-17, Fase B) */}
-      <div className="hidden print:block border-2 border-gray-800 rounded">
-        <div className="flex items-start justify-between px-4 pt-3">
-          <div>
-            <div className="font-bold text-lg text-gray-800">MANUFACTURA DE ALIMENTOS S.A.</div>
-            <div className="font-semibold text-sm text-gray-700 uppercase tracking-wide">Solicitud de Materiales</div>
-          </div>
-          <div className="border border-gray-800 text-center text-sm">
-            <div className="bg-gray-100 px-3 py-0.5 border-b border-gray-800 font-semibold">Fecha</div>
-            <div className="px-3 py-1">{new Date(solicitud.fecha).toLocaleDateString('es-GT')}</div>
-          </div>
-        </div>
-        <div className="text-right px-4 text-sm text-red-600 font-bold">N.° {solicitud.numero_solicitud}</div>
+      {/* Vista de impresion: replica el formato fisico "Solicitud de Materiales"
+          (reverso del talonario FT-GE-17). 6 productos por hoja. */}
+      <div className="hidden print:block">
+        {enPaginas(solicitud.detalle).map((filas, pi, todas) => {
+          const ultima = pi === todas.length - 1
+          const [yy, mm, dd] = String(solicitud.fecha).slice(0, 10).split('-')
+          const per = solicitud.periodo ? String(solicitud.periodo).slice(0, 10).split('-') : null
+          return (
+            <div key={pi} className="border-2 border-gray-800 rounded break-after-page last:break-after-auto">
+              <div className="flex items-start justify-between px-4 pt-3">
+                <div>
+                  <div className="font-bold text-lg text-gray-800 text-center">MANUFACTURA DE ALIMENTOS S.A.</div>
+                  <div className="font-semibold text-sm text-gray-700 uppercase tracking-wide text-center">Solicitud de Materiales</div>
+                </div>
+                <div className="text-xs text-right space-y-0.5">
+                  <div><b>FECHA :</b> {dd || ''}/{mm || ''}/{(yy || '').slice(2)}</div>
+                  <div><b>PERIODO :</b> {per ? `${per[2]}/${per[1]}/${per[0].slice(2)}` : ''}</div>
+                  <div className="text-red-600 font-bold text-sm">
+                    N.° {solicitud.numero_solicitud}
+                    {todas.length > 1 && <span className="text-gray-500 font-normal text-xs ml-1">Hoja {pi + 1}/{todas.length}</span>}
+                  </div>
+                </div>
+              </div>
 
-        <div className="grid grid-cols-2 gap-x-6 gap-y-1 px-4 py-3 text-sm">
-          <div className="border-b border-gray-200 pb-1"><b className="text-gray-500 text-xs uppercase mr-1">Secc.</b> {solicitud.seccion || '—'}</div>
-          <div className="border-b border-gray-200 pb-1"><b className="text-gray-500 text-xs uppercase mr-1">Periodo</b> {solicitud.periodo ? new Date(solicitud.periodo).toLocaleDateString('es-GT') : '—'}</div>
-          <div className="border-b border-gray-200 pb-1 col-span-2"><b className="text-gray-500 text-xs uppercase mr-1">Persona responsable</b> {solicitud.persona_responsable}</div>
-        </div>
+              <div className="px-4 py-2 text-xs">
+                <b className="uppercase mr-2">Marcar con una X</b>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
+                  {CATEGORIAS_MATERIALES.map(c => (
+                    <span key={c.value} className="inline-flex items-center gap-1">
+                      <span className="inline-block w-3 h-3 border border-gray-800 text-center leading-3">
+                        {solicitud.categoria === c.value ? 'X' : ''}
+                      </span>
+                      {c.label}{c.value === 'OTROS' && solicitud.categoria === 'OTROS' && solicitud.categoria_detalle ? ` (${solicitud.categoria_detalle})` : ''}
+                    </span>
+                  ))}
+                </div>
+              </div>
 
-        <div className="px-4 py-2 text-xs">
-          <b className="text-gray-500 uppercase mr-2">Marcar con una X</b>
-          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
-            {CATEGORIAS_MATERIALES.map(c => (
-              <span key={c.value} className="inline-flex items-center gap-1">
-                <span className="inline-block w-3 h-3 border border-gray-800 text-center leading-3">
-                  {solicitud.categoria === c.value ? 'X' : ''}
-                </span>
-                {c.label}{c.value === 'OTROS' && solicitud.categoria === 'OTROS' && solicitud.categoria_detalle ? ` (${solicitud.categoria_detalle})` : ''}
-              </span>
-            ))}
-          </div>
-        </div>
+              <table className="w-full text-xs table-fixed border border-gray-800" style={{ width: 'calc(100% - 2rem)', margin: '0 auto' }}>
+                <thead>
+                  <tr className="bg-gray-100 border-b-2 border-gray-800">
+                    <th className="text-center py-1 tracking-wider">P R O D U C T O</th>
+                    <th className="text-center py-1 border-l border-gray-800 w-24">CANTIDAD</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filas.map((d, ri) => (
+                    <tr key={ri} className="border-b border-gray-400 h-8 align-top">
+                      <td className="py-1 px-2">{d ? d.producto : ''}</td>
+                      <td className="py-1 text-center border-l border-gray-400">{d ? Number(d.cantidad) : ''}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
 
-        <table className="w-full text-xs mx-4" style={{ width: 'calc(100% - 2rem)', margin: '0.5rem auto' }}>
-          <thead>
-            <tr className="border-b-2 border-gray-800">
-              <th className="text-left py-1">Producto</th>
-              <th className="text-right py-1">Cantidad</th>
-            </tr>
-          </thead>
-          <tbody>
-            {solicitud.detalle.map(d => (
-              <tr key={d.id} className="border-b border-gray-200">
-                <td className="py-1">{d.producto}</td>
-                <td className="py-1 text-right">{Number(d.cantidad)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        <div className="px-4 py-2 text-xs">
-          <b className="text-gray-500 uppercase mr-1">Observaciones</b> {solicitud.observaciones || ''}
-        </div>
-
-        <div className="flex justify-between px-4 py-6 text-xs text-gray-500 text-center">
-          <div className="border-t border-gray-800 pt-1 w-[45%]">Solicitado por</div>
-          <div className="border-t border-gray-800 pt-1 w-[45%]">V.° B.° Autorizado por</div>
-        </div>
-        <div className="flex justify-between items-end px-4 pb-2 pt-1 text-[10px] text-gray-400 border-t border-gray-300">
-          <span>FT-GE-17 ED.-01</span>
-          <span className="text-right">c.c. Almacen Materia Prima, Almacen {solicitud.almacen_nombre}<br />c.c. Compras</span>
-        </div>
+              {ultima && (
+                <>
+                  <div className="px-4 py-2 text-xs flex">
+                    <b className="mr-1">OBSERVACIONES</b>
+                    <span className="border-b border-gray-400 flex-1">{solicitud.observaciones || ''}</span>
+                  </div>
+                  <div className="px-4 pt-8 pb-2 text-xs">
+                    <div className="flex gap-6 mb-2">
+                      <span className="flex-1 flex"><b className="mr-1">Solicitado por:</b><span className="border-b border-gray-400 flex-1">&nbsp;</span></span>
+                      <span className="flex-1 flex"><b className="mr-1">V°B° Autorizado por:</b><span className="border-b border-gray-400 flex-1">&nbsp;</span></span>
+                    </div>
+                    <div className="flex"><b className="w-16 shrink-0">Nombre</b>: <span className="border-b border-gray-400 flex-1 ml-1">{solicitud.persona_responsable}</span></div>
+                    <div className="flex"><b className="w-16 shrink-0">Cargo</b>: <span className="border-b border-gray-400 flex-1 ml-1">&nbsp;</span></div>
+                    <div className="flex mt-1"><b className="w-16 shrink-0">Firma:</b><span className="border-b border-gray-400 flex-1 ml-1">&nbsp;</span></div>
+                  </div>
+                  <div className="px-4 py-1 text-[11px] italic text-gray-600">
+                    Nota.- Cuando no hay stock se envia una copia al area de Compras.
+                  </div>
+                  <div className="flex justify-between items-end px-4 pb-2 pt-1 text-[10px] text-gray-500 border-t border-gray-300">
+                    <span>FT-GE-17 ED. - 01</span>
+                    <span className="text-right">c.c. Almacen Materia Prima, Almacen {solicitud.almacen_nombre}<br />c.c. Compras</span>
+                  </div>
+                </>
+              )}
+            </div>
+          )
+        })}
       </div>
     </div>
   )

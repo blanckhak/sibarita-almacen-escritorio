@@ -4,6 +4,7 @@ import api from '../utils/api'
 import { useAuth } from '../context/AuthContext'
 import { colorEtiquetaEstado } from '../utils/etiquetaEstados'
 import { textoStock } from '../utils/stockResumen'
+import { enPaginas } from '../utils/paginarImpresion'
 import CodigoBarras from '../components/CodigoBarras'
 
 const colorEstado = {
@@ -455,65 +456,115 @@ export default function NotaSalidaDetalle() {
         </div>
       )}
 
-      {/* Vista de impresion: replica el formato fisico real "Nota de Salida
-          de Activos" de la empresa (talonario FT-GE-17, Fase B) */}
-      <div className={`${modoImpresion === 'salida' ? 'hidden print:block' : 'hidden'} border-2 border-gray-800 rounded`}>
-        <CabeceraTalonario
-          nota={nota}
-          subtitulo="Nota de Salida de Activos"
-          fecha={new Date(nota.fecha).toLocaleDateString('es-GT')}
-          refTexto={`N.° ${nota.numero_nota}`}
-        />
-        <table className="w-full text-xs mx-4" style={{ width: 'calc(100% - 2rem)', margin: '0.5rem auto' }}>
-          <thead>
-            <tr className="border-b-2 border-gray-800">
-              <th className="text-left py-1">Codigo</th>
-              <th className="text-left py-1">Detalle</th>
-              <th className="text-right py-1">Cantidad</th>
-              <th className="text-right py-1">Stock rest.</th>
-              <th className="text-right py-1">P. Unit.</th>
-              <th className="text-right py-1">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {nota.detalle.map(d => (
-              <tr key={d.id} className="border-b border-gray-200">
-                <td className="py-1">{d.etiqueta_codigo}</td>
-                <td className="py-1">{d.producto_nombre}</td>
-                <td className="py-1 text-right">{d.cantidad}</td>
-                <td className="py-1 text-right">
-                  {d.stock_agregado_actual} ({d.codigos_disponibles_actual} cod.)
-                </td>
-                <td className="py-1 text-right">{d.p_unitario ? Number(d.p_unitario).toFixed(2) : '—'}</td>
-                <td className="py-1 text-right">{d.total ? Number(d.total).toFixed(2) : '—'}</td>
-              </tr>
-            ))}
-          </tbody>
-          {total > 0 && (
-            <tfoot>
-              <tr>
-                <td colSpan={5} className="text-right font-bold py-1">Total</td>
-                <td className="text-right font-bold py-1">{total.toFixed(2)}</td>
-              </tr>
-            </tfoot>
-          )}
-        </table>
-        <div className="px-4 py-2 text-xs">
-          <b className="text-gray-500 uppercase mr-1">Observaciones</b> {nota.observaciones || ''}
+      {modoImpresion === 'salida' && (
+        <div className="hidden print:block">
+          {enPaginas(nota.detalle).map((filas, pi, todas) => {
+            const ultima = pi === todas.length - 1
+            const [yy, mm, dd] = String(nota.fecha).slice(0, 10).split('-')
+            return (
+              <div key={pi} className="border-2 border-gray-800 rounded break-after-page last:break-after-auto">
+                <div className="flex items-start justify-between px-4 pt-3">
+                  <div>
+                    <div className="font-bold text-lg text-gray-800 text-center">MANUFACTURA DE ALIMENTOS S.A.</div>
+                    <div className="font-semibold text-sm text-gray-700 uppercase tracking-wide text-center">Nota de Salida de Activos</div>
+                  </div>
+                  <table className="border border-gray-800 text-center text-xs">
+                    <tbody>
+                      <tr><td colSpan={3} className="bg-gray-100 border-b border-gray-800 font-semibold px-2 py-0.5">FECHA</td></tr>
+                      <tr>
+                        <td className="border-r border-gray-800 px-3 py-1 w-8">{dd || ''}</td>
+                        <td className="border-r border-gray-800 px-3 py-1 w-8">{mm || ''}</td>
+                        <td className="px-3 py-1 w-8">{(yy || '').slice(2)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div className="text-right px-4 text-sm text-red-600 font-bold">
+                  N.° {nota.numero_nota}
+                  {todas.length > 1 && <span className="text-gray-500 font-normal text-xs ml-2">Hoja {pi + 1} de {todas.length}</span>}
+                </div>
+
+                <div className="px-4 py-3 text-sm space-y-1">
+                  <div className="flex"><b className="text-gray-600 w-44 shrink-0">SECC.:</b><span className="border-b border-gray-400 flex-1">{nota.seccion || ''}</span></div>
+                  <div className="flex"><b className="text-gray-600 w-44 shrink-0">PERSONA RESPONSABLE:</b><span className="border-b border-gray-400 flex-1">{nota.persona_responsable}</span></div>
+                  <div className="flex"><b className="text-gray-600 w-44 shrink-0">ORDEN DE INGRESO</b><span className="border-b border-gray-400 flex-1">{nota.numero_guia || ''}</span></div>
+                </div>
+
+                <table className="w-full text-xs table-fixed" style={{ width: 'calc(100% - 2rem)', margin: '0 auto' }}>
+                  <thead>
+                    <tr className="bg-gray-100 border-y-2 border-gray-800">
+                      <th className="text-center py-1 tracking-widest">D E T A L L E</th>
+                      <th className="text-center py-1 border-l border-gray-800 w-20">CANTIDAD</th>
+                      <th className="text-center py-1 border-l border-gray-800 w-16">P. UNIT.</th>
+                      <th className="text-center py-1 border-l border-gray-800 w-20">TOTAL</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filas.map((d, ri) => (
+                      <tr key={ri} className="border-b border-gray-400 h-7 align-top">
+                        <td className="py-1 px-1">
+                          {d ? (
+                            <>
+                              <span className="font-mono">{d.etiqueta_codigo}</span> {d.producto_nombre}
+                              {d.devuelto_condicion === 'USADO' && <span className="text-[10px] text-gray-500"> (devuelto usado)</span>}
+                            </>
+                          ) : ''}
+                        </td>
+                        <td className="py-1 text-center border-l border-gray-400">{d ? d.cantidad : ''}</td>
+                        <td className="py-1 text-right px-1 border-l border-gray-400">{d?.p_unitario ? Number(d.p_unitario).toFixed(2) : ''}</td>
+                        <td className="py-1 text-right px-1 border-l border-gray-400">{d?.total ? Number(d.total).toFixed(2) : ''}</td>
+                      </tr>
+                    ))}
+                    {ultima && (
+                      <tr className="border-y-2 border-gray-800 h-7 font-semibold">
+                        <td className="py-1 text-right pr-2">TOTAL</td>
+                        <td className="border-l border-gray-800">&nbsp;</td>
+                        <td className="border-l border-gray-800">&nbsp;</td>
+                        <td className="py-1 text-right px-1 border-l border-gray-800">{total > 0 ? total.toFixed(2) : ''}</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+
+                {ultima && (
+                  <>
+                    <div className="px-4 py-2 text-xs flex">
+                      <b className="text-gray-600 mr-1">OBSERVACIONES</b>
+                      <span className="border-b border-gray-400 flex-1">{nota.observaciones || ''}</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-x-6 px-4 pt-10 pb-2 text-xs text-gray-600 text-center">
+                      <div className="border-t border-gray-800 pt-1">Solicitado por</div>
+                      <div className="border-t border-gray-800 pt-1">Revisado por</div>
+                      <div className="border-t border-gray-800 pt-1">Revisado por</div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-6 px-10 pt-10 pb-3 text-xs text-gray-600 text-center">
+                      <div className="border-t border-gray-800 pt-1">Revisado por</div>
+                      <div className="border-t border-gray-800 pt-1">Aprobado por</div>
+                    </div>
+                    <div className="border-t-2 border-dashed border-gray-500 mx-4" />
+                    <div className="px-4 py-3 text-xs">
+                      <div className="flex gap-6 mb-1">
+                        <span className="flex-1 flex"><b className="mr-1">Solicitado por:</b><span className="border-b border-gray-400 flex-1">&nbsp;</span></span>
+                        <span className="flex-1 flex"><b className="mr-1">V°B° Autorizado por:</b><span className="border-b border-gray-400 flex-1">&nbsp;</span></span>
+                      </div>
+                      <div className="flex"><b className="w-16 shrink-0">Nombre</b>: <span className="border-b border-gray-400 flex-1 ml-1">{nota.persona_responsable}</span></div>
+                      <div className="flex"><b className="w-16 shrink-0">Cargo</b>: <span className="border-b border-gray-400 flex-1 ml-1">&nbsp;</span></div>
+                      <div className="flex mt-1"><b className="w-16 shrink-0">Firma:</b><span className="border-b border-gray-400 flex-1 ml-1">&nbsp;</span></div>
+                    </div>
+                    <div className="px-4 py-1 text-[11px] italic text-gray-600">
+                      Nota.- Cuando no hay stock se envia una copia al area de Compras.
+                    </div>
+                    <div className="flex justify-between items-end px-4 pb-2 pt-1 text-[10px] text-gray-500 border-t border-gray-300">
+                      <span>FT-GE-17 ED. - 01</span>
+                      <span className="text-right">c.c. Almacen Materia Prima, Almacen {nota.detalle[0]?.almacen_nombre || '—'}<br />c.c. Compras</span>
+                    </div>
+                  </>
+                )}
+              </div>
+            )
+          })}
         </div>
-        <div className="px-4 py-1 text-xs italic text-gray-600 border-t border-gray-300">
-          Nota.- Cuando no hay stock se envia una copia al area de Compras.
-        </div>
-        <div className="flex justify-between px-4 py-6 text-xs text-gray-500 text-center">
-          <div className="border-t border-gray-800 pt-1 w-[30%]">Solicitado por</div>
-          <div className="border-t border-gray-800 pt-1 w-[30%]">Revisado por</div>
-          <div className="border-t border-gray-800 pt-1 w-[30%]">Aprobado por</div>
-        </div>
-        <div className="flex justify-between items-end px-4 pb-2 pt-1 text-[10px] text-gray-400 border-t border-gray-300">
-          <span>FT-GE-17 ED.-01</span>
-          <span className="text-right">c.c. Almacen Materia Prima, Almacen {nota.detalle[0]?.almacen_nombre || '—'}<br />c.c. Compras</span>
-        </div>
-      </div>
+      )}
 
       {/* Nota de Devolucion (Bloque 4): se imprime cuando ya hay lineas
           devueltas. Lista lo que volvio a Mesa, en que condicion y, si volvio

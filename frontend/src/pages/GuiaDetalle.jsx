@@ -6,6 +6,7 @@ import CodigoBarras from '../components/CodigoBarras'
 import { extraerProveedoresConocidos } from '../utils/proveedores'
 import { colorEtiquetaEstado } from '../utils/etiquetaEstados'
 import { TIPOS_DOCUMENTO, tipoDocumentoLabel } from '../utils/tiposDocumento'
+import { enPaginas } from '../utils/paginarImpresion'
 
 const colorDestino = {
   ALMACEN:     'bg-blue-100 text-blue-700',
@@ -631,81 +632,109 @@ export default function GuiaDetalle() {
         </div>
       </div>
 
-      {/* Vista de impresion de la Nota de Ingresos de Activos: replica el
-          formato fisico real de la empresa (talonario "Nota de Ingresos de
-          Activos", Fase B). P. Unit./Total quedan en blanco para llenado a
-          mano porque el inventario de Sibarita no maneja precios. */}
-      <div className={vistaImpresion === 'nota' ? 'hidden print:block border-2 border-gray-800 rounded' : 'hidden'}>
-        <div className="flex items-start justify-between px-4 pt-3">
-          <div>
-            <div className="font-bold text-lg text-gray-800">MANUFACTURA DE ALIMENTOS S.A.</div>
-            <div className="font-semibold text-sm text-gray-700 uppercase tracking-wide">Nota de Ingresos de Activos</div>
-          </div>
-          <div className="border border-gray-800 text-center text-sm">
-            <div className="bg-gray-100 px-3 py-0.5 border-b border-gray-800 font-semibold">Fecha</div>
-            <div className="px-3 py-1">{new Date(guia.fecha).toLocaleDateString('es-GT')}</div>
-          </div>
-        </div>
-        <div className="text-right px-4 text-sm text-red-600 font-bold">{tipoDocumentoLabel(guia.tipo_documento)} N.° {guia.numero_guia}</div>
+      {vistaImpresion === 'nota' && (
+        <div className="hidden print:block">
+          {enPaginas(guia.items).map((filas, pi, todas) => {
+            const ultima = pi === todas.length - 1
+            const [yy, mm, dd] = String(guia.fecha).slice(0, 10).split('-')
+            return (
+              <div key={pi} className="border-2 border-gray-800 rounded break-after-page last:break-after-auto">
+                <div className="flex items-start justify-between px-4 pt-3">
+                  <div>
+                    <div className="font-bold text-lg text-gray-800 text-center">MANUFACTURA DE ALIMENTOS S.A.</div>
+                    <div className="font-semibold text-sm text-gray-700 uppercase tracking-wide text-center">Nota de Ingresos de Activos</div>
+                  </div>
+                  <table className="border border-gray-800 text-center text-xs">
+                    <tbody>
+                      <tr><td colSpan={3} className="bg-gray-100 border-b border-gray-800 font-semibold px-2 py-0.5">FECHA</td></tr>
+                      <tr>
+                        <td className="border-r border-gray-800 px-3 py-1 w-8">{dd || ''}</td>
+                        <td className="border-r border-gray-800 px-3 py-1 w-8">{mm || ''}</td>
+                        <td className="px-3 py-1 w-8">{(yy || '').slice(2)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div className="text-right px-4 text-sm text-red-600 font-bold">
+                  {tipoDocumentoLabel(guia.tipo_documento)} N.° {guia.numero_guia}
+                  {todas.length > 1 && <span className="text-gray-500 font-normal text-xs ml-2">Hoja {pi + 1} de {todas.length}</span>}
+                </div>
 
-        <div className="grid grid-cols-2 gap-x-6 gap-y-1 px-4 py-3 text-sm">
-          <div className="border-b border-gray-200 pb-1"><b className="text-gray-500 text-xs uppercase mr-1">Proveedor</b> {guia.proveedor || '—'}</div>
-          <div className="border-b border-gray-200 pb-1"><b className="text-gray-500 text-xs uppercase mr-1">Orden de Compra</b> {guia.numero_oc || '—'}</div>
-          <div className="border-b border-gray-200 pb-1"><b className="text-gray-500 text-xs uppercase mr-1">Guia de Remision</b> {guia.guia_remision || '—'}</div>
-          <div className="border-b border-gray-200 pb-1"><b className="text-gray-500 text-xs uppercase mr-1">Factura</b> {guia.factura || '—'}</div>
-        </div>
+                <div className="px-4 py-3 text-sm space-y-1">
+                  <div className="flex"><b className="text-gray-600 w-40 shrink-0">PROVEEDOR:</b><span className="border-b border-gray-400 flex-1">{guia.proveedor || ''}</span></div>
+                  <div className="flex"><b className="text-gray-600 w-40 shrink-0">ORDEN DE COMPRA:</b><span className="border-b border-gray-400 flex-1">{guia.numero_oc || ''}</span></div>
+                  <div className="flex"><b className="text-gray-600 w-40 shrink-0">GUIA DE REMISION:</b><span className="border-b border-gray-400 flex-1">{guia.guia_remision || ''}</span></div>
+                  <div className="flex"><b className="text-gray-600 w-40 shrink-0">FACTURA:</b><span className="border-b border-gray-400 flex-1">{guia.factura || ''}</span></div>
+                </div>
 
-        <table className="w-full text-xs mx-4" style={{ width: 'calc(100% - 2rem)', margin: '0.5rem auto' }}>
-          <thead>
-            <tr className="border-b-2 border-gray-800">
-              <th className="text-left py-1">Detalle</th>
-              <th className="text-right py-1">Cantidad</th>
-              <th className="text-right py-1">P. Unit.</th>
-              <th className="text-right py-1">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {guia.items.map(it => (
-              <tr key={it.id} className="border-b border-gray-200 align-top">
-                <td className="py-1">
-                  {it.producto_nombre}
-                  {it.tipo === 'SERVICIO' && <span className="text-[10px] text-gray-500"> (servicio)</span>}
-                  {it.partidas?.length > 0 && (
-                    <span className="block text-[10px] text-gray-500">
-                      {it.partidas.map(pt => `${pt.cantidad}${pt.referencia ? ` (${pt.referencia})` : ''}`).join(' · ')}
-                    </span>
-                  )}
-                </td>
-                <td className="py-1 text-right">
-                  {it.cantidad}{it.unidad_medida_abreviatura ? ` ${it.unidad_medida_abreviatura}` : ''}
-                </td>
-                <td className="py-1 text-right">&nbsp;</td>
-                <td className="py-1 text-right">&nbsp;</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                <table className="w-full text-xs table-fixed" style={{ width: 'calc(100% - 2rem)', margin: '0 auto' }}>
+                  <thead>
+                    <tr className="bg-gray-100 border-y-2 border-gray-800">
+                      <th className="text-center py-1 tracking-widest">D E T A L L E</th>
+                      <th className="text-center py-1 border-l border-gray-800 w-20">CANTIDAD</th>
+                      <th className="text-center py-1 border-l border-gray-800 w-16">P. UNIT.</th>
+                      <th className="text-center py-1 border-l border-gray-800 w-20">TOTAL</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filas.map((it, ri) => (
+                      <tr key={ri} className="border-b border-gray-400 h-7 align-top">
+                        <td className="py-1 px-1">
+                          {it ? it.producto_nombre : ''}
+                          {it?.tipo === 'SERVICIO' && <span className="text-[10px] text-gray-500"> (servicio)</span>}
+                          {it?.partidas?.length > 0 && (
+                            <span className="block text-[10px] text-gray-500">
+                              {it.partidas.map(pt => `${pt.cantidad}${pt.referencia ? ` (${pt.referencia})` : ''}`).join(' · ')}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-1 text-center border-l border-gray-400">{it ? `${it.cantidad}${it.unidad_medida_abreviatura ? ` ${it.unidad_medida_abreviatura}` : ''}` : ''}</td>
+                        <td className="py-1 border-l border-gray-400">&nbsp;</td>
+                        <td className="py-1 border-l border-gray-400">&nbsp;</td>
+                      </tr>
+                    ))}
+                    {ultima && (
+                      <tr className="border-y-2 border-gray-800 h-7 font-semibold">
+                        <td className="py-1 text-right pr-2">TOTAL</td>
+                        <td className="border-l border-gray-800">&nbsp;</td>
+                        <td className="border-l border-gray-800">&nbsp;</td>
+                        <td className="border-l border-gray-800">&nbsp;</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
 
-        <div className="px-4 py-2 text-xs">
-          <b className="text-gray-500 uppercase mr-1">Observaciones</b>
-          <span className="inline-block border-b border-gray-400" style={{ width: '80%' }}>&nbsp;</span>
+                {ultima && (
+                  <>
+                    <div className="px-4 py-2 text-xs flex">
+                      <b className="text-gray-600 mr-1">OBSERVACIONES:</b>
+                      <span className="border-b border-gray-400 flex-1">{guia.observaciones || ''}</span>
+                    </div>
+                    <div className="px-4 py-2 text-xs text-gray-600 border-t border-gray-300">
+                      Por medio de la presente se da conformidad a los siguientes materiales ingresados segun la calidad
+                      y caracteristicas por Produccion y Dpto. de Compras.
+                      <div className="mt-1">
+                        Documento: {tipoDocumentoLabel(guia.tipo_documento)} N° {guia.numero_guia}
+                        &nbsp;&nbsp;Guia de Remision N° {guia.guia_remision || '.........'}
+                        &nbsp;&nbsp;.......... CONFORME.
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-x-6 px-4 pt-10 pb-2 text-xs text-gray-600 text-center">
+                      <div className="border-t border-gray-800 pt-1">V.° B.° Jefe de Mto. {guia.almacen_nombre}</div>
+                      <div className="border-t border-gray-800 pt-1">Revisado por: Dpto. Compras</div>
+                      <div className="border-t border-gray-800 pt-1">Revisado por: Dpto. Tesoreria</div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-6 px-10 pt-10 pb-4 text-xs text-gray-600 text-center">
+                      <div className="border-t border-gray-800 pt-1">Revisado por: Almacen</div>
+                      <div className="border-t border-gray-800 pt-1">Aprobado por: Jefe de Produccion</div>
+                    </div>
+                  </>
+                )}
+              </div>
+            )
+          })}
         </div>
-
-        <div className="px-4 py-2 text-xs text-gray-600 border-t border-gray-300">
-          Por medio de la presente se da conformidad a los siguientes materiales ingresados segun la calidad
-          y caracteristicas por Produccion y Dpto. de Compras.
-        </div>
-
-        <div className="grid grid-cols-3 gap-x-6 px-4 pt-8 pb-2 text-xs text-gray-500 text-center">
-          <div className="border-t border-gray-800 pt-1">V.° B.° Jefe de Mto. {guia.almacen_nombre}</div>
-          <div className="border-t border-gray-800 pt-1">Revisado por: Dpto. Compras</div>
-          <div className="border-t border-gray-800 pt-1">Revisado por: Dpto. Tesoreria</div>
-        </div>
-        <div className="grid grid-cols-2 gap-x-6 px-4 pt-8 pb-4 text-xs text-gray-500 text-center">
-          <div className="border-t border-gray-800 pt-1">Revisado por: Almacen</div>
-          <div className="border-t border-gray-800 pt-1">Aprobado por: Jefe de Produccion</div>
-        </div>
-      </div>
+      )}
     </div>
   )
 }
