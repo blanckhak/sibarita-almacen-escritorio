@@ -1390,5 +1390,66 @@ secuencia) ya se aplico en sibarita_db (0 filas, resto intacto).
 Commiteada en master (5f7ca47).
 
 --------------------------------------------------
+21. SESION 31/08/2026 (tarde) - AJUSTES SUELTOS SOBRE PEDIDO DEL USUARIO
+--------------------------------------------------
+Varios cambios pedidos mientras se revisaba la app corriendo (todos
+commiteados en master):
+
+- e64fd31  App escritorio: app.disableHardwareAcceleration() en main.js.
+  La ventana de Electron quedaba en "Cargando..." por un crash del proceso
+  GPU (exit_code=34); desactivar la aceleracion lo arregla.
+- cb0aff2  Solicitud de Materiales: el campo de cada linea paso de texto
+  libre a un <select> del catalogo + "+ Escribir otro material". Sin
+  cambio de backend.
+- 2167f32  "Stock consolidado" (Bloque 3): el mismo material se cargaba en
+  guias con nombres apenas distintos (espacios, tildes, guion vs barra,
+  pegado) y cada variante creaba un producto aparte, partiendo el stock.
+  * producto_canon(nombre) + indice unico productos_canon_unique (canon =
+    minusculas, sin tildes, sin nada que no sea letra/numero -> "Tornillo
+    1/2" == "tornillo  1-2" == "Tornillo1/2"). Migracion idempotente, ya
+    en sibarita_db, 0 colisiones.
+  * guias.js: el match contra el catalogo y el upsert usan producto_canon.
+  * Guias.jsx: al elegir un producto en el ingreso, la linea muestra el
+    stock consolidado (en el almacen de la guia + total en los 3).
+  Evidencia + limpiador en captura/stock_consolidado/ (commit 7d3f448).
+- 1283d64 + 5a1b73c  Devolucion USADA: panel para registrar cuanto vuelve
+  realmente (cantidad, puede ser menor a la que salio; peso numerico
+  opcional; observacion). El codigo nuevo USADO se genera con esa cantidad
+  y reingresa al bucket DEVOLUCION por esa cantidad. Junto a "-> cod. NNNN
+  (usado)" hay un boton "Imprimir etiqueta" (codigo de barras, marcada
+  USADO). Esquema: etiquetas.cantidad (override, NULL = usa guia_item) +
+  notas_salida_detalle.devuelto_cantidad/devuelto_peso/devuelto_obs. Ya
+  migrado en sibarita_db. Todas las lecturas de cantidad de una etiqueta
+  pasan a COALESCE(e.cantidad, gi.cantidad); marcarSalida y transferir
+  descuentan del bucket DEVOLUCION si el codigo es USADO (fixes de
+  code-review). Capturas en captura/devolucion_usada_panel/.
+  DECISION: si vuelve menos de lo que salio, la diferencia solo queda
+  registrada (visible como "volvieron 7 de 10"), NO genera pendiente ni
+  alerta. Si en el futuro se quiere trackear el faltante, es aparte.
+- cee4cb2  DEUDA CONOCIDA DE VALIDACION DE LONGITUD -> RESUELTA. Nuevo
+  helper backend/src/utils/texto.js (validarLargos) aplicado en guias,
+  notas de salida, solicitudes, compras diarias, productos, almacenes,
+  usuarios y unidades de medida: un texto mas largo que su VARCHAR ahora
+  da 400 claro en vez de 500. Sin cambio de esquema.
+- INSTALADOR .exe REGENERADO (31/08 14:52): dist/Sibarita Setup 1.0.0.exe
+  (~83 MB, sin firma) ahora incluye todo lo de las Fases 5-10 y esta
+  sesion. Verificado que dist/win-unpacked/Sibarita.exe arranca su backend
+  embebido. (dist/ esta en .gitignore, el .exe no se commitea.)
+
+QUE QUEDA PENDIENTE (revision del proyecto, 31/08):
+- Fase 1 - Calibracion de impresion matricial (Bloque 2 "6 lineas" +
+  Bloque 6 impresora Epson FX-890 II): BLOQUEADA esperando que el usuario
+  mida el talonario fisico con regla. Afecta las 4 vistas de impresion.
+- Fase 4 - Resiliencia de red offline (Bloque 7): NO EMPEZADA, la de mayor
+  arquitectura. Conviene como proyecto separado.
+- Bloque 6 "procesos en segundo plano" (solicitudes / servicios de
+  limpieza al firmar): AMBIGUO, falta que el cliente/usuario aclare que
+  espera concretamente.
+- Menores: Compras Diarias sin filtro de fecha en pantalla ni edicion;
+  Solicitud de Materiales sin edicion; Reportes "Salidas por Motivo" sin
+  tabla en pantalla (solo grafica + export). Web Vercel/Render congelada
+  (la base de Render vence el 20/09/2026).
+
+--------------------------------------------------
 FIN DE LA NOTA
 --------------------------------------------------
