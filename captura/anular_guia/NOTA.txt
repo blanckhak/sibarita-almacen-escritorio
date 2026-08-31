@@ -1,0 +1,69 @@
+ANULAR GUIA (31/08/2026)
+================================================================================
+
+PEDIDO
+------
+Boton para "eliminar" una guia de ingreso. Casos de uso mencionados: cambio de
+guia del proveedor, error de carga. Sin nota de credito de por medio.
+
+DECISIONES (confirmadas con el usuario)
+-------------------------------------
+- ANULAR (soft), no borrar: la guia queda visible en el historial marcada
+  ANULADA, se revierte el stock que sumo y sus codigos quedan retirados.
+- Solo se puede anular si NINGUN codigo salio del almacen ni esta comprometido
+  en una nota de salida (si alguno salio, primero hay que revertir esa salida).
+- MOTIVO obligatorio al anular; queda guardado.
+- No genera comprobante imprimible ni nota de credito.
+
+ESQUEMA (migraciones idempotentes, ya aplicadas en sibarita_db)
+-----------------------------------------------------------
+- guias.estado CHECK sumó 'ANULADA'. + columnas motivo_anulacion VARCHAR(200),
+  anulada_en TIMESTAMP, anulada_por -> usuarios(id).
+- etiquetas.estado CHECK sumó 'ANULADA'; etiqueta_historial.evento sumó
+  'ANULADA'.
+- guias_numero_almacen_unique paso a INDICE PARCIAL (WHERE estado <> 'ANULADA'):
+  una guia anulada libera su numero para volver a registrarlo ("cambio de
+  guia"). Se recrea una sola vez via DO $mig$.
+
+BACKEND (guias.js)
+-----------------
+- POST /api/guias/:id/anular  (soloRoles admin/almacen, log ANULAR_GUIA).
+  body { motivo } requerido (<=200). Transaccion:
+  * SELECT ... FOR UPDATE de la guia; 404 / 400 si ya anulada.
+  * Trae todos los codigos de la guia (FOR UPDATE OF e). Si alguno != EN_ALMACEN
+    -> 409. Si alguno esta en notas_salida_detalle -> 409.
+  * Por cada codigo: ajustarInventario(-cantidad, bucket segun condicion),
+    etiqueta -> ANULADA, historial evento ANULADA con el motivo.
+  * guia -> ANULADA + motivo/anulada_en/anulada_por. Devuelve codigos_retirados.
+- PUT /api/guias/:id ahora rechaza con 400 si la guia esta ANULADA.
+- El check de numero de guia duplicado en POST / ignora las ANULADA.
+- consulta/productos excluye los codigos ANULADOS (igual que REEMPLAZADA).
+- GET /:id trae anulada_por_nombre.
+
+FRONTEND
+--------
+- GuiaDetalle.jsx: boton "Anular guia" (rojo) en el header para admin/almacen
+  cuando la guia no esta anulada; abre un modal que pide el motivo. Cuando la
+  guia esta ANULADA: badge rojo, banner con motivo/fecha/quien, y se ocultan
+  "Editar", "Imprimir todas las etiquetas", "+ Agregar O.C." y el input de
+  ubicacion. Queda "Imprimir Nota de Ingreso".
+- Guias.jsx (listado): por defecto solo muestra las CARGADA; el toggle pasa a
+  "Mostrar tambien las cerradas y anuladas (N)". Badge ANULADA en rojo.
+- utils/etiquetaEstados.js: color para ANULADA (rojo).
+
+PROBADO
+-------
+scratchpad/test-anular.mjs: 17/17 contra copia desechable sibarita_demo_an
+(borrada al terminar). Anular revierte stock (5->0), etiqueta y historial en
+ANULADA; sin motivo / motivo largo / re-anular / editar anulada -> 400;
+codigo que salio -> 409; re-registrar el mismo numero tras anular -> 201;
+consulta/productos sin codigos anulados; ANULAR_GUIA en el log. Migracion
+aplicada en sibarita_db (24 guias, 33 codigos EN_ALMACEN, intacto).
+
+CAPTURAS
+--------
+- 01_modal_anular.png     -> el boton "Anular guia" + el modal del motivo.
+- 02_guia_anulada.png     -> la guia en estado ANULADA (badge rojo, banner con
+  el motivo, codigo en ANULADA).
+- 03_lista_con_anuladas.png -> el listado con el toggle activado; se ven dos
+  filas "AN-01" (una ANULADA y otra CARGADA) = el numero se reuso tras anular.

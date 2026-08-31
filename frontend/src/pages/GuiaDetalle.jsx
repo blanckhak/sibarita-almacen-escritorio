@@ -28,6 +28,9 @@ export default function GuiaDetalle() {
   const [proveedorOtro, setProveedorOtro] = useState(false)
   // Ediciones locales de la ubicacion fisica de cada codigo, por etiqueta_id.
   const [ubicEdits, setUbicEdits] = useState({})
+  const [mostrarAnular, setMostrarAnular] = useState(false)
+  const [motivoAnular, setMotivoAnular]   = useState('')
+  const [procesandoAnular, setProcesandoAnular] = useState(false)
 
   const puedeImprimir = ['admin', 'almacen'].includes(usuario?.rol)
   const puedeEditar = ['admin', 'almacen'].includes(usuario?.rol)
@@ -47,13 +50,19 @@ export default function GuiaDetalle() {
   }
 
   // Guarda la ubicacion de un codigo si cambio respecto a lo que trae el detalle.
+  // Actualiza solo esa linea en el estado local (no recarga toda la guia) para
+  // no pisar lo que se este escribiendo en otra fila.
   const guardarUbicacion = async (it) => {
     const nuevo = (ubicEdits[it.etiqueta_id] ?? '').trim()
     if (nuevo === (it.etiqueta_ubicacion || '')) return
     try {
       await api.put(`/api/etiquetas/${it.etiqueta_id}/ubicacion`, { ubicacion: nuevo })
       setMensaje({ tipo: 'ok', texto: `Ubicacion del codigo ${it.etiqueta_codigo} guardada` })
-      cargar()
+      setGuia(g => ({
+        ...g,
+        items: g.items.map(x => x.etiqueta_id === it.etiqueta_id ? { ...x, etiqueta_ubicacion: nuevo || null } : x),
+      }))
+      setUbicEdits(u => ({ ...u, [it.etiqueta_id]: nuevo }))
     } catch (err) {
       setMensaje({ tipo: 'error', texto: err.response?.data?.error || 'Error al guardar la ubicacion' })
     } finally {
@@ -111,6 +120,24 @@ export default function GuiaDetalle() {
   }
 
   const cerrada = (guia?.estado || 'CARGADA') === 'CERRADA'
+  const anulada = (guia?.estado || 'CARGADA') === 'ANULADA'
+
+  const anularGuia = async () => {
+    if (!motivoAnular.trim()) return
+    setProcesandoAnular(true)
+    try {
+      const { data } = await api.post(`/api/guias/${id}/anular`, { motivo: motivoAnular.trim() })
+      setMensaje({ tipo: 'ok', texto: `Guia anulada. ${data.codigos_retirados} codigo(s) retirado(s) y stock revertido.` })
+      setMostrarAnular(false)
+      setMotivoAnular('')
+      cargar()
+    } catch (err) {
+      setMensaje({ tipo: 'error', texto: err.response?.data?.error || 'Error al anular la guia' })
+    } finally {
+      setProcesandoAnular(false)
+      setTimeout(() => setMensaje(null), 5000)
+    }
+  }
 
   const guardarEdicion = async (e) => {
     e.preventDefault()
@@ -188,7 +215,11 @@ export default function GuiaDetalle() {
           <div>
             <div className="flex items-center gap-3">
               <h1 className="text-3xl font-bold text-gray-800">Guia {guia.numero_guia}</h1>
-              <span className={`px-2 py-1 rounded-full text-xs font-bold ${guia.estado === 'CERRADA' ? 'bg-gray-200 text-gray-600' : 'bg-blue-100 text-blue-700'}`}>
+              <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                anulada ? 'bg-red-100 text-red-700'
+                : guia.estado === 'CERRADA' ? 'bg-gray-200 text-gray-600'
+                : 'bg-blue-100 text-blue-700'
+              }`}>
                 {guia.estado || 'CARGADA'}
               </span>
             </div>
@@ -197,7 +228,7 @@ export default function GuiaDetalle() {
             </p>
           </div>
           <div className="flex gap-3">
-            {puedeEditar && (
+            {puedeEditar && !anulada && (
               <button
                 onClick={abrirEdicion}
                 className="border border-gray-300 text-gray-700 text-sm px-4 py-2 rounded-lg font-medium hover:bg-gray-50 transition"
@@ -213,7 +244,7 @@ export default function GuiaDetalle() {
                 Imprimir Nota de Ingreso
               </button>
             )}
-            {puedeImprimir && conEtiqueta.length > 0 && (
+            {puedeImprimir && !anulada && conEtiqueta.length > 0 && (
               <button
                 onClick={() => handleImprimir(conEtiqueta.map(it => it.etiqueta_id))}
                 className="bg-blue-700 hover:bg-blue-800 text-white text-sm px-4 py-2 rounded-lg font-medium transition"
@@ -221,8 +252,25 @@ export default function GuiaDetalle() {
                 Imprimir todas las etiquetas
               </button>
             )}
+            {puedeEditar && !anulada && (
+              <button
+                onClick={() => setMostrarAnular(true)}
+                className="border border-red-300 text-red-700 text-sm px-4 py-2 rounded-lg font-medium hover:bg-red-50 transition"
+              >
+                Anular guia
+              </button>
+            )}
           </div>
         </div>
+
+        {anulada && (
+          <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 mb-4 text-sm text-red-800">
+            <b>Guia anulada.</b> Motivo: {guia.motivo_anulacion || '—'}
+            {guia.anulada_en && ` · ${new Date(guia.anulada_en).toLocaleString('es-GT')}`}
+            {guia.anulada_por_nombre && ` · por ${guia.anulada_por_nombre}`}
+            <div className="text-xs text-red-600 mt-1">El stock que sumo esta guia se revirtio y sus codigos quedaron retirados.</div>
+          </div>
+        )}
 
         <div className="grid grid-cols-3 gap-4 mb-6 text-sm">
           <div className="bg-white rounded-lg border border-gray-200 px-4 py-3">
@@ -233,7 +281,7 @@ export default function GuiaDetalle() {
             <div className="text-gray-400 text-xs font-medium mb-1">Orden de Compra</div>
             {guia.numero_oc ? (
               <div className="text-gray-800">{guia.numero_oc}</div>
-            ) : puedeEditar ? (
+            ) : puedeEditar && !anulada ? (
               <button onClick={abrirEdicion} className="text-blue-700 hover:underline text-sm font-medium">
                 + Agregar Orden de Compra
               </button>
@@ -459,7 +507,7 @@ export default function GuiaDetalle() {
                   </td>
                   <td className="px-6 py-3">
                     {it.etiqueta_id ? (
-                      puedeEditar ? (
+                      puedeEditar && !anulada ? (
                         <input
                           value={ubicEdits[it.etiqueta_id] ?? ''}
                           onChange={e => setUbicEdits(u => ({ ...u, [it.etiqueta_id]: e.target.value }))}
@@ -498,6 +546,40 @@ export default function GuiaDetalle() {
           </table>
         </div>
       </div>
+
+      {mostrarAnular && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 print:hidden" onClick={() => setMostrarAnular(false)}>
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
+            <h2 className="text-lg font-semibold text-gray-800 mb-1">Anular guia {guia.numero_guia}</h2>
+            <p className="text-sm text-gray-500 mb-4">
+              Se revierte el stock que sumo esta guia y sus codigos quedan retirados.
+              La guia queda visible en el historial. No se puede deshacer.
+            </p>
+            <label className="block text-sm font-medium text-gray-600 mb-1">Motivo de la anulacion</label>
+            <input
+              autoFocus
+              value={motivoAnular}
+              onChange={e => setMotivoAnular(e.target.value)}
+              maxLength={200}
+              placeholder="Ej: cambio de guia del proveedor, error de carga..."
+              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 mb-4"
+            />
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setMostrarAnular(false)} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={anularGuia}
+                disabled={procesandoAnular || !motivoAnular.trim()}
+                className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+              >
+                {procesandoAnular ? 'Anulando...' : 'Anular guia'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Vista de impresion de etiquetas: solo visible al imprimir etiquetas */}
       <div className={vistaImpresion === 'etiquetas' ? 'hidden print:block' : 'hidden'}>

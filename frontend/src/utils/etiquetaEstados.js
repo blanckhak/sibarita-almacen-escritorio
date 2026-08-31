@@ -6,6 +6,7 @@ export const COLOR_ETIQUETA_ESTADO = {
   EN_ALMACEN:  'bg-blue-100 text-blue-700',
   SALIO:       'bg-orange-100 text-orange-700',
   REEMPLAZADA: 'bg-gray-200 text-gray-500',
+  ANULADA:     'bg-red-100 text-red-700',
 }
 
 export const colorEtiquetaEstado = (estado) =>

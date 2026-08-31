@@ -146,7 +146,11 @@ CREATE TABLE guias (
   proveedor VARCHAR(150),
   numero_oc VARCHAR(50),
   direccion VARCHAR(200),
-  estado VARCHAR(20) NOT NULL DEFAULT 'CARGADA' CHECK (estado IN ('CARGADA', 'CERRADA')),
+  estado VARCHAR(20) NOT NULL DEFAULT 'CARGADA' CHECK (estado IN ('CARGADA', 'CERRADA', 'ANULADA')),
+  -- Anular guia: motivo obligatorio, revierte el stock y retira sus codigos.
+  motivo_anulacion VARCHAR(200),
+  anulada_en TIMESTAMP,
+  anulada_por INTEGER REFERENCES usuarios(id),
   -- Datos del documento fisico del proveedor (Fase B, formato de impresion):
   -- el numero de guia interno de Sibarita no es el mismo que la guia de
   -- remision o factura que trae el proveedor, y el formato fisico "Nota de
@@ -155,7 +159,10 @@ CREATE TABLE guias (
   factura VARCHAR(50)
 );
 
-CREATE UNIQUE INDEX guias_numero_almacen_unique ON guias (numero_guia, almacen_id);
+-- Unico solo entre guias vigentes: una guia ANULADA libera su numero para
+-- volver a registrarlo (cambio de guia del proveedor / error de carga).
+CREATE UNIQUE INDEX guias_numero_almacen_unique
+  ON guias (numero_guia, almacen_id) WHERE estado <> 'ANULADA';
 
 CREATE TABLE guia_items (
   id SERIAL PRIMARY KEY,
@@ -202,7 +209,7 @@ CREATE TABLE etiquetas (
   almacen_id INTEGER REFERENCES almacenes(id),
   -- REEMPLAZADA (Bloque 4): estado terminal del codigo viejo cuando el item
   -- vuelve "usado" y se le asigna un codigo nuevo.
-  estado VARCHAR(20) NOT NULL DEFAULT 'EN_ALMACEN' CHECK (estado IN ('EN_ALMACEN', 'SALIO', 'REEMPLAZADA')),
+  estado VARCHAR(20) NOT NULL DEFAULT 'EN_ALMACEN' CHECK (estado IN ('EN_ALMACEN', 'SALIO', 'REEMPLAZADA', 'ANULADA')),
   -- NUEVO / USADO (Bloque 4): un codigo generado por devolucion "usada"
   -- nace con condicion USADO y su stock va aparte del stock nuevo.
   condicion VARCHAR(10) NOT NULL DEFAULT 'NUEVO' CHECK (condicion IN ('NUEVO', 'USADO')),
@@ -219,7 +226,7 @@ CREATE TABLE etiquetas (
 CREATE TABLE etiqueta_historial (
   id SERIAL PRIMARY KEY,
   etiqueta_id INTEGER REFERENCES etiquetas(id),
-  evento VARCHAR(20) NOT NULL CHECK (evento IN ('GENERADA', 'IMPRESA', 'REIMPRESA', 'SALIO', 'DEVOLVIO', 'TRANSFERIDA', 'REEMPLAZADA')),
+  evento VARCHAR(20) NOT NULL CHECK (evento IN ('GENERADA', 'IMPRESA', 'REIMPRESA', 'SALIO', 'DEVOLVIO', 'TRANSFERIDA', 'REEMPLAZADA', 'ANULADA')),
   almacen_origen_id INTEGER REFERENCES almacenes(id),
   almacen_destino_id INTEGER REFERENCES almacenes(id),
   usuario_id INTEGER REFERENCES usuarios(id),

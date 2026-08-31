@@ -27,13 +27,16 @@ export default function Guias() {
   const puedeRegistrar = ['admin', 'almacen'].includes(usuario?.rol)
   const proveedoresConocidos = useMemo(() => extraerProveedoresConocidos(guias), [guias])
   // Por defecto solo se ven las guias CARGADA (las que todavia se estan
-  // trabajando); las CERRADA quedan disponibles con el toggle de abajo
-  // en vez de desaparecer de la pantalla.
+  // trabajando); las CERRADA y ANULADA quedan disponibles con el toggle de
+  // abajo en vez de desaparecer de la pantalla.
   const guiasVisibles = useMemo(
-    () => mostrarCerradas ? guias : guias.filter(g => (g.estado || 'CARGADA') !== 'CERRADA'),
+    () => mostrarCerradas ? guias : guias.filter(g => (g.estado || 'CARGADA') === 'CARGADA'),
     [guias, mostrarCerradas]
   )
-  const totalCerradas = useMemo(() => guias.filter(g => g.estado === 'CERRADA').length, [guias])
+  const totalNoVigentes = useMemo(
+    () => guias.filter(g => ['CERRADA', 'ANULADA'].includes(g.estado)).length,
+    [guias]
+  )
 
   const cargarDatos = async () => {
     const [g, a, p, u, inv] = await Promise.all([
@@ -575,7 +578,7 @@ export default function Guias() {
         </div>
       )}
 
-      {!cargando && totalCerradas > 0 && (
+      {!cargando && totalNoVigentes > 0 && (
         <label className="flex items-center gap-2 text-sm text-gray-600 mb-3 cursor-pointer w-fit">
           <input
             type="checkbox"
@@ -583,7 +586,7 @@ export default function Guias() {
             onChange={e => setMostrarCerradas(e.target.checked)}
             className="rounded border-gray-300"
           />
-          Mostrar tambien las cerradas ({totalCerradas})
+          Mostrar tambien las cerradas y anuladas ({totalNoVigentes})
         </label>
       )}
 
@@ -612,7 +615,11 @@ export default function Guias() {
                   <td className="px-6 py-3 text-gray-700">{g.almacen_nombre}</td>
                   <td className="px-6 py-3 text-gray-500">{g.numero_oc || '—'}</td>
                   <td className="px-6 py-3">
-                    <span className={`px-2 py-1 rounded-full text-xs font-bold ${g.estado === 'CERRADA' ? 'bg-gray-200 text-gray-600' : 'bg-blue-100 text-blue-700'}`}>
+                    <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                      g.estado === 'ANULADA' ? 'bg-red-100 text-red-700'
+                      : g.estado === 'CERRADA' ? 'bg-gray-200 text-gray-600'
+                      : 'bg-blue-100 text-blue-700'
+                    }`}>
                       {g.estado || 'CARGADA'}
                     </span>
                   </td>

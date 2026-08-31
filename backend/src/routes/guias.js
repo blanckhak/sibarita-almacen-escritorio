@@ -31,9 +31,9 @@ router.get('/consulta/productos', verificarToken, async (req, res) => {
     valores.push(`%${numero_guia}%`)
     condiciones.push(`g.numero_guia ILIKE $${valores.length}`)
   }
-  // Las lineas SERVICIO (Fase 8) no representan stock fisico: quedan fuera de
-  // la consulta de productos por almacen/guia.
-  condiciones.unshift(`gi.tipo = 'PRODUCTO'`)
+  // Las lineas SERVICIO (Fase 8) no representan stock fisico y las guias
+  // ANULADAS ya no tienen stock: quedan fuera de la consulta de productos.
+  condiciones.unshift(`gi.tipo = 'PRODUCTO'`, `g.estado <> 'ANULADA'`)
   const where = `WHERE ${condiciones.join(' AND ')}`
 
   try {
@@ -49,7 +49,7 @@ router.get('/consulta/productos', verificarToken, async (req, res) => {
       JOIN productos p ON gi.producto_id = p.id
       -- Una devolucion "usada" deja el codigo viejo como REEMPLAZADA y crea uno
       -- nuevo para el mismo guia_item; se muestra el vigente, no el retirado.
-      LEFT JOIN etiquetas e ON e.guia_item_id = gi.id AND e.estado <> 'REEMPLAZADA'
+      LEFT JOIN etiquetas e ON e.guia_item_id = gi.id AND e.estado NOT IN ('REEMPLAZADA', 'ANULADA')
       ${where}
       ORDER BY g.fecha DESC, gi.id DESC
       LIMIT 300
@@ -85,10 +85,12 @@ router.get('/', verificarToken, async (req, res) => {
 router.get('/:id', verificarToken, async (req, res) => {
   try {
     const guia = await pool.query(`
-      SELECT g.*, a.nombre as almacen_nombre, u.nombre as usuario_nombre
+      SELECT g.*, a.nombre as almacen_nombre, u.nombre as usuario_nombre,
+             ua.nombre as anulada_por_nombre
       FROM guias g
       JOIN almacenes a ON g.almacen_id = a.id
       LEFT JOIN usuarios u ON g.usuario_id = u.id
+      LEFT JOIN usuarios ua ON g.anulada_por = ua.id
       WHERE g.id = $1
     `, [req.params.id])
     if (guia.rows.length === 0) {
@@ -200,7 +202,7 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
     await client.query('BEGIN')
 
     const dup = await client.query(
-      'SELECT id FROM guias WHERE numero_guia = $1 AND almacen_id = $2',
+      `SELECT id FROM guias WHERE numero_guia = $1 AND almacen_id = $2 AND estado <> 'ANULADA'`,
       [numero_guia.trim(), almacen_id]
     )
     if (dup.rows.length > 0) {
@@ -434,6 +436,11 @@ router.put('/:id', verificarToken, soloRoles('admin', 'almacen'),
     }
     const guiaActual = actual.rows[0]
 
+    if (guiaActual.estado === 'ANULADA') {
+      await client.query('ROLLBACK')
+      return res.status(400).json({ error: 'La guia esta ANULADA y no se puede editar' })
+    }
+
     // Guia CERRADA: solo cantidad de lineas + N de O.C. (y reabrir con estado).
     if (guiaActual.estado === 'CERRADA') {
       const bloqueados = { proveedor, direccion, guia_remision, factura }
@@ -523,6 +530,104 @@ router.put('/:id', verificarToken, soloRoles('admin', 'almacen'),
 
     await client.query('COMMIT')
     res.json(guiaFinal)
+  } catch (err) {
+    await client.query('ROLLBACK')
+    res.status(500).json({ error: err.message })
+  } finally {
+    client.release()
+  }
+})
+
+// Anular una guia: revierte el stock que sumo, retira sus codigos (etiquetas ->
+// estado ANULADA) y deja la guia en estado ANULADA con el motivo. Solo se
+// permite si NINGUN codigo salio del almacen ni esta comprometido en una nota
+// de salida. No borra nada: la guia sigue visible en el historial.
+router.post('/:id/anular', verificarToken, soloRoles('admin', 'almacen'),
+  log('ANULAR_GUIA', req => `Guia id ${req.params.id}, motivo: ${(req.body.motivo || '').trim() || 'sin indicar'}`),
+  async (req, res) => {
+  const motivo = (req.body.motivo || '').trim()
+  if (!motivo) {
+    return res.status(400).json({ error: 'El motivo de anulacion es requerido' })
+  }
+  const errLargo = validarLargos({ 'motivo': [motivo, 200] })
+  if (errLargo) return res.status(400).json({ error: errLargo })
+
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+
+    const g = await client.query('SELECT * FROM guias WHERE id = $1 FOR UPDATE', [req.params.id])
+    if (g.rows.length === 0) {
+      await client.query('ROLLBACK')
+      return res.status(404).json({ error: 'Guia no encontrada' })
+    }
+    if (g.rows[0].estado === 'ANULADA') {
+      await client.query('ROLLBACK')
+      return res.status(400).json({ error: 'La guia ya esta anulada' })
+    }
+    const numeroGuia = g.rows[0].numero_guia
+
+    // Solo las lineas PRODUCTO con destino ALMACEN (o OFICINA/LABORATORIO sin
+    // recoger) tienen etiqueta y movieron inventario; las demas no.
+    const ets = await client.query(`
+      SELECT e.id, e.codigo, e.estado, e.almacen_id, e.producto_id, e.condicion,
+             COALESCE(e.cantidad, gi.cantidad) as cantidad
+      FROM etiquetas e
+      JOIN guia_items gi ON e.guia_item_id = gi.id
+      WHERE gi.guia_id = $1
+      FOR UPDATE OF e
+    `, [req.params.id])
+
+    const salioAfuera = ets.rows.find(e => e.estado === 'SALIO')
+    if (salioAfuera) {
+      await client.query('ROLLBACK')
+      return res.status(409).json({ error: `El codigo ${salioAfuera.codigo} ya salio del almacen; revertí esa salida antes de anular la guia` })
+    }
+    // REEMPLAZADA = una linea que salio y volvio "usada" (devolucion). Tiene
+    // historial posterior a la guia: no se puede anular sin desarmarlo.
+    const conMovimientos = ets.rows.find(e => e.estado !== 'EN_ALMACEN')
+    if (conMovimientos) {
+      await client.query('ROLLBACK')
+      return res.status(409).json({ error: `El codigo ${conMovimientos.codigo} tiene movimientos posteriores (devolucion); no se puede anular la guia` })
+    }
+    const idsEt = ets.rows.map(e => e.id)
+    if (idsEt.length > 0) {
+      const enNota = await client.query(
+        `SELECT e.codigo
+         FROM notas_salida_detalle d JOIN etiquetas e ON d.etiqueta_id = e.id
+         WHERE d.etiqueta_id = ANY($1::int[]) LIMIT 1`,
+        [idsEt]
+      )
+      if (enNota.rows.length > 0) {
+        await client.query('ROLLBACK')
+        return res.status(409).json({ error: `El codigo ${enNota.rows[0].codigo} esta en una nota de salida; no se puede anular la guia` })
+      }
+    }
+
+    for (const e of ets.rows) {
+      await ajustarInventario(client, {
+        almacenId: e.almacen_id,
+        productoId: e.producto_id,
+        delta: -e.cantidad,
+        tipo: e.condicion === 'USADO' ? 'DEVOLUCION' : 'NUEVO',
+        descripcion: `Anulacion guia ${numeroGuia}`,
+      })
+      await client.query(`UPDATE etiquetas SET estado = 'ANULADA' WHERE id = $1`, [e.id])
+      await client.query(
+        `INSERT INTO etiqueta_historial (etiqueta_id, evento, almacen_origen_id, usuario_id, detalle)
+         VALUES ($1, 'ANULADA', $2, $3, $4)`,
+        [e.id, e.almacen_id, req.usuario.id, `Anulacion guia ${numeroGuia}: ${motivo}`]
+      )
+    }
+
+    const actualizada = await client.query(
+      `UPDATE guias SET estado = 'ANULADA', motivo_anulacion = $1, anulada_en = NOW(), anulada_por = $2
+       WHERE id = $3 RETURNING *`,
+      [motivo, req.usuario.id, req.params.id]
+    )
+
+    await client.query('COMMIT')
+    res.json({ ...actualizada.rows[0], codigos_retirados: ets.rows.length })
   } catch (err) {
     await client.query('ROLLBACK')
     res.status(500).json({ error: err.message })

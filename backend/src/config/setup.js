@@ -121,12 +121,36 @@ async function setup() {
     CREATE UNIQUE INDEX IF NOT EXISTS guias_numero_almacen_unique
       ON guias (numero_guia, almacen_id);
 
+    -- El numero de guia solo tiene que ser unico entre las guias VIGENTES: si
+    -- una se anula (cambio de guia del proveedor, error de carga), se puede
+    -- volver a registrar el mismo numero. Se recrea el indice como parcial una
+    -- sola vez.
+    DO $mig$ BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_indexes
+        WHERE indexname = 'guias_numero_almacen_unique' AND indexdef LIKE '%ANULADA%'
+      ) THEN
+        DROP INDEX IF EXISTS guias_numero_almacen_unique;
+        CREATE UNIQUE INDEX guias_numero_almacen_unique
+          ON guias (numero_guia, almacen_id) WHERE estado <> 'ANULADA';
+      END IF;
+    END $mig$;
+
     -- Datos de proveedor/O.C. y estado de la guia (Fase A del nuevo spec del cliente)
     ALTER TABLE guias ADD COLUMN IF NOT EXISTS proveedor VARCHAR(150);
     ALTER TABLE guias ADD COLUMN IF NOT EXISTS numero_oc VARCHAR(50);
     ALTER TABLE guias ADD COLUMN IF NOT EXISTS direccion VARCHAR(200);
     ALTER TABLE guias ADD COLUMN IF NOT EXISTS estado VARCHAR(20) NOT NULL DEFAULT 'CARGADA'
       CHECK (estado IN ('CARGADA', 'CERRADA'));
+    -- Anular guia: motivo obligatorio, revierte el stock y retira sus codigos,
+    -- la guia queda visible en el historial. El CHECK se recrea para sumar
+    -- ANULADA (el ADD COLUMN de arriba no re-corre si la columna ya existe).
+    ALTER TABLE guias DROP CONSTRAINT IF EXISTS guias_estado_check;
+    ALTER TABLE guias ADD CONSTRAINT guias_estado_check
+      CHECK (estado IN ('CARGADA', 'CERRADA', 'ANULADA'));
+    ALTER TABLE guias ADD COLUMN IF NOT EXISTS motivo_anulacion VARCHAR(200);
+    ALTER TABLE guias ADD COLUMN IF NOT EXISTS anulada_en TIMESTAMP;
+    ALTER TABLE guias ADD COLUMN IF NOT EXISTS anulada_por INTEGER REFERENCES usuarios(id);
 
     -- Guia de remision y factura del proveedor (Fase B, formato de impresion)
     ALTER TABLE guias ADD COLUMN IF NOT EXISTS guia_remision VARCHAR(50);
@@ -209,7 +233,7 @@ async function setup() {
     ALTER TABLE etiquetas ADD COLUMN IF NOT EXISTS condicion VARCHAR(10) NOT NULL DEFAULT 'NUEVO';
     ALTER TABLE etiquetas DROP CONSTRAINT IF EXISTS etiquetas_estado_check;
     ALTER TABLE etiquetas ADD CONSTRAINT etiquetas_estado_check
-      CHECK (estado IN ('EN_ALMACEN', 'SALIO', 'REEMPLAZADA'));
+      CHECK (estado IN ('EN_ALMACEN', 'SALIO', 'REEMPLAZADA', 'ANULADA'));
     ALTER TABLE etiquetas DROP CONSTRAINT IF EXISTS etiquetas_condicion_check;
     ALTER TABLE etiquetas ADD CONSTRAINT etiquetas_condicion_check
       CHECK (condicion IN ('NUEVO', 'USADO'));
@@ -222,7 +246,7 @@ async function setup() {
     ALTER TABLE etiquetas ADD COLUMN IF NOT EXISTS ubicacion VARCHAR(100);
     ALTER TABLE etiqueta_historial DROP CONSTRAINT IF EXISTS etiqueta_historial_evento_check;
     ALTER TABLE etiqueta_historial ADD CONSTRAINT etiqueta_historial_evento_check
-      CHECK (evento IN ('GENERADA', 'IMPRESA', 'REIMPRESA', 'SALIO', 'DEVOLVIO', 'TRANSFERIDA', 'REEMPLAZADA'));
+      CHECK (evento IN ('GENERADA', 'IMPRESA', 'REIMPRESA', 'SALIO', 'DEVOLVIO', 'TRANSFERIDA', 'REEMPLAZADA', 'ANULADA'));
 
     CREATE SEQUENCE IF NOT EXISTS notas_salida_numero_seq START 1;
 
