@@ -3,6 +3,12 @@ const path = require('path');
 const http = require('http');
 const { spawn } = require('child_process');
 
+// En algunas PCs el proceso GPU de Electron se cae al arrancar
+// ("GPU process exited unexpectedly: exit_code=34") y la ventana queda en
+// blanco / "Cargando...". Desactivar la aceleracion por hardware lo evita;
+// esta app es UI simple, no necesita GPU.
+app.disableHardwareAcceleration();
+
 const PORT = 3000;
 const APP_URL = `http://localhost:${PORT}`;
 const BACKEND_DIR = path.join(__dirname, 'backend');
