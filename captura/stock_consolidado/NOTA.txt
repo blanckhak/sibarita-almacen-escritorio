@@ -45,3 +45,30 @@ cargadas por guia caen todas en el mismo producto (stock consolidado 35);
 igual. Contra copia desechable sibarita_demo_canon (borrada al terminar). La
 migracion (funcion + indice) ya se aplico en sibarita_db, 0 colisiones, datos
 intactos.
+
+EVIDENCIA EN VIVO (capturas 03-06, sobre sibarita_db)
+----------------------------------------------------
+Se registraron 3 guias de evidencia escribiendo el nombre del MISMO material
+de 3 formas distintas:
+  EVID-CONS-01  MALSA     "GUANTES  de  nitrilo-talla-m"     25 u.
+  EVID-CONS-02  JOPISA    "guántes de nítrilo talla m !!"    15 u.
+  EVID-CONS-03  INDELPAS  "GuantesDeNitriloTallaM"           10 u.
+
+ANTES : catalogo 15 productos; "Guantes de Nitrilo Talla M" (id 12);
+        stock INDELPAS 10 / JOPISA 80 / MALSA 80  ->  total 170.
+DESPUES: catalogo 15 productos (NO se crearon duplicados); las 3 lineas
+        quedaron con producto_id 12; stock INDELPAS 20 / JOPISA 95 /
+        MALSA 105  ->  total 220 (+50 = 25+15+10), todo en el mismo producto.
+
+- 03_guias_evidencia_lista.png          -> las 3 guias EVID-CONS-* en el listado.
+- 04_guia_EVID-CONS-02_detalle.png      -> la guia donde se escribio
+  "guántes de nítrilo talla m !!"; la linea quedo como "Guantes de Nitrilo
+  Talla M", codigo 9047.
+- 05_catalogo_un_solo_producto.png      -> Catalogo filtrado por "nitrilo":
+  1 resultado (id 12). No se duplico.
+- 06_inventario_consolidado_actualizado.png -> modal de Inventario: INDELPAS 20
+  / JOPISA 95 / MALSA 105 / Total general 220.
+
+Las guias EVID-CONS-* se dejan en la base para poder revisarlas en la app.
+Para quitarlas y revertir su stock: evid-consolidado-limpiar.sql (en esta
+misma carpeta).
