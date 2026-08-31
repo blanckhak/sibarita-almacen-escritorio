@@ -146,12 +146,31 @@ de actividad_log que referenciaban guias de prueba ya inexistentes.
 Leccion: los scripts de limpieza de prueba deben borrar por ID capturado al
 inicio del test, nunca por patron LIKE sobre numero_guia.
 
+CAPTURAS VISUALES (agregadas 31/08/2026)
+--------------------------------------
+En la sesion de la Fase 8 (29/08) no se pudieron tomar: el Chrome de la
+extension no alcanzaba localhost:3000. Se tomaron despues (31/08) con Chrome
+headless via puppeteer-core, contra una copia desechable de la base
+(sibarita_db -> sibarita_demo_f8, backend temporal en :3000, DB borrada al
+terminar; sibarita_db no se toco). Guia demo "DEMO-F8-CAPTURA" con 1 linea
+PRODUCTO (Rodamiento 6203, ALMACEN) + 2 lineas SERVICIO.
+- 05_nuevo_ingreso_toggle_servicio.png  -> form "Nuevo Ingreso" con el toggle
+  Producto/Servicio en modo Servicio (campo pasa a "Servicio / descripcion",
+  se ocultan destino/unidad/partidas, nota "no genera codigo ni mueve
+  inventario").
+- 06_guia_detalle_lineas_servicio.png   -> detalle de la guia: badge SERVICIO
+  en las 2 lineas de servicio, Destino "—", Codigo "–", Estado "Servicio";
+  la linea PRODUCTO con etiqueta 9024 / ALMACEN / EN_ALMACEN.
+- 07_editar_guia_cargada_cantidad_por_linea.png -> "Editar guia" con la guia
+  CARGADA: cabecera completa + seccion "Cantidad por linea" (un input por
+  linea).
+- 08_editar_guia_cerrada_restringida.png -> "Editar guia" con la guia CERRADA:
+  aviso amarillo + solo N de O.C. + Estado + "Cantidad por linea".
+- 09_nota_ingreso_impresa_servicio.png  -> vista de impresion "Nota de
+  Ingresos de Activos" con las lineas de servicio marcadas "(servicio)".
+
 PENDIENTE / A TENER EN CUENTA
 ----------------------------
-- Capturas visuales de la app: NO se pudieron tomar en esta sesion (el Chrome
-  de la extension no alcanza localhost:3000 desde este entorno). El flujo esta
-  cubierto por el test end-to-end por API (34/34). `npm start` sirve la
-  version nueva.
 - Instalador .exe no regenerado; deploy Vercel/Render sin tocar (repo congelado).
 - Env: ninguna nueva.
 - DEUDA CONOCIDA (revisada 30/08): ningun campo de texto libre del backend valida

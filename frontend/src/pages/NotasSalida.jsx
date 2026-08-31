@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import api from '../utils/api'
 import { useAuth } from '../context/AuthContext'
 import { MOTIVOS } from '../utils/motivos'
+import { textoStock } from '../utils/stockResumen'
 
 const colorEstado = {
   PENDIENTE:     'bg-orange-100 text-orange-700',
@@ -28,6 +29,12 @@ export default function NotasSalida() {
   const [buscando, setBuscando]   = useState(false)
   const [sugerencias, setSugerencias] = useState([])
   const [mostrarSugerencias, setMostrarSugerencias] = useState(false)
+  // Fase 9: id de etiqueta que el backend rechazo por 409 (otro usuario la saco
+  // mientras se armaba la nota). Marca esa linea en rojo.
+  const [conflicto, setConflicto] = useState(null)
+  // Contador para forzar un refetch de la lista de codigos disponibles aunque
+  // el texto del buscador no cambie (p. ej. tras un 409).
+  const [recargarSugerencias, setRecargarSugerencias] = useState(0)
   const [parametro, setParametro] = useState({ monto_minimo: '', activo: false })
   const [mostrarConfig, setMostrarConfig] = useState(false)
   const [guardandoConfig, setGuardandoConfig] = useState(false)
@@ -70,12 +77,15 @@ export default function NotasSalida() {
     setBuscarCodigo('')
     setSugerencias([])
     setMostrarSugerencias(false)
+    setConflicto(null)
     setMostrarForm(true)
   }
 
   // Lista en vivo de todos los codigos disponibles en almacen (o filtrados por
-  // lo que se va escribiendo), con producto y cantidad, para elegir sin tener
-  // que saber el codigo exacto de memoria.
+  // lo que se va escribiendo), con producto, cantidad y stock del producto,
+  // para elegir sin tener que saber el codigo exacto de memoria. El stock que
+  // trae cada fila (Fase 9) tambien alimenta el hint de las lineas ya
+  // agregadas, para que no queden con un numero viejo.
   useEffect(() => {
     if (!mostrarForm) return
     let cancelado = false
@@ -88,7 +98,7 @@ export default function NotasSalida() {
         .finally(() => { if (!cancelado) setBuscando(false) })
     }, 200)
     return () => { cancelado = true; clearTimeout(t) }
-  }, [buscarCodigo, mostrarForm])
+  }, [buscarCodigo, mostrarForm, recargarSugerencias])
 
   const agregarEtiqueta = (encontrado) => {
     if (form.lineas.some(l => l.etiqueta_id === encontrado.id)) {
@@ -120,6 +130,7 @@ export default function NotasSalida() {
 
   const quitarLinea = (etiquetaId) => {
     setForm(f => ({ ...f, lineas: f.lineas.filter(l => l.etiqueta_id !== etiquetaId) }))
+    if (conflicto === etiquetaId) setConflicto(null)
   }
 
   const actualizarLinea = (etiquetaId, campo, valor) => {
@@ -149,9 +160,20 @@ export default function NotasSalida() {
       await api.post('/api/notas-salida', payload)
       setMensaje({ tipo: 'ok', texto: 'Nota de salida generada correctamente' })
       setMostrarForm(false)
+      setConflicto(null)
       cargarNotas()
     } catch (err) {
-      setMensaje({ tipo: 'error', texto: err.response?.data?.error || 'Error al guardar la nota de salida' })
+      // Fase 9: si otro usuario saco ese codigo primero, el backend responde
+      // 409 con el codigo en conflicto -> se marca esa linea y se refresca la
+      // lista de disponibles, en vez de solo un aviso generico.
+      const data = err.response?.data
+      if (err.response?.status === 409 && data?.etiqueta_id_conflicto) {
+        setConflicto(data.etiqueta_id_conflicto)
+        setRecargarSugerencias(n => n + 1)
+        setMensaje({ tipo: 'error', texto: `${data.error}. Quita esa linea (marcada en rojo) y vuelve a intentar.` })
+      } else {
+        setMensaje({ tipo: 'error', texto: data?.error || 'Error al guardar la nota de salida' })
+      }
     } finally {
       setGuardando(false)
       setTimeout(() => setMensaje(null), 4000)
@@ -323,6 +345,9 @@ export default function NotasSalida() {
                           <span className="col-span-6 text-gray-700 truncate">
                             {e.producto_nombre}
                             {e.condicion === 'USADO' && <span className="ml-1 text-xs text-amber-600 font-medium">(usado)</span>}
+                            <span className="block text-xs text-gray-400">
+                              {textoStock(e.stock_agregado, e.codigos_disponibles, { abreviatura: e.unidad_medida_abreviatura })} en {e.almacen_nombre}
+                            </span>
                           </span>
                           <span className="col-span-3 text-gray-500 text-right">
                             {e.cantidad} {e.unidad_medida_abreviatura || ''} <span className="text-gray-400">saliendo</span>
@@ -341,9 +366,30 @@ export default function NotasSalida() {
               {form.lineas.length > 0 && (
                 <div className="space-y-2">
                   {form.lineas.map(l => (
-                    <div key={l.etiqueta_id} className="grid grid-cols-12 gap-3 items-center bg-gray-50 border border-gray-200 rounded-lg p-3">
+                    <div
+                      key={l.etiqueta_id}
+                      className={`grid grid-cols-12 gap-3 items-center rounded-lg p-3 border ${
+                        conflicto === l.etiqueta_id
+                          ? 'bg-red-50 border-red-300'
+                          : 'bg-gray-50 border-gray-200'
+                      }`}
+                    >
                       <div className="col-span-2 font-mono font-bold text-gray-800">{l.etiqueta.codigo}</div>
-                      <div className="col-span-4 text-sm text-gray-700">{l.etiqueta.producto_nombre}</div>
+                      <div className="col-span-4 text-sm text-gray-700">
+                        {l.etiqueta.producto_nombre}
+                        {conflicto === l.etiqueta_id ? (
+                          <span className="block text-xs text-red-600 font-medium">Ya no esta disponible en almacen — quitala</span>
+                        ) : (() => {
+                          // Toma el stock del ultimo fetch si el codigo sigue en
+                          // la lista; si no, cae al valor con que se agrego.
+                          const fresco = sugerencias.find(s => s.id === l.etiqueta_id) || l.etiqueta
+                          return (
+                            <span className="block text-xs text-gray-400">
+                              {textoStock(fresco.stock_agregado, fresco.codigos_disponibles, { abreviatura: fresco.unidad_medida_abreviatura })} en {fresco.almacen_nombre}
+                            </span>
+                          )
+                        })()}
+                      </div>
                       <div className="col-span-2 text-sm text-gray-500">
                         {l.etiqueta.cantidad} {l.etiqueta.unidad_medida_abreviatura || ''}
                       </div>

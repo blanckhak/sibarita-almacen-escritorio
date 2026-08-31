@@ -76,7 +76,14 @@ router.get('/:id', verificarToken, async (req, res) => {
       SELECT d.*, e.codigo as etiqueta_codigo, e.estado as etiqueta_estado,
              e.condicion as etiqueta_condicion, e.almacen_id,
              p.nombre as producto_nombre, a.nombre as almacen_nombre,
-             en.codigo as etiqueta_devuelta_codigo
+             en.codigo as etiqueta_devuelta_codigo,
+             -- Stock actual del producto en ese almacen (Fase 9, Bloque 7):
+             -- lo que queda hoy, no una foto al momento de la salida.
+             (SELECT COALESCE(SUM(i.cantidad), 0)::int FROM inventario i
+                WHERE i.almacen_id = e.almacen_id AND i.producto_id = e.producto_id) as stock_agregado_actual,
+             (SELECT COUNT(*)::int FROM etiquetas e2
+                WHERE e2.almacen_id = e.almacen_id AND e2.producto_id = e.producto_id
+                  AND e2.estado = 'EN_ALMACEN') as codigos_disponibles_actual
       FROM notas_salida_detalle d
       JOIN etiquetas e ON d.etiqueta_id = e.id
       JOIN productos p ON e.producto_id = p.id
@@ -130,7 +137,14 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
     const noDisponible = etiquetas.rows.find(e => e.estado !== 'EN_ALMACEN')
     if (noDisponible) {
       await client.query('ROLLBACK')
-      return res.status(409).json({ error: `El codigo ${noDisponible.codigo} ya no esta disponible en almacen` })
+      // Fase 9: se devuelve el codigo/id en conflicto para que el formulario
+      // marque esa linea puntual en vez de un aviso generico. Pasa cuando otra
+      // persona saco ese mismo codigo mientras se armaba esta nota.
+      return res.status(409).json({
+        error: `El codigo ${noDisponible.codigo} ya no esta disponible en almacen`,
+        codigo_conflicto: noDisponible.codigo,
+        etiqueta_id_conflicto: noDisponible.id,
+      })
     }
 
     const guiaIds = new Set(etiquetas.rows.map(e => e.guia_id))

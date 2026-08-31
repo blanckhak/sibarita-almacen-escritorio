@@ -38,13 +38,29 @@ router.get('/', verificarToken, async (req, res) => {
       SELECT e.id, e.codigo, e.estado, e.condicion, e.almacen_id, e.producto_id,
              p.nombre as producto_nombre, a.nombre as almacen_nombre,
              gi.cantidad, g.numero_guia,
-             um.nombre as unidad_medida_nombre, um.abreviatura as unidad_medida_abreviatura
+             um.nombre as unidad_medida_nombre, um.abreviatura as unidad_medida_abreviatura,
+             -- Stock del producto en ese almacen (Fase 9, Bloque 7): total
+             -- agregado (tabla inventario, NUEVO + DEVOLUCION) y conteo de
+             -- codigos individuales que siguen EN_ALMACEN. Se calcula una vez
+             -- por par (almacen, producto) via LEFT JOIN a subconsultas
+             -- agrupadas, no una subconsulta por fila.
+             COALESCE(inv.total, 0)::int as stock_agregado,
+             COALESCE(disp.n, 0)::int as codigos_disponibles
       FROM etiquetas e
       JOIN productos p ON e.producto_id = p.id
       JOIN almacenes a ON e.almacen_id = a.id
       JOIN guia_items gi ON e.guia_item_id = gi.id
       JOIN guias g ON gi.guia_id = g.id
       LEFT JOIN unidades_medida um ON p.unidad_medida_id = um.id
+      LEFT JOIN (
+        SELECT almacen_id, producto_id, SUM(cantidad) as total
+        FROM inventario GROUP BY almacen_id, producto_id
+      ) inv ON inv.almacen_id = e.almacen_id AND inv.producto_id = e.producto_id
+      LEFT JOIN (
+        SELECT almacen_id, producto_id, COUNT(*) as n
+        FROM etiquetas WHERE estado = 'EN_ALMACEN'
+        GROUP BY almacen_id, producto_id
+      ) disp ON disp.almacen_id = e.almacen_id AND disp.producto_id = e.producto_id
       ${where}
       ${orderBy}
       LIMIT 50

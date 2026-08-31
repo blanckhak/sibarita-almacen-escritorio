@@ -1,0 +1,106 @@
+FASE 9 - Stock visible en la Orden de Salida + control de concurrencia (Bloque 7)
+================================================================================
+Fecha: 31/08/2026
+
+REGLA DE NEGOCIO (definida en Fase 3, seccion 20 de NOTAS_PROYECTO_SIBARITA.txt)
+------------------------------------------------------------------------------
+- "Mostrar el stock que queda en la Orden de Salida" -> mostrar LOS DOS numeros
+  que conviven en el sistema: el total AGREGADO por producto (tabla inventario,
+  NUEVO + DEVOLUCION) y el CONTEO de etiquetas individuales que siguen
+  EN_ALMACEN. No es uno u otro.
+- "Que los productos no se crucen" -> control de concurrencia sobre la MISMA
+  etiqueta: si dos personas arman una salida con el mismo codigo a la vez, una
+  debe fallar con aviso claro.
+
+DECISIONES DE ESTA FASE (confirmadas con el usuario antes de tocar codigo)
+-----------------------------------------------------------------------
+- Donde mostrar el stock: en los TRES lugares -> buscador de codigos del
+  formulario, detalle de la nota ya guardada, y vista de impresion.
+- Concurrencia: el backend YA bloquea bien (SELECT ... FOR UPDATE sobre las
+  etiquetas + rechazo 409 si alguna dejo de estar EN_ALMACEN). No se toca el
+  locking. Solo se mejora el AVISO: el 409 ahora identifica el codigo en
+  conflicto y el formulario marca esa linea puntual en rojo, en vez de un
+  banner generico. No se agrego lock con dueno ni columna nueva.
+
+SIN CAMBIOS DE ESQUEMA. Todo es lado lectura + un campo extra en la respuesta
+de error. No hubo migraciones.
+
+BACKEND
+-------
+backend/src/routes/etiquetas.js  (GET / , el buscador que alimenta la nota de salida)
+- Cada fila trae 2 campos nuevos, por subconsulta correlacionada sobre
+  e.almacen_id / e.producto_id:
+  * stock_agregado      = SUM(inventario.cantidad) de ese producto+almacen
+  * codigos_disponibles = COUNT(etiquetas EN_ALMACEN) de ese producto+almacen
+
+backend/src/routes/notasSalida.js
+- GET /:id : el detalle de cada linea trae stock_agregado_actual y
+  codigos_disponibles_actual (mismas subconsultas). Es el stock ACTUAL, no una
+  foto al momento de la salida (no se snapshotea).
+- POST / : el 409 "El codigo X ya no esta disponible" ahora ademas devuelve
+  { codigo_conflicto, etiqueta_id_conflicto } para que el form marque la linea.
+- POST /:id/aprobar : mismo 409 enriquecido, por consistencia.
+
+FRONTEND
+--------
+frontend/src/utils/stockResumen.js  (NUEVO)
+- textoStock(agregado, codigos, { abreviatura }) -> "12 L en stock · 3 codigos".
+  Centralizado porque se usa en 4 sitios (dropdown, lineas del form, detalle,
+  impresion no lo usa directo pero comparte el concepto).
+
+frontend/src/pages/NotasSalida.jsx
+- Dropdown de codigos: bajo el nombre del producto, linea gris con
+  "<stock> en stock · <n> codigos en <almacen>".
+- Lineas ya agregadas al borrador: mismo hint de stock por linea.
+- Estado nuevo `conflicto` (id de etiqueta). Al recibir 409 con
+  etiqueta_id_conflicto: se marca esa linea con fondo/borde rojo y el texto
+  "Ya no esta disponible en almacen - quitala", y el banner dice que quite esa
+  linea. Se limpia al quitar la linea, al reabrir el form o al guardar OK.
+
+frontend/src/pages/NotaSalidaDetalle.jsx
+- Tabla de pantalla: columna nueva "Stock actual" ->
+  textoStock(stock_agregado_actual, codigos_disponibles_actual).
+- Vista de impresion "Nota de Salida de Activos": columna nueva "Stock rest."
+  -> "<agregado> (<n> cod.)". El colSpan del pie (Total) paso de 4 a 5.
+
+PROBADO (contra copia desechable sibarita_demo_f9, backend en :3000, scratchpad/test-fase9.mjs)
+------------------------------------------------------------------------------
+20/20 asserts OK:
+- GET /api/etiquetas trae stock_agregado y codigos_disponibles numericos;
+  dos etiquetas del mismo producto+almacen reportan el mismo resumen.
+- Tras sacar una etiqueta: codigos_disponibles baja en 1 y stock_agregado baja
+  por la cantidad de esa etiqueta.
+- GET /api/notas-salida/:id trae stock_agregado_actual / codigos_disponibles_actual
+  por linea.
+- Segundo intento con un codigo ya sacado -> 409 con codigo_conflicto y
+  etiqueta_id_conflicto correctos y mensaje explicativo.
+- Nota mixta (una etiqueta valida + una ya sacada) -> 409 apuntando a la ya
+  sacada; la valida sigue EN_ALMACEN (ROLLBACK completo).
+La copia sibarita_demo_f9 se borro al terminar; sibarita_db no se toco
+(verificado: 9 notas, 12 codigos EN_ALMACEN, max nota id 17, igual que antes).
+Build de frontend limpio (tsc + vite). frontend-dist re-sincronizado.
+
+CAPTURAS (Chrome headless via puppeteer, contra sibarita_demo_f9)
+---------------------------------------------------------------
+- 01_buscador_codigos_con_stock.png       -> dropdown de codigos con la linea
+  de stock por producto ("5 U en stock · 1 codigo en MALSA", etc.).
+- 02_lineas_agregadas_hint_stock.png      -> 2 lineas en el borrador, cada una
+  con su hint de stock.
+- 03_conflicto_concurrencia_linea_roja.png -> se saco un codigo por API con la
+  linea ya en el borrador; al Generar, la linea 9023 queda roja con
+  "Ya no esta disponible" y el banner pide quitarla; la otra linea intacta.
+- 04_detalle_nota_columna_stock_actual.png -> detalle de la nota con la columna
+  "Stock actual" ("0 u. en stock · 0 codigos" tras agotar ese producto).
+- 05_impresion_nota_salida_stock_rest.png  -> talonario impreso con la columna
+  "Stock rest." ("0 (0 cod.)").
+
+PENDIENTE / A TENER EN CUENTA
+----------------------------
+- El "stock actual" del detalle e impresion es en vivo (cambia si despues entra
+  o sale mas stock de ese producto). Si en algun momento se quiere el stock
+  "al momento de la salida", habria que snapshotear en notas_salida_detalle
+  (columna nueva) -> no se pidio.
+- Instalador .exe no regenerado; deploy Vercel/Render sin tocar (repo congelado).
+- Env: ninguna nueva. Sin cambios de esquema.
+- Sigue vigente la DEUDA CONOCIDA de validacion de longitud de campos de texto
+  libre del backend (ver NOTA de Fase 8).

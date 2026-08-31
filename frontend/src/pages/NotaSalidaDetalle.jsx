@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import api from '../utils/api'
 import { useAuth } from '../context/AuthContext'
 import { colorEtiquetaEstado } from '../utils/etiquetaEstados'
+import { textoStock } from '../utils/stockResumen'
 
 const colorEstado = {
   PENDIENTE:     'bg-orange-100 text-orange-700',
@@ -247,6 +248,7 @@ export default function NotaSalidaDetalle() {
                 <th className="px-6 py-3 text-left">Producto</th>
                 <th className="px-6 py-3 text-left">Almacen</th>
                 <th className="px-6 py-3 text-right">Cantidad</th>
+                <th className="px-6 py-3 text-left">Stock actual</th>
                 <th className="px-6 py-3 text-right">P. Unitario</th>
                 <th className="px-6 py-3 text-right">Total</th>
                 <th className="px-6 py-3 text-left">Estado</th>
@@ -287,6 +289,9 @@ export default function NotaSalidaDetalle() {
                   <td className="px-6 py-3 text-gray-700">{d.producto_nombre}</td>
                   <td className="px-6 py-3 text-gray-500">{d.almacen_nombre}</td>
                   <td className="px-6 py-3 text-right">{d.cantidad}</td>
+                  <td className="px-6 py-3 text-gray-500 text-xs">
+                    {textoStock(d.stock_agregado_actual, d.codigos_disponibles_actual)}
+                  </td>
                   <td className="px-6 py-3 text-right">{d.p_unitario ? Number(d.p_unitario).toFixed(2) : '—'}</td>
                   <td className="px-6 py-3 text-right">{d.total ? Number(d.total).toFixed(2) : '—'}</td>
                   <td className="px-6 py-3">
@@ -374,6 +379,7 @@ export default function NotaSalidaDetalle() {
               <th className="text-left py-1">Codigo</th>
               <th className="text-left py-1">Detalle</th>
               <th className="text-right py-1">Cantidad</th>
+              <th className="text-right py-1">Stock rest.</th>
               <th className="text-right py-1">P. Unit.</th>
               <th className="text-right py-1">Total</th>
             </tr>
@@ -384,6 +390,9 @@ export default function NotaSalidaDetalle() {
                 <td className="py-1">{d.etiqueta_codigo}</td>
                 <td className="py-1">{d.producto_nombre}</td>
                 <td className="py-1 text-right">{d.cantidad}</td>
+                <td className="py-1 text-right">
+                  {d.stock_agregado_actual} ({d.codigos_disponibles_actual} cod.)
+                </td>
                 <td className="py-1 text-right">{d.p_unitario ? Number(d.p_unitario).toFixed(2) : '—'}</td>
                 <td className="py-1 text-right">{d.total ? Number(d.total).toFixed(2) : '—'}</td>
               </tr>
@@ -392,7 +401,7 @@ export default function NotaSalidaDetalle() {
           {total > 0 && (
             <tfoot>
               <tr>
-                <td colSpan={4} className="text-right font-bold py-1">Total</td>
+                <td colSpan={5} className="text-right font-bold py-1">Total</td>
                 <td className="text-right font-bold py-1">{total.toFixed(2)}</td>
               </tr>
             </tfoot>
