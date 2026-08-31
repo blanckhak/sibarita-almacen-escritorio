@@ -1436,6 +1436,45 @@ commiteados en master):
   sesion. Verificado que dist/win-unpacked/Sibarita.exe arranca su backend
   embebido. (dist/ esta en .gitignore, el .exe no se commitea.)
 
+- 010e4a4  IMPRESION + COLOR POR ALMACEN + KARDEX EXCEL.
+  * PreviewImpresion (frontend/src/components/PreviewImpresion.jsx): los 3
+    formatos (Nota de Ingreso en GuiaDetalle, Nota de Salida en
+    NotaSalidaDetalle, Solicitud de Materiales) ya no imprimen directo:
+    abren un overlay con el documento armado + botones Imprimir / Cerrar.
+    El bloque de impresion adentro lleva `preview ? '' : 'hidden
+    print:block'`, asi que un Ctrl+P sin abrir el preview sigue sacando
+    solo ese bloque. En GuiaDetalle/NotaSalidaDetalle se saco el auto-
+    print por useEffect/tick; ahora el disparo es el boton del overlay.
+  * colorAlmacen.js: el codigo de un producto se pinta con el color de su
+    almacen. MALSA amarillo (#fde047), JOPISA naranja (#fdba74), INDELPAS
+    verde claro (#bbf7d0); cualquier otro -> gris. `colorAlmacen(nombre)`
+    da {bg,text,hex,hexText}; `claseCodigoAlmacen` da las clases juntas
+    (una sola llamada); `estiloCodigoImpreso` da el style inline con
+    print-color-adjust para lo impreso. Aplicado en: banda del codigo de
+    la etiqueta impresa (EtiquetaDetalle, GuiaDetalle etiquetas,
+    NotaSalidaDetalle etiqueta usada), chip del codigo en la columna
+    DETALLE de la Nota de Ingreso y de Salida impresas, y los codigos en
+    pantalla (ConsultaProductos, GuiaDetalle, NotaSalidaDetalle,
+    EtiquetaDetalle). Los colores estan como literales en el .js para que
+    Tailwind v4 los detecte.
+  * Reporte "Kardex (Excel)" en Reportes: GET /api/reportes/kardex
+    devuelve una fila por etiqueta (item, ubicac, fecha, N/I, O/C, DOC,
+    N°, proveedor, detalle, motivo, U.M., cantidad, condicion, estado y
+    json_agg de sus salidas {cant, guia, fecha} de notas_salida_detalle
+    con fecha_salida). El front (frontend/src/utils/kardexExcel.js) arma
+    un .xls SpreadsheetML 2003 (un solo XML, sin libreria nueva) con 2
+    hojas: INGRESOS (codigos NUEVO) y DEVOLUCIONES (codigos USADO), al
+    estilo MALSA.xlsx: columnas fijas + pares CANT.|N° GUIA (min 6) +
+    TTL/S + SALDO. La consulta es pesada (escanea todas las etiquetas con
+    subconsulta correlacionada), asi que NO se carga con el dashboard: se
+    pide solo al hacer clic en "Descargar Excel" y se cachea. El resto de
+    exports (CSV/PDF) queda igual. SIN CAMBIOS DE ESQUEMA.
+  Fixes de code-review aplicados: kardex fuera del Promise.all del
+  dashboard (una falla suya ya no deja Reportes en blanco);
+  claseCodigoAlmacen para no llamar colorAlmacen 2-4 veces por celda.
+  Evidencia en captura/colores_preview/ (incluye Kardex_MALSA_test.xls).
+  NOTA: el .exe NO se regenero en esta tanda.
+
 QUE QUEDA PENDIENTE (revision del proyecto, 31/08):
 - Fase 1 - Calibracion de impresion matricial (Bloque 2 "6 lineas" +
   Bloque 6 impresora Epson FX-890 II): BLOQUEADA esperando que el usuario
