@@ -4,6 +4,7 @@ import api from '../utils/api'
 import { useAuth } from '../context/AuthContext'
 import CodigoBarras from '../components/CodigoBarras'
 import { colorEtiquetaEstado } from '../utils/etiquetaEstados'
+import { claseCodigoAlmacen, estiloCodigoImpreso } from '../utils/colorAlmacen'
 
 const colorEvento = {
   GENERADA:    'bg-blue-100 text-blue-700',
@@ -96,7 +97,9 @@ export default function EtiquetaDetalle() {
 
         <div className="flex items-center justify-between mt-2 mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-gray-800 font-mono">Codigo {etiqueta.codigo}</h1>
+            <h1 className="text-3xl font-bold text-gray-800 font-mono">
+              Codigo <span className={`px-2 rounded ${claseCodigoAlmacen(etiqueta.almacen_nombre)}`}>{etiqueta.codigo}</span>
+            </h1>
             <p className="text-gray-500 mt-1">
               {etiqueta.producto_nombre} · Guia {etiqueta.numero_guia} · {etiqueta.almacen_nombre}
             </p>
@@ -217,7 +220,7 @@ export default function EtiquetaDetalle() {
             {etiqueta.producto_nombre}
           </div>
           <div className="flex">
-            <div className="bg-amber-500 text-white font-bold text-2xl flex items-center justify-center px-4 min-w-[70px]">
+            <div className="font-bold text-2xl flex items-center justify-center px-4 min-w-[70px]" style={estiloCodigoImpreso(etiqueta.almacen_nombre)}>
               {etiqueta.codigo}
             </div>
             <div className="flex-1 border-l border-r border-gray-800 px-3 py-2 text-sm flex items-center">
@@ -226,7 +229,7 @@ export default function EtiquetaDetalle() {
             <div className="px-3 py-2 text-sm flex items-center justify-center">
               {etiqueta.unidad_medida_abreviatura || etiqueta.unidad_medida_nombre || ''}
             </div>
-            <div className="bg-amber-500 text-white font-bold flex items-center justify-center px-4 min-w-[40px]">
+            <div className="font-bold flex items-center justify-center px-4 min-w-[40px]" style={estiloCodigoImpreso(etiqueta.almacen_nombre)}>
               {etiqueta.cantidad}
             </div>
           </div>

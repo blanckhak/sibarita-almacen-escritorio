@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import api from '../utils/api'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { exportarCSV, exportarPDF } from '../utils/exportar'
+import { generarKardexExcel } from '../utils/kardexExcel'
 import { motivoLabel } from '../utils/motivos'
 
 export default function Reportes() {
@@ -11,6 +12,8 @@ export default function Reportes() {
   const [reimpresiones, setReimpresiones] = useState([])
   const [salidasMotivo, setSalidasMotivo] = useState([])
   const [sinMovimiento, setSinMovimiento] = useState([])
+  const [kardex, setKardex]           = useState(null)
+  const [bajandoKardex, setBajandoKardex] = useState(false)
   const [desde, setDesde]             = useState('')
   const [hasta, setHasta]             = useState('')
   const [cargando, setCargando]       = useState(true)
@@ -76,6 +79,25 @@ export default function Reportes() {
       : '—',
   }))
 
+  // Kardex tipo MALSA.xlsx. Consulta pesada (escanea todas las etiquetas), asi
+  // que NO se carga con el resto del dashboard: se pide solo al hacer clic en
+  // "Descargar Excel" y se cachea para descargas siguientes.
+  const descargarKardex = async () => {
+    setBajandoKardex(true)
+    try {
+      const data = kardex || (await api.get('/api/reportes/kardex')).data
+      if (!kardex) setKardex(data)
+      generarKardexExcel(data.ingresos || [], data.devoluciones || [])
+    } catch (err) {
+      console.error('No se pudo generar el kardex', err)
+    } finally {
+      setBajandoKardex(false)
+    }
+  }
+
+  const kardexIngresos = kardex?.ingresos?.length || 0
+  const kardexDevol = kardex?.devoluciones?.length || 0
+
   if (cargando) return <div className="p-6 text-center text-gray-400">Cargando reportes...</div>
 
   return (
@@ -87,6 +109,29 @@ export default function Reportes() {
 
       {/* Tarjetas de reporte */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-6 mb-10">
+
+        {/* Kardex tipo MALSA (Excel de 2 hojas: INGRESOS y DEVOLUCIONES) */}
+        <div className="bg-white rounded-xl shadow p-6 border border-gray-100">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="bg-emerald-100 text-emerald-700 p-2 rounded-lg text-xl">📑</div>
+            <div>
+              <h3 className="font-semibold text-gray-800">Kardex (Excel)</h3>
+              <p className="text-xs text-gray-400">
+                {kardex ? `${kardexIngresos} ingresos · ${kardexDevol} devoluciones` : 'Se arma al descargar'}
+              </p>
+            </div>
+          </div>
+          <p className="text-sm text-gray-500 mb-4">Formato MALSA: una fila por codigo con su ingreso y sus salidas por guia.</p>
+          <div className="flex gap-2">
+            <button
+              onClick={descargarKardex}
+              disabled={bajandoKardex}
+              className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs py-2 rounded-lg transition disabled:opacity-50"
+            >
+              {bajandoKardex ? 'Generando...' : 'Descargar Excel'}
+            </button>
+          </div>
+        </div>
 
         {/* Reporte resumen */}
         <div className="bg-white rounded-xl shadow p-6 border border-gray-100">

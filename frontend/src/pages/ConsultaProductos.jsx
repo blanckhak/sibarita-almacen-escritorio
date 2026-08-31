@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import api from '../utils/api'
 import { exportarCSV, exportarPDF } from '../utils/exportar'
 import { colorEtiquetaEstado } from '../utils/etiquetaEstados'
+import { claseCodigoAlmacen } from '../utils/colorAlmacen'
 
 const colorDestino = {
   ALMACEN:     'bg-blue-100 text-blue-700',
@@ -141,7 +142,7 @@ export default function ConsultaProductos() {
                   <td className="px-6 py-3 font-semibold text-gray-800">{r.numero_guia}</td>
                   <td className="px-6 py-3 font-mono text-gray-700">
                     {r.etiqueta_id
-                      ? <Link to={`/etiquetas/${r.etiqueta_id}`} className="text-blue-700 hover:underline">{r.etiqueta_codigo}</Link>
+                      ? <Link to={`/etiquetas/${r.etiqueta_id}`} className={`hover:underline px-1.5 rounded ${claseCodigoAlmacen(r.almacen_nombre)}`}>{r.etiqueta_codigo}</Link>
                       : '—'}
                   </td>
                   <td className="px-6 py-3 text-gray-700">{r.producto_nombre}</td>

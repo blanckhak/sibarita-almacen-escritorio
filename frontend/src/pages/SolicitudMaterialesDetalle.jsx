@@ -4,6 +4,7 @@ import api from '../utils/api'
 import { useAuth } from '../context/AuthContext'
 import { CATEGORIAS_MATERIALES } from '../utils/categoriasMateriales'
 import { enPaginas } from '../utils/paginarImpresion'
+import PreviewImpresion from '../components/PreviewImpresion'
 
 const colorEstado = {
   PENDIENTE: 'bg-orange-100 text-orange-700',
@@ -19,6 +20,7 @@ export default function SolicitudMaterialesDetalle() {
   const [mensaje, setMensaje]     = useState(null)
   const [motivoRechazo, setMotivoRechazo] = useState('')
   const [procesando, setProcesando] = useState(false)
+  const [preview, setPreview] = useState(false)
 
   const puedeGestionar = ['admin', 'almacen'].includes(usuario?.rol)
 
@@ -77,7 +79,7 @@ export default function SolicitudMaterialesDetalle() {
           <div className="flex items-center gap-3">
             <span className={`px-3 py-1.5 rounded-full text-xs font-bold ${colorEstado[solicitud.estado]}`}>{solicitud.estado}</span>
             <button
-              onClick={() => window.print()}
+              onClick={() => setPreview(true)}
               className="bg-blue-700 hover:bg-blue-800 text-white text-sm px-4 py-2 rounded-lg font-medium transition"
             >
               Imprimir
@@ -165,7 +167,8 @@ export default function SolicitudMaterialesDetalle() {
 
       {/* Vista de impresion: replica el formato fisico "Solicitud de Materiales"
           (reverso del talonario FT-GE-17). 6 productos por hoja. */}
-      <div className="hidden print:block">
+      <PreviewImpresion abierto={preview} onCerrar={() => setPreview(false)}>
+      <div className={preview ? '' : 'hidden print:block'}>
         {enPaginas(solicitud.detalle).map((filas, pi, todas) => {
           const ultima = pi === todas.length - 1
           const [yy, mm, dd] = String(solicitud.fecha).slice(0, 10).split('-')
@@ -246,6 +249,7 @@ export default function SolicitudMaterialesDetalle() {
           )
         })}
       </div>
+      </PreviewImpresion>
     </div>
   )
 }

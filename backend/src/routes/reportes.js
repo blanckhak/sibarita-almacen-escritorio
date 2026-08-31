@@ -78,4 +78,54 @@ router.get('/stock-sin-movimiento', verificarToken, async (req, res) => {
   }
 })
 
+// Kardex tipo MALSA.xlsx: una fila por codigo (etiqueta) con su ingreso y sus
+// salidas por nota. El front arma el .xls con dos hojas: INGRESOS (codigos
+// NUEVO) y DEVOLUCIONES (codigos nacidos de una devolucion usada, condicion
+// USADO). Solo cuenta salidas que ya salieron fisicamente (fecha_salida).
+router.get('/kardex', verificarToken, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT e.codigo::text                         AS item,
+             e.ubicacion                            AS ubicac,
+             e.condicion                            AS condicion,
+             e.estado                               AS estado_etiqueta,
+             g.fecha                                AS fecha,
+             g.numero_guia                          AS ni,
+             g.numero_oc                            AS oc_externa,
+             g.tipo_documento                       AS doc,
+             COALESCE(g.guia_remision, g.factura)   AS nro_doc,
+             g.proveedor                            AS proveedor,
+             g.estado                               AS estado_guia,
+             p.nombre                               AS detalle,
+             a.nombre                               AS almacen,
+             COALESCE(gi.destino_detalle, gi.destino) AS motivo,
+             um.abreviatura                         AS unid_med,
+             COALESCE(e.cantidad, gi.cantidad)      AS cantidad,
+             COALESCE((
+               SELECT json_agg(json_build_object(
+                        'cant', d.cantidad,
+                        'guia', n.numero_nota,
+                        'fecha', n.fecha_salida
+                      ) ORDER BY n.fecha_salida, n.id)
+               FROM notas_salida_detalle d
+               JOIN notas_salida n ON n.id = d.nota_salida_id
+               WHERE d.etiqueta_id = e.id AND n.fecha_salida IS NOT NULL
+             ), '[]'::json)                         AS salidas
+      FROM etiquetas e
+      JOIN guia_items gi ON e.guia_item_id = gi.id
+      JOIN guias g       ON gi.guia_id = g.id
+      JOIN productos p   ON e.producto_id = p.id
+      JOIN almacenes a   ON e.almacen_id = a.id
+      LEFT JOIN unidades_medida um ON p.unidad_medida_id = um.id
+      ORDER BY a.nombre, g.fecha, e.codigo
+    `)
+
+    const ingresos = result.rows.filter(r => r.condicion === 'NUEVO')
+    const devoluciones = result.rows.filter(r => r.condicion === 'USADO')
+    res.json({ ingresos, devoluciones, generado_en: new Date().toISOString() })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 module.exports = router

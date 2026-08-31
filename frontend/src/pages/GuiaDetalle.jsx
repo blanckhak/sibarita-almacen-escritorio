@@ -7,6 +7,8 @@ import { extraerProveedoresConocidos } from '../utils/proveedores'
 import { colorEtiquetaEstado } from '../utils/etiquetaEstados'
 import { TIPOS_DOCUMENTO, tipoDocumentoLabel } from '../utils/tiposDocumento'
 import { enPaginas } from '../utils/paginarImpresion'
+import { claseCodigoAlmacen, estiloCodigoImpreso } from '../utils/colorAlmacen'
+import PreviewImpresion from '../components/PreviewImpresion'
 
 const colorDestino = {
   ALMACEN:     'bg-blue-100 text-blue-700',
@@ -22,6 +24,7 @@ export default function GuiaDetalle() {
   const [cargando, setCargando]   = useState(true)
   const [imprimiendo, setImprimiendo] = useState(null)
   const [vistaImpresion, setVistaImpresion] = useState(null) // 'etiquetas' | 'nota'
+  const [preview, setPreview] = useState(false) // previsualizacion antes de imprimir
   const [mensaje, setMensaje]     = useState(null)
   const [editando, setEditando]   = useState(false)
   const [formEdicion, setFormEdicion] = useState(null)
@@ -175,17 +178,17 @@ export default function GuiaDetalle() {
     }
   }
 
+  // Al elegir un formato para imprimir se abre la previsualizacion; el envio a
+  // la impresora lo dispara el boton "Imprimir" del overlay.
   useEffect(() => {
-    if (!vistaImpresion) return
-    const t = setTimeout(() => window.print(), 150)
-    return () => clearTimeout(t)
+    if (vistaImpresion) setPreview(true)
   }, [vistaImpresion])
 
-  useEffect(() => {
-    const onAfterPrint = () => { setImprimiendo(null); setVistaImpresion(null) }
-    window.addEventListener('afterprint', onAfterPrint)
-    return () => window.removeEventListener('afterprint', onAfterPrint)
-  }, [])
+  const cerrarPreview = () => {
+    setPreview(false)
+    setVistaImpresion(null)
+    setImprimiendo(null)
+  }
 
   const handleImprimir = async (etiquetaIds) => {
     try {
@@ -518,7 +521,7 @@ export default function GuiaDetalle() {
                   </td>
                   <td className="px-6 py-3 font-mono text-gray-700">
                     {it.etiqueta_id
-                      ? <Link to={`/etiquetas/${it.etiqueta_id}`} className="text-blue-700 hover:underline">{it.etiqueta_codigo}</Link>
+                      ? <Link to={`/etiquetas/${it.etiqueta_id}`} className={`hover:underline px-1.5 rounded ${claseCodigoAlmacen(guia.almacen_nombre)}`}>{it.etiqueta_codigo}</Link>
                       : '—'}
                   </td>
                   <td className="px-6 py-3">
@@ -597,8 +600,9 @@ export default function GuiaDetalle() {
         </div>
       )}
 
+      <PreviewImpresion abierto={preview} onCerrar={cerrarPreview}>
       {/* Vista de impresion de etiquetas: solo visible al imprimir etiquetas */}
-      <div className={vistaImpresion === 'etiquetas' ? 'hidden print:block' : 'hidden'}>
+      <div className={vistaImpresion === 'etiquetas' ? (preview ? '' : 'hidden print:block') : 'hidden'}>
         <div className="grid grid-cols-2 gap-4">
           {itemsAImprimir.map(it => (
             <div key={it.etiqueta_id} className="border border-gray-800 rounded print:break-inside-avoid">
@@ -606,7 +610,7 @@ export default function GuiaDetalle() {
                 {it.producto_nombre}
               </div>
               <div className="flex">
-                <div className="bg-amber-500 text-white font-bold text-2xl flex items-center justify-center px-4 min-w-[70px]">
+                <div className="font-bold text-2xl flex items-center justify-center px-4 min-w-[70px]" style={estiloCodigoImpreso(guia.almacen_nombre)}>
                   {it.etiqueta_codigo}
                 </div>
                 <div className="flex-1 border-l border-r border-gray-800 px-3 py-2 text-sm flex items-center">
@@ -615,7 +619,7 @@ export default function GuiaDetalle() {
                 <div className="px-3 py-2 text-sm flex items-center justify-center">
                   {it.unidad_medida_abreviatura || it.unidad_medida_nombre || ''}
                 </div>
-                <div className="bg-amber-500 text-white font-bold flex items-center justify-center px-4 min-w-[40px]">
+                <div className="font-bold flex items-center justify-center px-4 min-w-[40px]" style={estiloCodigoImpreso(guia.almacen_nombre)}>
                   {it.cantidad}
                 </div>
               </div>
@@ -633,7 +637,7 @@ export default function GuiaDetalle() {
       </div>
 
       {vistaImpresion === 'nota' && (
-        <div className="hidden print:block">
+        <div className={preview ? '' : 'hidden print:block'}>
           {enPaginas(guia.items).map((filas, pi, todas) => {
             const ultima = pi === todas.length - 1
             const [yy, mm, dd] = String(guia.fecha).slice(0, 10).split('-')
@@ -680,6 +684,11 @@ export default function GuiaDetalle() {
                     {filas.map((it, ri) => (
                       <tr key={ri} className="border-b border-gray-400 h-7 align-top">
                         <td className="py-1 px-1">
+                          {it?.etiqueta_codigo && (
+                            <span className="font-mono font-bold px-1 mr-1 rounded" style={estiloCodigoImpreso(guia.almacen_nombre)}>
+                              {it.etiqueta_codigo}
+                            </span>
+                          )}
                           {it ? it.producto_nombre : ''}
                           {it?.tipo === 'SERVICIO' && <span className="text-[10px] text-gray-500"> (servicio)</span>}
                           {it?.partidas?.length > 0 && (
@@ -735,6 +744,7 @@ export default function GuiaDetalle() {
           })}
         </div>
       )}
+      </PreviewImpresion>
     </div>
   )
 }

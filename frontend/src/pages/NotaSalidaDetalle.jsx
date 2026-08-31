@@ -5,6 +5,8 @@ import { useAuth } from '../context/AuthContext'
 import { colorEtiquetaEstado } from '../utils/etiquetaEstados'
 import { textoStock } from '../utils/stockResumen'
 import { enPaginas } from '../utils/paginarImpresion'
+import { claseCodigoAlmacen, estiloCodigoImpreso } from '../utils/colorAlmacen'
+import PreviewImpresion from '../components/PreviewImpresion'
 import CodigoBarras from '../components/CodigoBarras'
 
 const colorEstado = {
@@ -57,7 +59,9 @@ export default function NotaSalidaDetalle() {
   const [devObs, setDevObs]           = useState('')
   const [marcandoNoDevuelto, setMarcandoNoDevuelto] = useState(null)
   const [modoImpresion, setModoImpresion] = useState('salida')
-  const [imprimirTick, setImprimirTick] = useState(0)
+  // Previsualizacion: el documento se muestra en pantalla dentro de un overlay
+  // con boton Imprimir antes de mandar a la impresora.
+  const [preview, setPreview] = useState(false)
   // Linea cuya etiqueta USADA (codigo nuevo de la devolucion) se va a imprimir.
   const [lineaEtiquetaUsada, setLineaEtiquetaUsada] = useState(null)
 
@@ -72,14 +76,13 @@ export default function NotaSalidaDetalle() {
 
   useEffect(() => { cargar() }, [id])
 
-  // Imprime recien despues de que el DOM refleja el modo elegido (evita la
-  // carrera de un setTimeout fijo), y deja el modo siempre en 'salida' para
-  // que un Ctrl+P posterior no saque la nota de devolucion por error.
-  useEffect(() => {
-    if (imprimirTick === 0) return
-    window.print()
+  // Cierra el preview y vuelve el modo a 'salida' para que un Ctrl+P posterior
+  // no saque la nota de devolucion por error.
+  const cerrarPreview = () => {
+    setPreview(false)
     setModoImpresion('salida')
-  }, [imprimirTick])
+    setLineaEtiquetaUsada(null)
+  }
 
   const abrirConfirmacionDevuelto = (linea) => {
     setLineaDevolucion(linea)
@@ -137,7 +140,7 @@ export default function NotaSalidaDetalle() {
 
   const imprimir = (modo) => {
     setModoImpresion(modo)
-    setImprimirTick(t => t + 1)
+    setPreview(true)
   }
 
   // Imprime la etiqueta fisica del codigo nuevo que genero una devolucion usada
@@ -319,7 +322,7 @@ export default function NotaSalidaDetalle() {
                     </td>
                   )}
                   <td className="px-6 py-3 font-mono font-semibold text-gray-800">
-                    <Link to={`/etiquetas/${d.etiqueta_id}`} className="text-blue-700 hover:underline">{d.etiqueta_codigo}</Link>
+                    <Link to={`/etiquetas/${d.etiqueta_id}`} className={`hover:underline px-1.5 rounded ${claseCodigoAlmacen(d.almacen_nombre)}`}>{d.etiqueta_codigo}</Link>
                     {d.etiqueta_devuelta_codigo && (
                       <div className="text-xs text-amber-700 font-normal mt-0.5 flex items-center gap-2">
                         <span>&rarr; cod. {d.etiqueta_devuelta_codigo} (usado)</span>
@@ -456,8 +459,9 @@ export default function NotaSalidaDetalle() {
         </div>
       )}
 
+      <PreviewImpresion abierto={preview} onCerrar={cerrarPreview}>
       {modoImpresion === 'salida' && (
-        <div className="hidden print:block">
+        <div className={preview ? '' : 'hidden print:block'}>
           {enPaginas(nota.detalle).map((filas, pi, todas) => {
             const ultima = pi === todas.length - 1
             const [yy, mm, dd] = String(nota.fecha).slice(0, 10).split('-')
@@ -505,7 +509,8 @@ export default function NotaSalidaDetalle() {
                         <td className="py-1 px-1">
                           {d ? (
                             <>
-                              <span className="font-mono">{d.etiqueta_codigo}</span> {d.producto_nombre}
+                              <span className="font-mono font-bold px-1 mr-1 rounded" style={estiloCodigoImpreso(d.almacen_nombre)}>{d.etiqueta_codigo}</span>
+                              {d.producto_nombre}
                               {d.devuelto_condicion === 'USADO' && <span className="text-[10px] text-gray-500"> (devuelto usado)</span>}
                             </>
                           ) : ''}
@@ -569,7 +574,8 @@ export default function NotaSalidaDetalle() {
       {/* Nota de Devolucion (Bloque 4): se imprime cuando ya hay lineas
           devueltas. Lista lo que volvio a Mesa, en que condicion y, si volvio
           usada, el codigo nuevo que se le asigno. */}
-      <div className={`${modoImpresion === 'devolucion' ? 'hidden print:block' : 'hidden'} border-2 border-gray-800 rounded`}>
+      {modoImpresion === 'devolucion' && (
+      <div className={`${preview ? '' : 'hidden print:block'} border-2 border-gray-800 rounded`}>
         <CabeceraTalonario
           nota={nota}
           subtitulo="Nota de Devolucion de Activos"
@@ -592,13 +598,17 @@ export default function NotaSalidaDetalle() {
           <tbody>
             {lineasDevueltas.map(d => (
               <tr key={d.id} className="border-b border-gray-200">
-                <td className="py-1 pr-3">{d.etiqueta_codigo}</td>
+                <td className="py-1 pr-3"><span className="font-mono font-bold px-1 rounded" style={estiloCodigoImpreso(d.almacen_nombre)}>{d.etiqueta_codigo}</span></td>
                 <td className="py-1 pr-3">{d.producto_nombre}</td>
                 <td className="py-1 pr-3 text-right">{d.cantidad}</td>
                 <td className="py-1 pr-3 text-right">{d.devuelto_cantidad != null ? d.devuelto_cantidad : d.cantidad}</td>
                 <td className="py-1 pr-3 text-right">{d.devuelto_peso != null ? Number(d.devuelto_peso) : '—'}</td>
                 <td className="py-1 pr-3">{d.devuelto_condicion === 'USADO' ? 'Usada' : 'Nueva'}</td>
-                <td className="py-1 pr-3">{d.etiqueta_devuelta_codigo || '—'}</td>
+                <td className="py-1 pr-3">
+                  {d.etiqueta_devuelta_codigo
+                    ? <span className="font-mono font-bold px-1 rounded" style={estiloCodigoImpreso(d.almacen_nombre)}>{d.etiqueta_devuelta_codigo}</span>
+                    : '—'}
+                </td>
                 <td className="py-1">{d.devuelto_en ? new Date(d.devuelto_en).toLocaleDateString('es-GT') : '—'}</td>
               </tr>
             ))}
@@ -616,16 +626,17 @@ export default function NotaSalidaDetalle() {
           <span className="text-right">c.c. Almacen {nota.detalle[0]?.almacen_nombre || '—'}<br />c.c. Compras</span>
         </div>
       </div>
+      )}
 
       {/* Etiqueta fisica del codigo nuevo de una devolucion usada */}
-      <div className={modoImpresion === 'etiqueta_usada' ? 'hidden print:block' : 'hidden'}>
-        {lineaEtiquetaUsada && (
+      {modoImpresion === 'etiqueta_usada' && lineaEtiquetaUsada && (
+        <div className={preview ? '' : 'hidden print:block'}>
           <div className="border border-gray-800 rounded inline-block">
             <div className="bg-gray-100 text-center font-semibold text-sm py-1.5 border-b border-gray-800 px-4">
               {lineaEtiquetaUsada.producto_nombre} · USADO
             </div>
             <div className="flex">
-              <div className="bg-amber-500 text-white font-bold text-2xl flex items-center justify-center px-4 min-w-[70px]">
+              <div className="font-bold text-2xl flex items-center justify-center px-4 min-w-[70px]" style={estiloCodigoImpreso(lineaEtiquetaUsada.almacen_nombre)}>
                 {lineaEtiquetaUsada.etiqueta_devuelta_codigo}
               </div>
               <div className="flex-1 border-l border-r border-gray-800 px-3 py-2 text-sm flex items-center">
@@ -634,7 +645,7 @@ export default function NotaSalidaDetalle() {
               <div className="px-3 py-2 text-sm flex items-center justify-center">
                 {lineaEtiquetaUsada.unidad_medida_abreviatura || ''}
               </div>
-              <div className="bg-amber-500 text-white font-bold flex items-center justify-center px-4 min-w-[40px]">
+              <div className="font-bold flex items-center justify-center px-4 min-w-[40px]" style={estiloCodigoImpreso(lineaEtiquetaUsada.almacen_nombre)}>
                 {lineaEtiquetaUsada.devuelto_cantidad != null ? lineaEtiquetaUsada.devuelto_cantidad : lineaEtiquetaUsada.cantidad}
               </div>
             </div>
@@ -642,8 +653,9 @@ export default function NotaSalidaDetalle() {
               <CodigoBarras valor={lineaEtiquetaUsada.etiqueta_devuelta_codigo} height={28} />
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+      </PreviewImpresion>
     </div>
   )
 }
