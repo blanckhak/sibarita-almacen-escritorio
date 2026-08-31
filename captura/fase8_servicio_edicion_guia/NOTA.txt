@@ -154,3 +154,9 @@ PENDIENTE / A TENER EN CUENTA
   version nueva.
 - Instalador .exe no regenerado; deploy Vercel/Render sin tocar (repo congelado).
 - Env: ninguna nueva.
+- DEUDA CONOCIDA (revisada 30/08): ningun campo de texto libre del backend valida
+  su longitud contra el VARCHAR de la columna (proveedor, direccion,
+  destino_detalle, numero_guia, guia_items.descripcion, ...). Un valor mas largo
+  que la columna da un 500 generico en vez de 400. No es regresion de esta fase.
+  Arreglo proporcionado: un helper de validacion compartido para todos esos
+  campos, no un parche solo a descripcion. Se deja anotado a proposito.

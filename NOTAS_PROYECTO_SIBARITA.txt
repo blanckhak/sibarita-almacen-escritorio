@@ -1226,6 +1226,16 @@ solo esos dos campos). Resumen tecnico:
 - Capturas visuales de la app pendientes (el navegador de la extension no
   alcanzo localhost en esta sesion; el flujo queda cubierto por el test
   por API).
+- DEUDA CONOCIDA (revisada 30/08, se deja anotada a proposito): ningun
+  campo de texto libre del backend valida longitud contra su VARCHAR
+  (proveedor 150, direccion 200, destino_detalle 200, numero_guia 50,
+  guia_items.descripcion 200, etc.). Un valor mas largo que la columna
+  produce un 500 generico en vez de un 400 claro. NO es regresion de la
+  Fase 8: descripcion solo sigue el patron existente, y el maxLength del
+  input HTML ya lo frena salvo llamada directa por API. Arreglo
+  proporcionado = un helper compartido que recorte/valide todos esos
+  campos de una, en su propio mini-pase de validacion; NO parchear solo
+  descripcion (dejaria el codigo inconsistente).
 
 --------------------------------------------------
 ESTADO DEL PLAN DE FASES (se actualiza al cerrar cada fase)
