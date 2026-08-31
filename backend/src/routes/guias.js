@@ -3,6 +3,7 @@ const router = express.Router()
 const pool = require('../config/db')
 const { verificarToken, soloRoles } = require('../middlewares/authMiddleware')
 const { ajustarInventario } = require('../utils/inventario')
+const { validarLargos } = require('../utils/texto')
 const log = require('../middlewares/logMiddleware')
 
 const DESTINOS = ['ALMACEN', 'OFICINA', 'LABORATORIO', 'OTRO']
@@ -143,9 +144,27 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
   if (!Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: 'La guia debe tener al menos una linea de producto' })
   }
+  const errLargo = validarLargos({
+    'numero de guia': [numero_guia, 50],
+    'proveedor': [proveedor, 150],
+    'numero de O.C.': [numero_oc, 50],
+    'direccion': [direccion, 200],
+    'guia de remision': [guia_remision, 50],
+    'factura': [factura, 50],
+  })
+  if (errLargo) return res.status(400).json({ error: errLargo })
   for (const it of items) {
     if (!it.producto_id && !(it.producto_nombre && it.producto_nombre.trim())) {
       return res.status(400).json({ error: 'Cada linea debe tener un producto o servicio' })
+    }
+    const errItem = validarLargos({
+      'producto / servicio': [it.producto_nombre, 150],
+      'destino (Otro)': [it.destino_detalle, 200],
+    })
+    if (errItem) return res.status(400).json({ error: errItem })
+    for (const pt of (Array.isArray(it.partidas) ? it.partidas : [])) {
+      const errRef = validarLargos({ 'referencia de partida': [pt.referencia, 200] })
+      if (errRef) return res.status(400).json({ error: errRef })
     }
     // Linea SERVICIO (Fase 8): solo se registra e imprime -> sin destino, sin
     // partidas, sin etiqueta. Solo se valida la cantidad.
@@ -383,6 +402,14 @@ router.put('/:id', verificarToken, soloRoles('admin', 'almacen'),
   if (estado !== undefined && !ESTADOS.includes(estado)) {
     return res.status(400).json({ error: 'Estado invalido' })
   }
+  const errLargo = validarLargos({
+    'proveedor': [proveedor, 150],
+    'numero de O.C.': [numero_oc, 50],
+    'direccion': [direccion, 200],
+    'guia de remision': [guia_remision, 50],
+    'factura': [factura, 50],
+  })
+  if (errLargo) return res.status(400).json({ error: errLargo })
 
   const editItems = Array.isArray(items) ? items : []
   for (const it of editItems) {

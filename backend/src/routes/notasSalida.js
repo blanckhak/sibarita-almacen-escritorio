@@ -3,6 +3,7 @@ const router = express.Router()
 const pool = require('../config/db')
 const { verificarToken, soloRoles } = require('../middlewares/authMiddleware')
 const { ajustarInventario } = require('../utils/inventario')
+const { validarLargos } = require('../utils/texto')
 const log = require('../middlewares/logMiddleware')
 
 const MOTIVOS = ['USO_INTERNO', 'PRESTAMO', 'REPARACION', 'DESECHO', 'OTRO']
@@ -112,6 +113,11 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
   if (!persona_responsable || !persona_responsable.trim()) {
     return res.status(400).json({ error: 'La persona responsable es requerida' })
   }
+  const errLargo = validarLargos({
+    'seccion': [seccion, 100],
+    'persona responsable': [persona_responsable, 150],
+  })
+  if (errLargo) return res.status(400).json({ error: errLargo })
   if (!MOTIVOS.includes(motivo)) {
     return res.status(400).json({ error: 'Motivo invalido' })
   }

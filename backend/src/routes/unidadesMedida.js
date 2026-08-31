@@ -2,6 +2,7 @@ const express = require('express')
 const router = express.Router()
 const pool = require('../config/db')
 const { verificarToken, soloRoles } = require('../middlewares/authMiddleware')
+const { validarLargos } = require('../utils/texto')
 
 router.get('/', verificarToken, async (req, res) => {
   try {
@@ -17,6 +18,8 @@ router.post('/', verificarToken, soloRoles('admin'), async (req, res) => {
   if (!nombre || !nombre.trim()) {
     return res.status(400).json({ error: 'El nombre de la unidad de medida es requerido' })
   }
+  const errLargo = validarLargos({ 'nombre': [nombre, 50], 'abreviatura': [abreviatura, 10] })
+  if (errLargo) return res.status(400).json({ error: errLargo })
   try {
     const result = await pool.query(
       'INSERT INTO unidades_medida (nombre, abreviatura) VALUES ($1, $2) RETURNING *',

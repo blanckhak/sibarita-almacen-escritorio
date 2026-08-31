@@ -3,6 +3,7 @@ const router = express.Router()
 const pool = require('../config/db')
 const bcrypt = require('bcryptjs')
 const { verificarToken, soloRoles } = require('../middlewares/authMiddleware')
+const { validarLargos } = require('../utils/texto')
 const log = require('../middlewares/logMiddleware')
 
 router.get('/roles', verificarToken, soloRoles('admin'), async (req, res) => {
@@ -34,6 +35,8 @@ router.post('/', verificarToken, soloRoles('admin'),
   log('CREAR_USUARIO', req => `Usuario ${req.body.nombre} (${req.body.email}), rol ${req.body.rol_id}`),
   async (req, res) => {
   const { nombre, email, password, rol_id, almacen_id } = req.body
+  const errLargo = validarLargos({ 'nombre': [nombre, 100], 'email': [email, 100] })
+  if (errLargo) return res.status(400).json({ error: errLargo })
   try {
     const hash = await bcrypt.hash(password, 10)
     const result = await pool.query(

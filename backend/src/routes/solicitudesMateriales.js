@@ -2,6 +2,7 @@ const express = require('express')
 const router = express.Router()
 const pool = require('../config/db')
 const { verificarToken, soloRoles } = require('../middlewares/authMiddleware')
+const { validarLargos } = require('../utils/texto')
 const log = require('../middlewares/logMiddleware')
 
 const CATEGORIAS = ['MUESTRAS', 'INSUMOS', 'MATERIA_PRIMA', 'REPUESTOS', 'HERRAMIENTAS', 'OTROS']
@@ -78,10 +79,18 @@ router.post('/', verificarToken, soloRoles('admin', 'mantenimiento'),
   if (categoria === 'OTROS' && (!categoria_detalle || !categoria_detalle.trim())) {
     return res.status(400).json({ error: 'Debes especificar la categoria cuando eliges "Otros"' })
   }
+  const errLargo = validarLargos({
+    'seccion': [seccion, 100],
+    'persona responsable': [persona_responsable, 150],
+    'detalle de categoria': [categoria_detalle, 200],
+  })
+  if (errLargo) return res.status(400).json({ error: errLargo })
   if (!Array.isArray(lineas) || lineas.length === 0) {
     return res.status(400).json({ error: 'La solicitud debe incluir al menos un producto' })
   }
   for (const l of lineas) {
+    const errLinea = validarLargos({ 'producto': [l.producto, 200] })
+    if (errLinea) return res.status(400).json({ error: errLinea })
     if (typeof l.producto !== 'string' || !l.producto.trim()) {
       return res.status(400).json({ error: 'Cada linea debe tener un producto' })
     }

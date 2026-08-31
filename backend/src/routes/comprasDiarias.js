@@ -2,6 +2,7 @@ const express = require('express')
 const router = express.Router()
 const pool = require('../config/db')
 const { verificarToken, soloRoles } = require('../middlewares/authMiddleware')
+const { validarLargos } = require('../utils/texto')
 const log = require('../middlewares/logMiddleware')
 
 // Compras diarias (Fase 10, Bloque 5): modulo nuevo aparte. Cabecera
@@ -95,6 +96,11 @@ router.post('/', verificarToken, soloRoles('admin', 'compras'),
   if (!oficina || !oficina.trim()) {
     return res.status(400).json({ error: 'La oficina es requerida' })
   }
+  const errLargo = validarLargos({
+    'oficina': [oficina, 150],
+    'proveedor': [proveedor, 150],
+  })
+  if (errLargo) return res.status(400).json({ error: errLargo })
   if (!Array.isArray(lineas) || lineas.length === 0) {
     return res.status(400).json({ error: 'La compra debe incluir al menos una linea' })
   }
@@ -102,6 +108,8 @@ router.post('/', verificarToken, soloRoles('admin', 'compras'),
     if (typeof l.descripcion !== 'string' || !l.descripcion.trim()) {
       return res.status(400).json({ error: 'Cada linea debe tener una descripcion' })
     }
+    const errLinea = validarLargos({ 'descripcion': [l.descripcion, 200] })
+    if (errLinea) return res.status(400).json({ error: errLinea })
     if (!esCantidadValida(l.cantidad)) {
       return res.status(400).json({ error: 'La cantidad debe ser mayor a 0 en todas las lineas' })
     }

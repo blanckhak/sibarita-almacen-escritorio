@@ -2,6 +2,13 @@ const express = require('express')
 const router = express.Router()
 const pool = require('../config/db')
 const { verificarToken, soloRoles } = require('../middlewares/authMiddleware')
+const { validarLargos } = require('../utils/texto')
+
+const largosProducto = (b) => validarLargos({
+  'nombre': [b.nombre, 150],
+  'categoria': [b.categoria, 100],
+  'codigo interno': [b.codigo_interno, 50],
+})
 
 const SELECT_BASE = `
   SELECT p.*, um.nombre as unidad_medida_nombre, um.abreviatura as unidad_medida_abreviatura
@@ -25,6 +32,8 @@ router.post('/', verificarToken, soloRoles('admin'), async (req, res) => {
   if (!nombre || !nombre.trim()) {
     return res.status(400).json({ error: 'El nombre del producto es requerido' })
   }
+  const errLargo = largosProducto(req.body)
+  if (errLargo) return res.status(400).json({ error: errLargo })
   if (metrica !== undefined && metrica !== null && !METRICAS.includes(metrica)) {
     return res.status(400).json({ error: 'Metrica invalida' })
   }
@@ -49,6 +58,8 @@ router.put('/:id', verificarToken, soloRoles('admin'), async (req, res) => {
   if (!nombre || !nombre.trim()) {
     return res.status(400).json({ error: 'El nombre del producto es requerido' })
   }
+  const errLargo = largosProducto(req.body)
+  if (errLargo) return res.status(400).json({ error: errLargo })
   if (metrica !== undefined && metrica !== null && !METRICAS.includes(metrica)) {
     return res.status(400).json({ error: 'Metrica invalida' })
   }
