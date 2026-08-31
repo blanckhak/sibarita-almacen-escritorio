@@ -60,6 +60,7 @@ export default function ConsultaProductos() {
     { titulo: 'Categoria',  campo: 'categoria' },
     { titulo: 'Destino',    campo: 'destino' },
     { titulo: 'Estado',     campo: 'etiqueta_estado' },
+    { titulo: 'Ubicacion',  campo: 'etiqueta_ubicacion' },
     { titulo: 'Cantidad',   campo: 'cantidad' },
   ]
 
@@ -130,6 +131,7 @@ export default function ConsultaProductos() {
                 <th className="px-6 py-3 text-left">Producto</th>
                 <th className="px-6 py-3 text-left">Categoria</th>
                 <th className="px-6 py-3 text-left">Destino / Estado</th>
+                <th className="px-6 py-3 text-left">Ubicacion</th>
                 <th className="px-6 py-3 text-right">Cantidad</th>
               </tr>
             </thead>
@@ -150,6 +152,7 @@ export default function ConsultaProductos() {
                       <span className={`px-2 py-1 rounded-full text-xs font-bold ${colorEtiquetaEstado(r.etiqueta_estado)}`}>{r.etiqueta_estado}</span>
                     )}
                   </td>
+                  <td className="px-6 py-3 text-gray-600 text-xs">{r.etiqueta_ubicacion || '—'}</td>
                   <td className="px-6 py-3 text-right">{r.cantidad}</td>
                 </tr>
               ))}

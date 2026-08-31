@@ -42,7 +42,7 @@ router.get('/consulta/productos', verificarToken, async (req, res) => {
              gi.id as guia_item_id, p.nombre as producto_nombre, p.categoria,
              COALESCE(e.cantidad, gi.cantidad) as cantidad, gi.destino,
              e.id as etiqueta_id, e.codigo as etiqueta_codigo, e.estado as etiqueta_estado,
-             e.condicion as etiqueta_condicion
+             e.condicion as etiqueta_condicion, e.ubicacion as etiqueta_ubicacion
       FROM guia_items gi
       JOIN guias g ON gi.guia_id = g.id
       JOIN almacenes a ON g.almacen_id = a.id
@@ -100,7 +100,7 @@ router.get('/:id', verificarToken, async (req, res) => {
              COALESCE(p.nombre, gi.descripcion) as producto_nombre, p.metrica as producto_metrica,
              um.nombre as unidad_medida_nombre, um.abreviatura as unidad_medida_abreviatura,
              e.id as etiqueta_id, e.codigo as etiqueta_codigo, e.estado as etiqueta_estado,
-             e.condicion as etiqueta_condicion
+             e.condicion as etiqueta_condicion, e.ubicacion as etiqueta_ubicacion
       FROM guia_items gi
       LEFT JOIN productos p ON gi.producto_id = p.id
       LEFT JOIN unidades_medida um ON p.unidad_medida_id = um.id

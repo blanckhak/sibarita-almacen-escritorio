@@ -3,6 +3,7 @@ const router = express.Router()
 const pool = require('../config/db')
 const { verificarToken, soloRoles } = require('../middlewares/authMiddleware')
 const { ajustarInventario } = require('../utils/inventario')
+const { validarLargos } = require('../utils/texto')
 const log = require('../middlewares/logMiddleware')
 
 // Busqueda de etiquetas, usada para armar la nota de salida (seccion 5.5)
@@ -36,6 +37,7 @@ router.get('/', verificarToken, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT e.id, e.codigo, e.estado, e.condicion, e.almacen_id, e.producto_id,
+             e.ubicacion,
              p.nombre as producto_nombre, a.nombre as almacen_nombre,
              COALESCE(e.cantidad, gi.cantidad) as cantidad, g.numero_guia,
              um.nombre as unidad_medida_nombre, um.abreviatura as unidad_medida_abreviatura,
@@ -111,6 +113,28 @@ router.get('/:id', verificarToken, async (req, res) => {
     const row = result.rows[0]
     // Cantidad efectiva: override propio del codigo (USADO parcial) o la del guia_item.
     res.json({ ...row, cantidad: row.cantidad != null ? row.cantidad : row.gi_cantidad })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Ubicacion fisica del codigo dentro del almacen (estante/rack/pasillo). Se
+// completa despues del ingreso; texto libre; vaciarla la deja en NULL.
+router.put('/:id/ubicacion', verificarToken, soloRoles('admin', 'almacen'),
+  log('EDITAR_UBICACION', req => `Codigo id ${req.params.id} -> "${(req.body.ubicacion || '').trim()}"`),
+  async (req, res) => {
+  const errLargo = validarLargos({ 'ubicacion': [req.body.ubicacion, 100] })
+  if (errLargo) return res.status(400).json({ error: errLargo })
+  try {
+    const ubic = (req.body.ubicacion || '').trim() || null
+    const result = await pool.query(
+      'UPDATE etiquetas SET ubicacion = $1 WHERE id = $2 RETURNING id, ubicacion',
+      [ubic, req.params.id]
+    )
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Etiqueta no encontrada' })
+    }
+    res.json(result.rows[0])
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

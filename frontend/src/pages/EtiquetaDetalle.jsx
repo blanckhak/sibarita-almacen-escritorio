@@ -25,6 +25,8 @@ export default function EtiquetaDetalle() {
   const [mensaje, setMensaje]     = useState(null)
   const [almacenDestino, setAlmacenDestino] = useState('')
   const [transfiriendo, setTransfiriendo]   = useState(false)
+  const [ubicacion, setUbicacion]           = useState('')
+  const [guardandoUbic, setGuardandoUbic]   = useState(false)
 
   const puedeGestionar = ['admin', 'almacen'].includes(usuario?.rol)
 
@@ -35,10 +37,25 @@ export default function EtiquetaDetalle() {
       api.get('/api/almacenes'),
     ]).then(([e, h, a]) => {
       setEtiqueta(e.data)
+      setUbicacion(e.data.ubicacion || '')
       setHistorial(h.data)
       setAlmacenes(a.data)
       setCargando(false)
     }).catch(() => setCargando(false))
+  }
+
+  const guardarUbicacion = async () => {
+    setGuardandoUbic(true)
+    try {
+      await api.put(`/api/etiquetas/${id}/ubicacion`, { ubicacion })
+      setMensaje({ tipo: 'ok', texto: 'Ubicacion guardada' })
+      cargar()
+    } catch (err) {
+      setMensaje({ tipo: 'error', texto: err.response?.data?.error || 'Error al guardar la ubicacion' })
+    } finally {
+      setGuardandoUbic(false)
+      setTimeout(() => setMensaje(null), 3000)
+    }
   }
 
   useEffect(() => { cargar() }, [id])
@@ -122,6 +139,31 @@ export default function EtiquetaDetalle() {
           </div>
         </div>
 
+        <div className="bg-white rounded-xl shadow p-5 mb-6">
+          <h2 className="text-sm font-semibold text-gray-700 mb-1">Ubicacion fisica</h2>
+          <p className="text-xs text-gray-400 mb-3">Donde esta el codigo dentro del almacen (estante, rack, pasillo...). Se completa despues del ingreso.</p>
+          {puedeGestionar ? (
+            <div className="flex gap-3">
+              <input
+                value={ubicacion}
+                onChange={e => setUbicacion(e.target.value)}
+                placeholder="Ej: Estante A-3, Rack 12, Pasillo 2 Nivel 1"
+                maxLength={100}
+                className="flex-1 border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <button
+                onClick={guardarUbicacion}
+                disabled={guardandoUbic || ubicacion === (etiqueta.ubicacion || '')}
+                className="px-5 py-2.5 text-sm bg-blue-700 text-white rounded-lg hover:bg-blue-800 disabled:opacity-50"
+              >
+                {guardandoUbic ? 'Guardando...' : 'Guardar'}
+              </button>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-700">{etiqueta.ubicacion || '— sin ubicacion —'}</p>
+          )}
+        </div>
+
         {puedeGestionar && etiqueta.estado === 'EN_ALMACEN' && (
           <div className="bg-white rounded-xl shadow p-5 mb-6">
             <h2 className="text-sm font-semibold text-gray-700 mb-3">Transferir a otro almacen</h2>
@@ -188,6 +230,11 @@ export default function EtiquetaDetalle() {
               {etiqueta.cantidad}
             </div>
           </div>
+          {etiqueta.ubicacion && (
+            <div className="text-center text-xs py-1 border-t border-gray-800 truncate px-2">
+              Ubicacion: <b>{etiqueta.ubicacion.slice(0, 45)}</b>
+            </div>
+          )}
           <div className="flex justify-center py-1.5 border-t border-gray-800">
             <CodigoBarras valor={etiqueta.codigo} height={28} />
           </div>

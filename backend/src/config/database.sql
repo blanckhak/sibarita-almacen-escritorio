@@ -209,6 +209,9 @@ CREATE TABLE etiquetas (
   -- Cantidad propia del codigo: solo la usan los codigos USADO de una
   -- devolucion parcial. NULL = la cantidad es la del guia_item.
   cantidad INTEGER,
+  -- Ubicacion fisica dentro del almacen (estante/rack/pasillo). Texto libre,
+  -- se completa despues del ingreso.
+  ubicacion VARCHAR(100),
   fecha_generacion TIMESTAMP DEFAULT NOW()
 );
 

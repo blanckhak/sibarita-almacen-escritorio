@@ -26,14 +26,39 @@ export default function GuiaDetalle() {
   const [guardandoEdicion, setGuardandoEdicion] = useState(false)
   const [proveedoresConocidos, setProveedoresConocidos] = useState([])
   const [proveedorOtro, setProveedorOtro] = useState(false)
+  // Ediciones locales de la ubicacion fisica de cada codigo, por etiqueta_id.
+  const [ubicEdits, setUbicEdits] = useState({})
 
   const puedeImprimir = ['admin', 'almacen'].includes(usuario?.rol)
   const puedeEditar = ['admin', 'almacen'].includes(usuario?.rol)
 
   const cargar = () => {
     api.get(`/api/guias/${id}`)
-      .then(res => { setGuia(res.data); setCargando(false) })
+      .then(res => {
+        setGuia(res.data)
+        // Se siembra el estado de edicion con lo que ya tiene cada codigo, para
+        // que enfocar y salir sin escribir no lo borre.
+        setUbicEdits(Object.fromEntries(
+          res.data.items.filter(it => it.etiqueta_id).map(it => [it.etiqueta_id, it.etiqueta_ubicacion || ''])
+        ))
+        setCargando(false)
+      })
       .catch(() => setCargando(false))
+  }
+
+  // Guarda la ubicacion de un codigo si cambio respecto a lo que trae el detalle.
+  const guardarUbicacion = async (it) => {
+    const nuevo = (ubicEdits[it.etiqueta_id] ?? '').trim()
+    if (nuevo === (it.etiqueta_ubicacion || '')) return
+    try {
+      await api.put(`/api/etiquetas/${it.etiqueta_id}/ubicacion`, { ubicacion: nuevo })
+      setMensaje({ tipo: 'ok', texto: `Ubicacion del codigo ${it.etiqueta_codigo} guardada` })
+      cargar()
+    } catch (err) {
+      setMensaje({ tipo: 'error', texto: err.response?.data?.error || 'Error al guardar la ubicacion' })
+    } finally {
+      setTimeout(() => setMensaje(null), 3000)
+    }
   }
 
   useEffect(() => { cargar() }, [id])
@@ -379,6 +404,7 @@ export default function GuiaDetalle() {
                 <th className="px-6 py-3 text-left">Unidad</th>
                 <th className="px-6 py-3 text-left">Destino</th>
                 <th className="px-6 py-3 text-left">Codigo</th>
+                <th className="px-6 py-3 text-left">Ubicacion</th>
                 <th className="px-6 py-3 text-left">Estado</th>
                 {puedeImprimir && <th className="px-6 py-3 text-right">Etiqueta</th>}
               </tr>
@@ -432,6 +458,24 @@ export default function GuiaDetalle() {
                       : '—'}
                   </td>
                   <td className="px-6 py-3">
+                    {it.etiqueta_id ? (
+                      puedeEditar ? (
+                        <input
+                          value={ubicEdits[it.etiqueta_id] ?? ''}
+                          onChange={e => setUbicEdits(u => ({ ...u, [it.etiqueta_id]: e.target.value }))}
+                          onBlur={() => guardarUbicacion(it)}
+                          placeholder="—"
+                          maxLength={100}
+                          className="w-36 border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      ) : (
+                        <span className="text-gray-600 text-xs">{it.etiqueta_ubicacion || '—'}</span>
+                      )
+                    ) : (
+                      <span className="text-gray-400 text-xs">—</span>
+                    )}
+                  </td>
+                  <td className="px-6 py-3">
                     {it.etiqueta_estado
                       ? <span className={`px-2 py-1 rounded-full text-xs font-bold ${colorEtiquetaEstado(it.etiqueta_estado)}`}>{it.etiqueta_estado}</span>
                       : <span className="text-gray-400 text-xs">{it.tipo === 'SERVICIO' ? 'Servicio' : 'Salida automatica'}</span>}
@@ -477,6 +521,11 @@ export default function GuiaDetalle() {
                   {it.cantidad}
                 </div>
               </div>
+              {it.etiqueta_ubicacion && (
+                <div className="text-center text-xs py-1 border-t border-gray-800 truncate px-2">
+                  Ubicacion: <b>{it.etiqueta_ubicacion.slice(0, 45)}</b>
+                </div>
+              )}
               <div className="flex justify-center py-1.5 border-t border-gray-800">
                 <CodigoBarras valor={it.etiqueta_codigo} height={28} />
               </div>

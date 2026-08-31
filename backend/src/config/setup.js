@@ -217,6 +217,9 @@ async function setup() {
     -- una devolucion parcial (volvio menos de lo que salio). NULL = la cantidad
     -- es la del guia_item (el caso normal de un ingreso).
     ALTER TABLE etiquetas ADD COLUMN IF NOT EXISTS cantidad INTEGER;
+    -- Ubicacion fisica del codigo dentro del almacen (estante, rack, pasillo...).
+    -- Texto libre, se completa DESPUES del ingreso a medida que se acomoda.
+    ALTER TABLE etiquetas ADD COLUMN IF NOT EXISTS ubicacion VARCHAR(100);
     ALTER TABLE etiqueta_historial DROP CONSTRAINT IF EXISTS etiqueta_historial_evento_check;
     ALTER TABLE etiqueta_historial ADD CONSTRAINT etiqueta_historial_evento_check
       CHECK (evento IN ('GENERADA', 'IMPRESA', 'REIMPRESA', 'SALIO', 'DEVOLVIO', 'TRANSFERIDA', 'REEMPLAZADA'));

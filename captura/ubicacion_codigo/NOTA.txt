@@ -1,0 +1,57 @@
+UBICACION FISICA POR CODIGO (31/08/2026)
+================================================================================
+
+PEDIDO
+------
+Poder registrar donde esta ubicado fisicamente cada producto dentro del
+almacen (estante, rack, pasillo...). Se completa DESPUES del ingreso, item
+por item, a medida que se acomoda. (Aparece como columna "Ubicacion" en el
+kardex manual MALSA.xlsx.)
+
+DECISIONES (confirmadas con el usuario)
+-------------------------------------
+- Nivel: POR CODIGO / ETIQUETA (no por producto+almacen). Cada codigo tiene
+  su ubicacion.
+- Se edita y se ve en: detalle del codigo (Etiqueta), detalle de la guia,
+  consulta de productos (solo lectura), y en la etiqueta impresa.
+
+ESQUEMA (migracion idempotente, ya en sibarita_db)
+------------------------------------------------
+- etiquetas + columna `ubicacion VARCHAR(100)` (nullable). Texto libre.
+
+BACKEND
+-------
+- etiquetas.js: PUT /api/etiquetas/:id/ubicacion  (soloRoles admin/almacen,
+  log EDITAR_UBICACION). Valida largo <= 100 (helper validarLargos); un valor
+  vacio la deja en NULL; 404 si el codigo no existe.
+- Se agrega la ubicacion a las lecturas:
+  * etiquetas.js GET /  (buscador) -> e.ubicacion
+  * etiquetas.js GET /:id           -> viene en e.*
+  * guias.js GET /:id  (items)      -> e.ubicacion as etiqueta_ubicacion
+  * guias.js consulta/productos     -> e.ubicacion as etiqueta_ubicacion
+
+FRONTEND
+--------
+- EtiquetaDetalle.jsx: panel "Ubicacion fisica" con input + boton Guardar
+  (solo lectura para roles sin permiso). Se agrega la ubicacion a la etiqueta
+  impresa.
+- GuiaDetalle.jsx: columna nueva "Ubicacion" en la tabla de lineas, con input
+  editable por codigo que guarda al salir del campo (onBlur). Tambien sale en
+  la etiqueta impresa ("Imprimir" / "Imprimir todas las etiquetas").
+- ConsultaProductos.jsx: columna "Ubicacion" (solo lectura) + en el export
+  Excel/PDF.
+
+PROBADO
+-------
+scratchpad/test-ubicacion.mjs: 11/11 contra copia desechable sibarita_demo_ub
+(borrada al terminar). PUT guarda y trimmea; se ve en las 4 vistas; vaciar ->
+NULL; > 100 chars -> 400; codigo inexistente -> 404; rol mantenimiento -> 403;
+EDITAR_UBICACION queda en actividad_log. Migracion aplicada en sibarita_db.
+Build de frontend limpio.
+
+CAPTURAS
+--------
+- 01_guia_detalle_columna_ubicacion.png -> tabla de la guia con la columna
+  "Ubicacion" editable (codigo 9051 con "Estante A-3 / Nivel 2", 9052 vacio).
+- 02_etiqueta_detalle_panel_ubicacion.png -> el panel "Ubicacion fisica" en
+  el detalle del codigo.
