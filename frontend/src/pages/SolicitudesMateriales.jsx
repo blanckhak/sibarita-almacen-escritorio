@@ -11,7 +11,9 @@ const colorEstado = {
   RECHAZADA: 'bg-red-100 text-red-700',
 }
 
-const LINEA_VACIA = () => ({ producto: '', cantidad: '' })
+// `otro` = el material no esta en el catalogo y se escribe a mano (una
+// solicitud puede pedir cosas no catalogadas: muestras, herramientas...).
+const LINEA_VACIA = () => ({ producto: '', cantidad: '', otro: false })
 
 const FORM_VACIO = () => ({
   almacen_id: '', seccion: '', persona_responsable: '', categoria: 'INSUMOS',
@@ -22,6 +24,7 @@ export default function SolicitudesMateriales() {
   const { usuario } = useAuth()
   const [solicitudes, setSolicitudes] = useState([])
   const [almacenes, setAlmacenes]     = useState([])
+  const [productos, setProductos]     = useState([])
   const [cargando, setCargando]       = useState(true)
   const [mostrarForm, setMostrarForm] = useState(false)
   const [guardando, setGuardando]     = useState(false)
@@ -32,15 +35,29 @@ export default function SolicitudesMateriales() {
 
   const cargarDatos = async () => {
     try {
-      const [s, a] = await Promise.all([
+      const [s, a, p] = await Promise.all([
         api.get('/api/solicitudes-materiales'),
         api.get('/api/almacenes'),
+        api.get('/api/productos'),
       ])
       setSolicitudes(s.data)
       setAlmacenes(a.data)
+      setProductos(p.data)
+    } catch (err) {
+      setMensaje({ tipo: 'error', texto: err.response?.data?.error || 'No se pudieron cargar los datos' })
     } finally {
       setCargando(false)
     }
+  }
+
+  // Elegir un material del catalogo, o "escribir otro" para uno no catalogado.
+  const seleccionarMaterial = (i, valor) => {
+    setForm(f => {
+      const lineas = [...f.lineas]
+      if (valor === '__otro__') lineas[i] = { ...lineas[i], otro: true, producto: '' }
+      else lineas[i] = { ...lineas[i], otro: false, producto: valor }
+      return { ...f, lineas }
+    })
   }
 
   useEffect(() => { cargarDatos() }, [])
@@ -183,14 +200,27 @@ export default function SolicitudesMateriales() {
               {form.lineas.map((l, i) => (
                 <div key={i} className="grid grid-cols-12 gap-3 items-end bg-gray-50 border border-gray-200 rounded-lg p-3">
                   <div className="col-span-8">
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Producto</label>
-                    <input
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Material</label>
+                    <select
                       required
-                      value={l.producto}
-                      onChange={e => actualizarLinea(i, 'producto', e.target.value)}
-                      placeholder="Nombre del producto o material..."
+                      value={l.otro ? '__otro__' : l.producto}
+                      onChange={e => seleccionarMaterial(i, e.target.value)}
                       className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
+                    >
+                      <option value="">Seleccionar del catalogo...</option>
+                      {productos.map(p => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}
+                      <option value="__otro__">+ Escribir otro material</option>
+                    </select>
+                    {l.otro && (
+                      <input
+                        required
+                        autoFocus
+                        value={l.producto}
+                        onChange={e => actualizarLinea(i, 'producto', e.target.value)}
+                        placeholder="Nombre del material (no catalogado)..."
+                        className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm mt-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    )}
                   </div>
                   <div className="col-span-2">
                     <label className="block text-xs font-medium text-gray-500 mb-1">Cantidad</label>
