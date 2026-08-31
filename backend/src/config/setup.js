@@ -60,6 +60,28 @@ async function setup() {
     -- sea la que realmente impide duplicados a nivel de base de datos.
     CREATE UNIQUE INDEX IF NOT EXISTS productos_nombre_lower_unique ON productos (LOWER(nombre));
 
+    -- "Stock consolidado" (Bloque 3): el mismo material se cargaba en guias con
+    -- nombres apenas distintos (espacios de mas, tildes, guion vs barra) y cada
+    -- variante creaba un producto aparte, partiendo su stock. producto_canon
+    -- reduce el nombre a una forma comparable -> minusculas, sin tildes y sin
+    -- nada que no sea letra/numero: "Tornillo 1/2", "tornillo  1 - 2",
+    -- "TORNILLO 1/2" y "Tornillo1/2" caen todos en "tornillo12" -> mismo
+    -- producto. guias.js compara con esta forma; el indice unico la vuelve la
+    -- regla real en la base.
+    CREATE OR REPLACE FUNCTION producto_canon(txt text) RETURNS text AS $func$
+      SELECT regexp_replace(
+        translate(lower(coalesce(txt, '')), 'áéíóúüñ', 'aeiouun'),
+        '[^a-z0-9]', '', 'g')
+    $func$ LANGUAGE sql IMMUTABLE;
+
+    -- Si ya hay casi-duplicados de guias viejas, el indice no se puede crear;
+    -- no se rompe el arranque, solo no se aplica la unicidad hasta limpiarlos.
+    DO $mig$ BEGIN
+      CREATE UNIQUE INDEX IF NOT EXISTS productos_canon_unique ON productos (producto_canon(nombre));
+    EXCEPTION WHEN unique_violation THEN
+      RAISE NOTICE 'productos_canon_unique no creado: hay nombres casi-duplicados existentes';
+    END $mig$;
+
     CREATE TABLE IF NOT EXISTS inventario (
       id SERIAL PRIMARY KEY,
       almacen_id INTEGER REFERENCES almacenes(id),

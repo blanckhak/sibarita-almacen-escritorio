@@ -1,0 +1,47 @@
+STOCK CONSOLIDADO - evidencia (31/08/2026)
+================================================================================
+
+CONTEXTO
+--------
+"Stock consolidado" (Bloque 3 del documento del cliente): el mismo material se
+cargaba en las guias con el nombre escrito de formas apenas distintas (espacios
+de mas, tildes, guion vs barra, pegado) y cada variante creaba un producto
+aparte -> el stock quedaba partido entre esos casi-duplicados.
+
+QUE SE HIZO
+-----------
+1. Funcion producto_canon(nombre) + indice unico productos_canon_unique en la
+   base (migracion idempotente en setup.js, tambien en database.sql). La forma
+   canonica = minusculas, sin tildes, sin nada que no sea letra/numero:
+     "Perno Hexagonal M8" / "perno  hexagonal m8" / "Pérno-Hexagonál-M8" /
+     "PernoHexagonalM8"  ->  todos "pernohexagonalm8"  ->  un solo producto.
+   "Perno Hexagonal M10" queda aparte (es distinto de verdad).
+2. backend/src/routes/guias.js: al dar de alta un producto desde una guia, el
+   match contra el catalogo y el upsert usan producto_canon -> reusa el
+   producto existente en vez de duplicarlo, y el stock se suma ahi.
+3. frontend/src/pages/Guias.jsx: al elegir un producto en el ingreso, la linea
+   muestra el "Stock consolidado" -> cuanto hay ya en el almacen de la guia y
+   el total sumando los 3 almacenes, con el desglose.
+   (Reusa /api/inventario, el mismo que alimenta el modal de la pantalla
+   Inventario.)
+Los casi-duplicados que YA existieran de guias viejas se dejan como estan; la
+normalizacion solo evita nuevos.
+
+CAPTURAS
+--------
+- 01_guia_ingreso_stock_consolidado.png -> Guias > Nuevo Ingreso, almacen MALSA,
+  producto "Guantes de Nitrilo Talla M". La linea muestra:
+  "Stock consolidado: 80 en MALSA · 170 en total — INDELPAS: 10 · JOPISA: 80 ·
+  MALSA: 80".
+- 02_inventario_consolidado_3_almacenes.png -> Inventario, clic en "Guantes de
+  Nitrilo Talla M": modal "Cuanto hay en cada almacen" con INDELPAS 10 /
+  JOPISA 80 / MALSA 80 / Total general 170.
+
+PROBADO
+-------
+scratchpad/test-canon.mjs: 15/15. 7 variantes de nombre de "Perno Hexagonal M8"
+cargadas por guia caen todas en el mismo producto (stock consolidado 35);
+"Perno Hexagonal M10" crea producto aparte; elegir del catalogo por id sigue
+igual. Contra copia desechable sibarita_demo_canon (borrada al terminar). La
+migracion (funcion + indice) ya se aplico en sibarita_db, 0 colisiones, datos
+intactos.

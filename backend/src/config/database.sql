@@ -84,6 +84,18 @@ CREATE UNIQUE INDEX productos_codigo_interno_unique
 -- sea la que realmente impide duplicados a nivel de base de datos.
 CREATE UNIQUE INDEX productos_nombre_lower_unique ON productos (LOWER(nombre));
 
+-- "Stock consolidado" (Bloque 3): forma canonica del nombre (minusculas, sin
+-- tildes y sin nada que no sea letra/numero) para que variantes como
+-- "Tornillo 1/2", "tornillo  1 - 2" y "Tornillo1/2" se traten como el mismo
+-- producto y su stock no se parta.
+CREATE OR REPLACE FUNCTION producto_canon(txt text) RETURNS text AS $func$
+  SELECT regexp_replace(
+    translate(lower(coalesce(txt, '')), 'áéíóúüñ', 'aeiouun'),
+    '[^a-z0-9]', '', 'g')
+$func$ LANGUAGE sql IMMUTABLE;
+
+CREATE UNIQUE INDEX productos_canon_unique ON productos (producto_canon(nombre));
+
 INSERT INTO productos (nombre) VALUES ('Producto General');
 
 -- Tabla de inventario

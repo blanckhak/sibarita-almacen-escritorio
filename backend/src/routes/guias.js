@@ -223,9 +223,13 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
       // cantidad (ENTERO) o el desglose de partidas (EN_PARTIDA).
       let productoMetrica = 'ENTERO'
       if (!productoId) {
-        const nombre = it.producto_nombre.trim()
+        // Nombre para guardar: sin espacios de mas. La comparacion contra el
+        // catalogo (Bloque 3, "stock consolidado") usa producto_canon para que
+        // "Tornillo 1/2", "tornillo  1 - 2" y "TORNILLO 1/2" sean el mismo
+        // producto y su stock no quede partido en variantes.
+        const nombre = it.producto_nombre.trim().replace(/\s+/g, ' ')
         const existente = await client.query(
-          'SELECT id, metrica FROM productos WHERE LOWER(nombre) = LOWER($1)',
+          'SELECT id, metrica FROM productos WHERE producto_canon(nombre) = producto_canon($1)',
           [nombre]
         )
         if (existente.rows.length > 0) {
@@ -233,22 +237,18 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
           productoMetrica = existente.rows[0].metrica
         } else {
           // Upsert atomico: si dos guias concurrentes registran el mismo
-          // producto nuevo al mismo tiempo, el check de arriba puede pasar
-          // en ambas antes de que cualquiera comitee (TOCTOU). El indice
-          // UNIQUE sobre LOWER(nombre) resuelve la carrera aqui sin
-          // necesidad de locking manual: la segunda transaccion recibe el
-          // id ya creado por la primera en vez de fallar con 23505. Tiene
-          // que ser sobre LOWER(nombre) y no sobre nombre a secas porque el
-          // chequeo de arriba (linea 162) tambien es case-insensitive -
-          // un indice case-sensitive no habria evitado que "Tornillo" y
-          // "TORNILLO" creados al mismo tiempo generen dos productos.
-          // Producto nuevo dado de alta desde la guia: la metrica se toma del
-          // formulario (por defecto ENTERO). El ON CONFLICT devuelve la
-          // metrica ya existente si otra transaccion lo creo primero.
+          // producto nuevo al mismo tiempo, el check de arriba puede pasar en
+          // ambas antes de que cualquiera comitee (TOCTOU). El ON CONFLICT
+          // sobre producto_canon(nombre) resuelve la carrera con la misma
+          // nocion de igualdad que usa el check (sin tildes/espacios/simbolos):
+          // la segunda transaccion recibe el id ya creado por la primera en
+          // vez de fallar con 23505, aunque haya escrito el nombre distinto.
+          // La metrica se toma del formulario (ENTERO por defecto); el
+          // ON CONFLICT devuelve la que ya existiera si otra la creo primero.
           const metricaNueva = ['ENTERO', 'EN_PARTIDA'].includes(it.metrica) ? it.metrica : 'ENTERO'
           const creado = await client.query(
             `INSERT INTO productos (nombre, unidad_medida_id, metrica) VALUES ($1, $2, $3)
-             ON CONFLICT ((LOWER(nombre))) DO UPDATE SET nombre = productos.nombre
+             ON CONFLICT ((producto_canon(nombre))) DO UPDATE SET nombre = productos.nombre
              RETURNING id, metrica`,
             [nombre, it.unidad_medida_id || null, metricaNueva]
           )

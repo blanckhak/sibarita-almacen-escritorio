@@ -15,6 +15,7 @@ export default function Guias() {
   const [almacenes, setAlmacenes] = useState([])
   const [productos, setProductos] = useState([])
   const [unidades, setUnidades]   = useState([])
+  const [inventario, setInventario] = useState([])
   const [cargando, setCargando]   = useState(true)
   const [mostrarForm, setMostrarForm] = useState(false)
   const [guardando, setGuardando] = useState(false)
@@ -35,17 +36,34 @@ export default function Guias() {
   const totalCerradas = useMemo(() => guias.filter(g => g.estado === 'CERRADA').length, [guias])
 
   const cargarDatos = async () => {
-    const [g, a, p, u] = await Promise.all([
+    const [g, a, p, u, inv] = await Promise.all([
       api.get('/api/guias'),
       api.get('/api/almacenes'),
       api.get('/api/productos'),
       api.get('/api/unidades-medida'),
+      api.get('/api/inventario'),
     ])
     setGuias(g.data)
     setAlmacenes(a.data)
     setProductos(p.data)
     setUnidades(u.data)
+    setInventario(inv.data)
     setCargando(false)
+  }
+
+  // Stock consolidado de un producto que ya esta en almacen: cuanto hay en el
+  // almacen de esta guia y el total sumando los 3 (NUEVO + DEVOLUCION). Se
+  // muestra bajo la linea al registrar un ingreso, para saber cuanto habia
+  // antes de sumar lo que entra.
+  const stockConsolidado = (productoId) => {
+    const filas = inventario.filter(x => Number(x.producto_id) === Number(productoId))
+    const total = filas.reduce((s, x) => s + Number(x.cantidad), 0)
+    const porAlmacen = {}
+    for (const x of filas) porAlmacen[x.almacen_nombre] = (porAlmacen[x.almacen_nombre] || 0) + Number(x.cantidad)
+    const enEsteAlmacen = form.almacen_id
+      ? filas.filter(x => Number(x.almacen_id) === Number(form.almacen_id)).reduce((s, x) => s + Number(x.cantidad), 0)
+      : null
+    return { total, porAlmacen, enEsteAlmacen }
   }
 
   useEffect(() => { cargarDatos() }, [])
@@ -379,6 +397,23 @@ export default function Guias() {
                                 </select>
                               </>
                             )}
+                            {it.producto_id && !esProductoNuevo && (() => {
+                              const s = stockConsolidado(it.producto_id)
+                              const nombreAlm = almacenes.find(a => a.id === Number(form.almacen_id))?.nombre
+                              const otros = Object.entries(s.porAlmacen)
+                              return (
+                                <p className="text-xs text-gray-400 mt-1 leading-snug">
+                                  Stock consolidado:{' '}
+                                  {form.almacen_id
+                                    ? <><b className="text-gray-500">{s.enEsteAlmacen}</b> en {nombreAlm} · </>
+                                    : null}
+                                  <b className="text-gray-500">{s.total}</b> en total
+                                  {otros.length > 1 && (
+                                    <span className="block">{otros.map(([k, v]) => `${k}: ${v}`).join('  ·  ')}</span>
+                                  )}
+                                </p>
+                              )
+                            })()}
                           </>
                         )}
                       </div>
