@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import CodigoBarras from '../components/CodigoBarras'
 import { extraerProveedoresConocidos } from '../utils/proveedores'
 import { colorEtiquetaEstado } from '../utils/etiquetaEstados'
+import { TIPOS_DOCUMENTO, tipoDocumentoLabel } from '../utils/tiposDocumento'
 
 const colorDestino = {
   ALMACEN:     'bg-blue-100 text-blue-700',
@@ -86,6 +87,7 @@ export default function GuiaDetalle() {
       estado: guia.estado || 'CARGADA',
       guia_remision: guia.guia_remision || '',
       factura: guia.factura || '',
+      tipo_documento: guia.tipo_documento || 'GUIA',
       // Fase 8: correccion de cantidad por linea. Una linea no se puede editar
       // si su producto es EN_PARTIDA (cantidad = suma de partidas) o si su
       // codigo ya salio del almacen.
@@ -157,6 +159,7 @@ export default function GuiaDetalle() {
             estado: formEdicion.estado,
             guia_remision: formEdicion.guia_remision,
             factura: formEdicion.factura,
+            tipo_documento: formEdicion.tipo_documento,
             items: itemsCambiados,
           }
       await api.put(`/api/guias/${id}`, body)
@@ -214,7 +217,7 @@ export default function GuiaDetalle() {
         <div className="flex items-center justify-between mt-2 mb-4">
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-bold text-gray-800">Guia {guia.numero_guia}</h1>
+              <h1 className="text-3xl font-bold text-gray-800">{tipoDocumentoLabel(guia.tipo_documento)} {guia.numero_guia}</h1>
               <span className={`px-2 py-1 rounded-full text-xs font-bold ${
                 anulada ? 'bg-red-100 text-red-700'
                 : guia.estado === 'CERRADA' ? 'bg-gray-200 text-gray-600'
@@ -314,6 +317,18 @@ export default function GuiaDetalle() {
                 </p>
               )}
               <div className="grid grid-cols-2 gap-4 mb-4">
+                {!cerrada && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-1">Tipo de documento</label>
+                    <select
+                      value={formEdicion.tipo_documento}
+                      onChange={e => setFormEdicion(f => ({ ...f, tipo_documento: e.target.value }))}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      {TIPOS_DOCUMENTO.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    </select>
+                  </div>
+                )}
                 {!cerrada && (
                   <div>
                     <label className="block text-sm font-medium text-gray-600 mb-1">Proveedor</label>
@@ -631,7 +646,7 @@ export default function GuiaDetalle() {
             <div className="px-3 py-1">{new Date(guia.fecha).toLocaleDateString('es-GT')}</div>
           </div>
         </div>
-        <div className="text-right px-4 text-sm text-red-600 font-bold">N.° {guia.numero_guia}</div>
+        <div className="text-right px-4 text-sm text-red-600 font-bold">{tipoDocumentoLabel(guia.tipo_documento)} N.° {guia.numero_guia}</div>
 
         <div className="grid grid-cols-2 gap-x-6 gap-y-1 px-4 py-3 text-sm">
           <div className="border-b border-gray-200 pb-1"><b className="text-gray-500 text-xs uppercase mr-1">Proveedor</b> {guia.proveedor || '—'}</div>

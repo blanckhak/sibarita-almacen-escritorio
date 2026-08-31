@@ -146,6 +146,10 @@ CREATE TABLE guias (
   proveedor VARCHAR(150),
   numero_oc VARCHAR(50),
   direccion VARCHAR(200),
+  -- El numero_guia puede ser una guia de remision, factura o boleta;
+  -- tipo_documento lo aclara.
+  tipo_documento VARCHAR(20) NOT NULL DEFAULT 'GUIA'
+    CHECK (tipo_documento IN ('GUIA', 'FACTURA', 'BOLETA', 'OTRO')),
   estado VARCHAR(20) NOT NULL DEFAULT 'CARGADA' CHECK (estado IN ('CARGADA', 'CERRADA', 'ANULADA')),
   -- Anular guia: motivo obligatorio, revierte el stock y retira sus codigos.
   motivo_anulacion VARCHAR(200),

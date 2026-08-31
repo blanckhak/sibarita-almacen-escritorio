@@ -153,6 +153,13 @@ async function setup() {
     ALTER TABLE guias ADD COLUMN IF NOT EXISTS anulada_por INTEGER REFERENCES usuarios(id);
 
     -- Guia de remision y factura del proveedor (Fase B, formato de impresion)
+    -- Tipo del documento con que entra la guia: el numero_guia puede ser una
+    -- guia de remision, una factura o una boleta; este campo lo aclara.
+    ALTER TABLE guias ADD COLUMN IF NOT EXISTS tipo_documento VARCHAR(20) NOT NULL DEFAULT 'GUIA';
+    ALTER TABLE guias DROP CONSTRAINT IF EXISTS guias_tipo_documento_check;
+    ALTER TABLE guias ADD CONSTRAINT guias_tipo_documento_check
+      CHECK (tipo_documento IN ('GUIA', 'FACTURA', 'BOLETA', 'OTRO'));
+
     ALTER TABLE guias ADD COLUMN IF NOT EXISTS guia_remision VARCHAR(50);
     ALTER TABLE guias ADD COLUMN IF NOT EXISTS factura VARCHAR(50);
 

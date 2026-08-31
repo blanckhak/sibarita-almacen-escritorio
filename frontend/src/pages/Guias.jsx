@@ -4,6 +4,7 @@ import api from '../utils/api'
 import { useAuth } from '../context/AuthContext'
 import { extraerProveedoresConocidos } from '../utils/proveedores'
 import { hoyLocal as hoy } from '../utils/fecha'
+import { TIPOS_DOCUMENTO, tipoDocumentoLabel } from '../utils/tiposDocumento'
 
 const LINEA_VACIA = () => ({ producto_id: '', producto_nombre: '', nuevo: false, tipo: 'PRODUCTO', cantidad: '', destino: 'ALMACEN', destino_detalle: '', unidad_medida_id: '', recogido: true, metrica: 'ENTERO', partidas: [] })
 const PARTIDA_VACIA = () => ({ cantidad: '', referencia: '' })
@@ -20,7 +21,7 @@ export default function Guias() {
   const [mostrarForm, setMostrarForm] = useState(false)
   const [guardando, setGuardando] = useState(false)
   const [mensaje, setMensaje]     = useState(null)
-  const [form, setForm] = useState({ numero_guia: '', almacen_id: '', fecha: hoy(), proveedor: '', numero_oc: '', direccion: '', guia_remision: '', factura: '', items: [LINEA_VACIA()] })
+  const [form, setForm] = useState({ numero_guia: '', tipo_documento: 'GUIA', almacen_id: '', fecha: hoy(), proveedor: '', numero_oc: '', direccion: '', guia_remision: '', factura: '', items: [LINEA_VACIA()] })
   const [proveedorOtro, setProveedorOtro] = useState(false)
   const [mostrarCerradas, setMostrarCerradas] = useState(false)
 
@@ -72,7 +73,7 @@ export default function Guias() {
   useEffect(() => { cargarDatos() }, [])
 
   const abrirNuevo = () => {
-    setForm({ numero_guia: '', almacen_id: '', fecha: hoy(), proveedor: '', numero_oc: '', direccion: '', guia_remision: '', factura: '', items: [LINEA_VACIA()] })
+    setForm({ numero_guia: '', tipo_documento: 'GUIA', almacen_id: '', fecha: hoy(), proveedor: '', numero_oc: '', direccion: '', guia_remision: '', factura: '', items: [LINEA_VACIA()] })
     setProveedorOtro(false)
     setMostrarForm(true)
   }
@@ -267,14 +268,23 @@ export default function Guias() {
           <form onSubmit={handleSubmit}>
             <div className="grid grid-cols-3 gap-4 mb-5">
               <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">N° de Guia / Factura / Boleta</label>
-                <input
-                  required
-                  value={form.numero_guia}
-                  onChange={e => setForm({ ...form, numero_guia: e.target.value })}
-                  placeholder="Ej: G-04521, F-001-123, B-045"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+                <label className="block text-sm font-medium text-gray-600 mb-1">Documento y N°</label>
+                <div className="flex gap-2">
+                  <select
+                    value={form.tipo_documento}
+                    onChange={e => setForm({ ...form, tipo_documento: e.target.value })}
+                    className="border border-gray-300 rounded-lg px-2 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {TIPOS_DOCUMENTO.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                  </select>
+                  <input
+                    required
+                    value={form.numero_guia}
+                    onChange={e => setForm({ ...form, numero_guia: e.target.value })}
+                    placeholder="Ej: G-04521, F-001-123, B-045"
+                    className="flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-600 mb-1">Almacen</label>
@@ -611,7 +621,10 @@ export default function Guias() {
             <tbody>
               {guiasVisibles.map((g, i) => (
                 <tr key={g.id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                  <td className="px-6 py-3 font-semibold text-gray-800">{g.numero_guia}</td>
+                  <td className="px-6 py-3 font-semibold text-gray-800">
+                    {g.numero_guia}
+                    <span className="block text-[10px] font-normal text-gray-400 uppercase">{tipoDocumentoLabel(g.tipo_documento)}</span>
+                  </td>
                   <td className="px-6 py-3 text-gray-700">{g.almacen_nombre}</td>
                   <td className="px-6 py-3 text-gray-500">{g.numero_oc || '—'}</td>
                   <td className="px-6 py-3">

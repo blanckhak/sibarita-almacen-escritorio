@@ -64,7 +64,7 @@ router.get('/', verificarToken, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT g.id, g.numero_guia, g.fecha, g.creado_en,
-             g.proveedor, g.numero_oc, g.direccion, g.estado,
+             g.proveedor, g.numero_oc, g.direccion, g.estado, g.tipo_documento,
              a.nombre as almacen_nombre, u.nombre as usuario_nombre,
              COUNT(gi.id)::int as total_items,
              COUNT(e.id)::int as total_etiquetas
@@ -136,6 +136,8 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
   log('CREAR_GUIA', req => `Guia ${req.body.numero_guia}, almacen ${req.body.almacen_id}, ${Array.isArray(req.body.items) ? req.body.items.length : 0} linea(s)`),
   async (req, res) => {
   const { numero_guia, almacen_id, fecha, items, proveedor, numero_oc, direccion, guia_remision, factura } = req.body
+  const TIPOS_DOC = ['GUIA', 'FACTURA', 'BOLETA', 'OTRO']
+  const tipoDocumento = TIPOS_DOC.includes(req.body.tipo_documento) ? req.body.tipo_documento : 'GUIA'
 
   if (!numero_guia || !numero_guia.trim()) {
     return res.status(400).json({ error: 'El numero de guia es requerido' })
@@ -211,8 +213,8 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
     }
 
     const guiaResult = await client.query(
-      `INSERT INTO guias (numero_guia, almacen_id, usuario_id, fecha, proveedor, numero_oc, direccion, guia_remision, factura)
-       VALUES ($1, $2, $3, COALESCE($4, CURRENT_DATE), $5, $6, $7, $8, $9) RETURNING *`,
+      `INSERT INTO guias (numero_guia, almacen_id, usuario_id, fecha, proveedor, numero_oc, direccion, guia_remision, factura, tipo_documento)
+       VALUES ($1, $2, $3, COALESCE($4, CURRENT_DATE), $5, $6, $7, $8, $9, $10) RETURNING *`,
       [
         numero_guia.trim(), almacen_id, req.usuario.id, fecha || null,
         (proveedor || '').trim() || null,
@@ -220,6 +222,7 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
         (direccion || '').trim() || null,
         (guia_remision || '').trim() || null,
         (factura || '').trim() || null,
+        tipoDocumento,
       ]
     )
     const guia = guiaResult.rows[0]
@@ -398,8 +401,12 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
 router.put('/:id', verificarToken, soloRoles('admin', 'almacen'),
   log('EDITAR_GUIA', req => `Guia ${req.params.id}: ${JSON.stringify(req.body)}`),
   async (req, res) => {
-  const { proveedor, numero_oc, direccion, estado, guia_remision, factura, items } = req.body
+  const { proveedor, numero_oc, direccion, estado, guia_remision, factura, tipo_documento, items } = req.body
   const ESTADOS = ['CARGADA', 'CERRADA']
+  const TIPOS_DOC = ['GUIA', 'FACTURA', 'BOLETA', 'OTRO']
+  if (tipo_documento !== undefined && !TIPOS_DOC.includes(tipo_documento)) {
+    return res.status(400).json({ error: 'Tipo de documento invalido' })
+  }
 
   if (estado !== undefined && !ESTADOS.includes(estado)) {
     return res.status(400).json({ error: 'Estado invalido' })
@@ -420,7 +427,7 @@ router.put('/:id', verificarToken, soloRoles('admin', 'almacen'),
     }
   }
 
-  const sinCabecera = [proveedor, numero_oc, direccion, estado, guia_remision, factura].every(v => v === undefined)
+  const sinCabecera = [proveedor, numero_oc, direccion, estado, guia_remision, factura, tipo_documento].every(v => v === undefined)
   if (sinCabecera && editItems.length === 0) {
     return res.status(400).json({ error: 'No se envio ningun campo para editar' })
   }
@@ -443,7 +450,7 @@ router.put('/:id', verificarToken, soloRoles('admin', 'almacen'),
 
     // Guia CERRADA: solo cantidad de lineas + N de O.C. (y reabrir con estado).
     if (guiaActual.estado === 'CERRADA') {
-      const bloqueados = { proveedor, direccion, guia_remision, factura }
+      const bloqueados = { proveedor, direccion, guia_remision, factura, tipo_documento }
       for (const [campo, valor] of Object.entries(bloqueados)) {
         if (valor !== undefined) {
           await client.query('ROLLBACK')
@@ -462,6 +469,7 @@ router.put('/:id', verificarToken, soloRoles('admin', 'almacen'),
     if (estado !== undefined)        push('estado', estado)
     if (guia_remision !== undefined) push('guia_remision', (guia_remision || '').trim() || null)
     if (factura !== undefined)       push('factura', (factura || '').trim() || null)
+    if (tipo_documento !== undefined) push('tipo_documento', tipo_documento)
 
     let guiaFinal = guiaActual
     if (cambios.length > 0) {
