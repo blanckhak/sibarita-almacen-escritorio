@@ -17,10 +17,13 @@ async function marcarSalida(client, etiqueta, numeroNota, usuarioId) {
     [etiqueta.id, etiqueta.almacen_id, usuarioId, `Nota de salida ${numeroNota}`]
   )
 
+  // Un codigo USADO (devolucion) tiene su stock en el bucket DEVOLUCION; al
+  // volver a salir hay que descontarlo de ahi, no del stock NUEVO.
   await ajustarInventario(client, {
     almacenId: etiqueta.almacen_id,
     productoId: etiqueta.producto_id,
     delta: -etiqueta.cantidad,
+    tipo: etiqueta.condicion === 'USADO' ? 'DEVOLUCION' : 'NUEVO',
   })
 }
 
@@ -123,7 +126,8 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
     await client.query('BEGIN')
 
     const etiquetas = await client.query(`
-      SELECT e.id, e.estado, e.almacen_id, e.producto_id, e.codigo, gi.cantidad, gi.guia_id
+      SELECT e.id, e.estado, e.almacen_id, e.producto_id, e.codigo, e.condicion,
+             COALESCE(e.cantidad, gi.cantidad) as cantidad, gi.guia_id
       FROM etiquetas e
       JOIN guia_items gi ON e.guia_item_id = gi.id
       WHERE e.id = ANY($1::int[])
@@ -231,7 +235,7 @@ router.post('/:id/aprobar', verificarToken, soloRoles('admin', 'almacen'),
     }
 
     const detalle = await client.query(`
-      SELECT d.etiqueta_id, e.estado, e.almacen_id, e.producto_id, e.codigo, d.cantidad
+      SELECT d.etiqueta_id, e.estado, e.almacen_id, e.producto_id, e.codigo, e.condicion, d.cantidad
       FROM notas_salida_detalle d
       JOIN etiquetas e ON d.etiqueta_id = e.id
       WHERE d.nota_salida_id = $1
@@ -246,7 +250,7 @@ router.post('/:id/aprobar', verificarToken, soloRoles('admin', 'almacen'),
     }
 
     for (const linea of detalle.rows) {
-      await marcarSalida(client, { id: linea.etiqueta_id, almacen_id: linea.almacen_id, producto_id: linea.producto_id, cantidad: linea.cantidad }, nota.rows[0].numero_nota, req.usuario.id)
+      await marcarSalida(client, { id: linea.etiqueta_id, almacen_id: linea.almacen_id, producto_id: linea.producto_id, cantidad: linea.cantidad, condicion: linea.condicion }, nota.rows[0].numero_nota, req.usuario.id)
     }
 
     const nuevoEstado = nota.rows[0].requiere_devolucion ? 'PENDIENTE' : 'CERRADO'
@@ -305,6 +309,38 @@ router.post('/:id/devolucion', verificarToken, soloRoles('admin', 'almacen'),
     return res.status(400).json({ error: 'Selecciona al menos un codigo para devolver' })
   }
 
+  // Panel de devolucion USADA: cantidad/peso reales con que vuelve el item.
+  // Solo aplican a condicion USADO y a una sola linea a la vez (asi lo manda el
+  // modal). devuelto_cantidad puede ser menor a la que salio; devuelto_peso es
+  // opcional. Se ignoran si la devolucion es NUEVA.
+  let devueltoCantidad = null
+  let devueltoPeso = null
+  let devueltoObs = null
+  if (condicion === 'USADO') {
+    const rawCant = req.body.devuelto_cantidad
+    if (rawCant !== undefined && rawCant !== null && rawCant !== '') {
+      const n = Number(rawCant)
+      if (!Number.isInteger(n) || n <= 0) {
+        return res.status(400).json({ error: 'La cantidad que vuelve debe ser un entero mayor a 0' })
+      }
+      devueltoCantidad = n
+    }
+    const rawPeso = req.body.devuelto_peso
+    if (rawPeso !== undefined && rawPeso !== null && rawPeso !== '') {
+      const p = Number(rawPeso)
+      if (Number.isNaN(p) || p <= 0 || p >= 1e10) {
+        return res.status(400).json({ error: 'El peso debe ser un numero mayor a 0' })
+      }
+      devueltoPeso = p
+    }
+    if (typeof req.body.devuelto_obs === 'string' && req.body.devuelto_obs.trim()) {
+      devueltoObs = req.body.devuelto_obs.trim()
+    }
+    if ((devueltoCantidad !== null || devueltoPeso !== null || devueltoObs !== null) && etiqueta_ids.length !== 1) {
+      return res.status(400).json({ error: 'Los datos de la devolucion usada se registran de a un codigo por vez' })
+    }
+  }
+
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
@@ -356,20 +392,34 @@ router.post('/:id/devolucion', verificarToken, soloRoles('admin', 'almacen'),
       const linea = detallePorId[eid]
 
       if (condicion === 'USADO') {
+        // Cantidad real que vuelve: la del panel si se indico, si no la que
+        // salio. No puede ser mayor a lo que salio.
+        const cantDevuelta = devueltoCantidad != null ? devueltoCantidad : linea.cantidad
+        if (cantDevuelta > linea.cantidad) {
+          await client.query('ROLLBACK')
+          return res.status(400).json({ error: `No puede volver mas de lo que salio (salieron ${linea.cantidad})` })
+        }
+
         // El codigo viejo queda retirado; el item fisico ahora vive bajo un
-        // codigo nuevo marcado USADO, que reingresa como stock DEVOLUCION.
+        // codigo nuevo marcado USADO, con su propia cantidad, que reingresa
+        // como stock DEVOLUCION.
         await client.query(`UPDATE etiquetas SET estado = 'REEMPLAZADA' WHERE id = $1`, [eid])
 
         const codigoResult = await client.query(`SELECT nextval('etiquetas_codigo_seq') as codigo`)
         const codigoNuevo = codigoResult.rows[0].codigo
         const nuevaEtiqueta = await client.query(
-          `INSERT INTO etiquetas (codigo, guia_item_id, producto_id, almacen_id, estado, condicion)
-           VALUES ($1, $2, $3, $4, 'EN_ALMACEN', 'USADO') RETURNING id`,
-          [codigoNuevo, linea.guia_item_id, linea.producto_id, linea.almacen_id]
+          `INSERT INTO etiquetas (codigo, guia_item_id, producto_id, almacen_id, estado, condicion, cantidad)
+           VALUES ($1, $2, $3, $4, 'EN_ALMACEN', 'USADO', $5) RETURNING id`,
+          [codigoNuevo, linea.guia_item_id, linea.producto_id, linea.almacen_id, cantDevuelta]
         )
         const nuevaEtiquetaId = nuevaEtiqueta.rows[0].id
         codigosNuevos.push({ codigo_viejo: linea.codigo, codigo_nuevo: Number(codigoNuevo) })
 
+        const detExtra = [
+          cantDevuelta !== linea.cantidad ? `cantidad ${cantDevuelta} de ${linea.cantidad}` : null,
+          devueltoPeso != null ? `peso ${devueltoPeso}` : null,
+          devueltoObs ? `obs: ${devueltoObs}` : null,
+        ].filter(Boolean).join(', ')
         await client.query(
           `INSERT INTO etiqueta_historial (etiqueta_id, evento, almacen_origen_id, usuario_id, detalle)
            VALUES ($1, 'REEMPLAZADA', $2, $3, $4)`,
@@ -378,22 +428,24 @@ router.post('/:id/devolucion', verificarToken, soloRoles('admin', 'almacen'),
         await client.query(
           `INSERT INTO etiqueta_historial (etiqueta_id, evento, almacen_destino_id, usuario_id, detalle)
            VALUES ($1, 'GENERADA', $2, $3, $4)`,
-          [nuevaEtiquetaId, linea.almacen_id, req.usuario.id, `Reingreso por devolucion usada del codigo ${linea.codigo}, nota ${numeroNota}`]
+          [nuevaEtiquetaId, linea.almacen_id, req.usuario.id,
+           `Reingreso por devolucion usada del codigo ${linea.codigo}, nota ${numeroNota}${detExtra ? ` (${detExtra})` : ''}`]
         )
 
         await ajustarInventario(client, {
           almacenId: linea.almacen_id,
           productoId: linea.producto_id,
-          delta: linea.cantidad,
+          delta: cantDevuelta,
           descripcion: `Devolucion usada nota ${numeroNota}`,
           tipo: 'DEVOLUCION',
         })
 
         await client.query(
           `UPDATE notas_salida_detalle
-           SET devuelto_condicion = 'USADO', devuelto_en = NOW(), etiqueta_devuelta_id = $1
-           WHERE id = $2`,
-          [nuevaEtiquetaId, linea.detalle_id]
+           SET devuelto_condicion = 'USADO', devuelto_en = NOW(), etiqueta_devuelta_id = $1,
+               devuelto_cantidad = $2, devuelto_peso = $3, devuelto_obs = $4
+           WHERE id = $5`,
+          [nuevaEtiquetaId, cantDevuelta, devueltoPeso, devueltoObs, linea.detalle_id]
         )
       } else {
         await client.query(`UPDATE etiquetas SET estado = 'EN_ALMACEN' WHERE id = $1`, [eid])

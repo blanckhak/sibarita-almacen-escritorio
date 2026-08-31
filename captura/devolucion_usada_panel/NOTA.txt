@@ -1,0 +1,70 @@
+DEVOLUCION USADA - PANEL DE CANTIDAD Y PESO (31/08/2026)
+================================================================================
+
+PEDIDO
+------
+Al marcar "Devuelto usado" en una nota de salida, se abre un panel para
+registrar como vuelve realmente el producto: la cantidad (puede ser menor a la
+que salio) y el peso (numerico, opcional), mas una observacion opcional.
+Antes el sistema asumia que volvia SIEMPRE el 100% de lo que salio.
+
+DECISIONES (confirmadas con el usuario)
+-------------------------------------
+- El panel aplica SOLO a la devolucion USADA. La devolucion NUEVA sigue igual
+  (el mismo codigo entero vuelve al stock).
+- Peso: numerico y opcional.
+- Si vuelve menos de lo que salio, solo se registra: reingresa lo indicado, la
+  nota queda como devuelta, la diferencia queda en los datos. No genera
+  pendiente ni alerta (si mas adelante se quiere trackear el faltante, se
+  agrega aparte).
+
+ESQUEMA (migraciones idempotentes en setup.js + database.sql, ya en sibarita_db)
+----------------------------------------------------------------------------
+- etiquetas + columna `cantidad` INTEGER (nullable). Solo la usan los codigos
+  USADO de una devolucion parcial; NULL = la cantidad es la del guia_item (el
+  caso normal). Las consultas que muestran la cantidad de una etiqueta ahora
+  hacen COALESCE(e.cantidad, gi.cantidad) -> etiquetas.js (GET / y GET /:id),
+  guias.js (consulta/productos).
+- notas_salida_detalle + columnas `devuelto_cantidad` INTEGER,
+  `devuelto_peso` NUMERIC(12,2), `devuelto_obs` TEXT (nullable).
+
+BACKEND (notasSalida.js, POST /:id/devolucion)
+--------------------------------------------
+- Acepta devuelto_cantidad / devuelto_peso / devuelto_obs, SOLO cuando
+  condicion = 'USADO' (en NUEVO se ignoran).
+- Valida: devuelto_cantidad entero > 0 y <= la cantidad que salio (si no, 400);
+  devuelto_peso numero > 0 si viene (si no, 400). Los datos del panel solo se
+  aceptan de a un codigo por vez (asi lo manda el modal).
+- La cantidad que reingresa (bucket DEVOLUCION) y la `cantidad` del codigo
+  nuevo USADO usan devuelto_cantidad; si no vino, la que salio (compatible con
+  lo anterior).
+- El historial de la etiqueta nueva anota "cantidad X de Y, peso Z, obs: ...".
+
+FRONTEND (NotaSalidaDetalle.jsx)
+-------------------------------
+- El modal "Confirmar devolucion" ahora tiene un panel "Datos de la devolucion
+  usada": Cantidad que vuelve (default = la que salio, max = la que salio),
+  Peso (opcional), Observacion (opcional). Se envian solo al pulsar
+  "Devuelta usada".
+- La tabla de detalle muestra bajo "Devuelta usada": "volvieron X de Y ·
+  Z de peso" y la observacion.
+- La vista de impresion "Nota de Devolucion de Activos" separa las columnas
+  Salio / Volvio / Peso.
+
+PROBADO
+-------
+scratchpad/test-devuelto.mjs: 18/18 contra copia desechable sibarita_demo_dev
+(borrada al terminar). Casos: USADA parcial (salieron 10, vuelven 7, peso
+32.5, obs) -> codigo nuevo con cantidad 7, inventario DEVOLUCION +7 (no +10),
+campos guardados; validaciones 400 (cantidad > la que salio / 0 / decimal /
+peso negativo); USADA sin panel -> vuelve el 100% (compatible); NUEVA ignora
+los campos. Migracion aplicada en sibarita_db (columnas creadas, datos
+intactos). Build de frontend limpio.
+
+CAPTURAS
+--------
+- 01_panel_devolucion_usada.png  -> el modal con el panel (cantidad 7 de 10,
+  peso 32.5, observacion).
+- 02_detalle_tras_devolucion.png -> el detalle despues: codigo 9055 ->
+  cod. 9056 (usado), "Devuelta usada / volvieron 7 de 10 · 32.5 de peso /
+  Vuelve rayado, con algo de oxido", stock actual 32 u.

@@ -49,6 +49,10 @@ export default function NotaSalidaDetalle() {
   const [procesandoAprobacion, setProcesandoAprobacion] = useState(false)
   const [lineaDevolucion, setLineaDevolucion] = useState(null)
   const [codigoConfirmacion, setCodigoConfirmacion] = useState('')
+  // Panel de "Devolucion usada": cantidad/peso reales con que vuelve el item.
+  const [devCantidad, setDevCantidad] = useState('')
+  const [devPeso, setDevPeso]         = useState('')
+  const [devObs, setDevObs]           = useState('')
   const [marcandoNoDevuelto, setMarcandoNoDevuelto] = useState(null)
   const [modoImpresion, setModoImpresion] = useState('salida')
   const [imprimirTick, setImprimirTick] = useState(0)
@@ -76,6 +80,9 @@ export default function NotaSalidaDetalle() {
   const abrirConfirmacionDevuelto = (linea) => {
     setLineaDevolucion(linea)
     setCodigoConfirmacion('')
+    setDevCantidad(String(linea.cantidad ?? ''))
+    setDevPeso('')
+    setDevObs('')
   }
 
   const confirmarDevolucion = async (condicion) => {
@@ -85,12 +92,28 @@ export default function NotaSalidaDetalle() {
       setTimeout(() => setMensaje(null), 3000)
       return
     }
+    if (condicion === 'USADO') {
+      const n = Number(devCantidad)
+      if (!Number.isInteger(n) || n <= 0 || n > lineaDevolucion.cantidad) {
+        setMensaje({ tipo: 'error', texto: `La cantidad que vuelve debe estar entre 1 y ${lineaDevolucion.cantidad}` })
+        setTimeout(() => setMensaje(null), 3000)
+        return
+      }
+      if (devPeso !== '' && (Number.isNaN(Number(devPeso)) || Number(devPeso) <= 0)) {
+        setMensaje({ tipo: 'error', texto: 'El peso debe ser un numero mayor a 0' })
+        setTimeout(() => setMensaje(null), 3000)
+        return
+      }
+    }
     setGuardando(true)
     try {
-      const { data } = await api.post(`/api/notas-salida/${id}/devolucion`, {
-        etiqueta_ids: [lineaDevolucion.etiqueta_id],
-        condicion,
-      })
+      const payload = { etiqueta_ids: [lineaDevolucion.etiqueta_id], condicion }
+      if (condicion === 'USADO') {
+        payload.devuelto_cantidad = Number(devCantidad)
+        if (devPeso !== '') payload.devuelto_peso = Number(devPeso)
+        if (devObs.trim()) payload.devuelto_obs = devObs.trim()
+      }
+      const { data } = await api.post(`/api/notas-salida/${id}/devolucion`, payload)
       const nuevo = data.codigos_nuevos?.[0]?.codigo_nuevo
       setMensaje({
         tipo: 'ok',
@@ -299,6 +322,13 @@ export default function NotaSalidaDetalle() {
                     {d.devuelto_condicion && (
                       <div className={`text-xs mt-1 font-medium ${d.devuelto_condicion === 'USADO' ? 'text-amber-700' : 'text-green-700'}`}>
                         Devuelta {d.devuelto_condicion === 'USADO' ? 'usada' : 'nueva'}
+                        {d.devuelto_condicion === 'USADO' && (d.devuelto_cantidad != null || d.devuelto_peso != null) && (
+                          <span className="block font-normal text-gray-500">
+                            {d.devuelto_cantidad != null && `volvieron ${d.devuelto_cantidad} de ${d.cantidad}`}
+                            {d.devuelto_peso != null && `${d.devuelto_cantidad != null ? ' · ' : ''}${Number(d.devuelto_peso)} de peso`}
+                          </span>
+                        )}
+                        {d.devuelto_obs && <span className="block font-normal text-gray-400 italic">{d.devuelto_obs}</span>}
                       </div>
                     )}
                   </td>
@@ -315,7 +345,7 @@ export default function NotaSalidaDetalle() {
           className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 print:hidden"
           onClick={() => setLineaDevolucion(null)}
         >
-          <div className="bg-white rounded-xl shadow-lg w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <h2 className="text-lg font-semibold text-gray-800 mb-1">Confirmar devolucion</h2>
             <p className="text-sm text-gray-500 mb-4">
               Verifica el producto y elegi como vuelve: <b>nueva</b> (el mismo codigo
@@ -338,6 +368,42 @@ export default function NotaSalidaDetalle() {
               placeholder={`Ej: ${lineaDevolucion.etiqueta_codigo}`}
               className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
             />
+
+            {/* Panel de la devolucion USADA: solo se usa al elegir "Devuelta usada" */}
+            <div className="border border-amber-200 bg-amber-50 rounded-lg p-3 mb-4">
+              <p className="text-xs font-semibold text-amber-800 mb-2">Datos de la devolucion usada</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Cantidad que vuelve</label>
+                  <input
+                    type="number" min="1" step="1" max={lineaDevolucion.cantidad}
+                    value={devCantidad}
+                    onChange={e => setDevCantidad(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                  <span className="text-[11px] text-gray-400">de {lineaDevolucion.cantidad} que salieron</span>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Peso (opcional)</label>
+                  <input
+                    type="number" min="0" step="0.01"
+                    value={devPeso}
+                    onChange={e => setDevPeso(e.target.value)}
+                    placeholder="Ej: 32.5"
+                    className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Observacion (opcional)</label>
+                  <input
+                    value={devObs}
+                    onChange={e => setDevObs(e.target.value)}
+                    placeholder="En que estado vuelve..."
+                    className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+              </div>
+            </div>
 
             <div className="flex flex-wrap justify-end gap-2">
               <button type="button" onClick={() => setLineaDevolucion(null)} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
@@ -439,7 +505,9 @@ export default function NotaSalidaDetalle() {
             <tr className="border-b-2 border-gray-800">
               <th className="text-left py-1 pr-3">Codigo salida</th>
               <th className="text-left py-1 pr-3">Detalle</th>
-              <th className="text-right py-1 pr-3">Cantidad</th>
+              <th className="text-right py-1 pr-3">Salio</th>
+              <th className="text-right py-1 pr-3">Volvio</th>
+              <th className="text-right py-1 pr-3">Peso</th>
               <th className="text-left py-1 pr-3">Condicion</th>
               <th className="text-left py-1 pr-3">Codigo nuevo</th>
               <th className="text-left py-1">Fecha dev.</th>
@@ -451,6 +519,8 @@ export default function NotaSalidaDetalle() {
                 <td className="py-1 pr-3">{d.etiqueta_codigo}</td>
                 <td className="py-1 pr-3">{d.producto_nombre}</td>
                 <td className="py-1 pr-3 text-right">{d.cantidad}</td>
+                <td className="py-1 pr-3 text-right">{d.devuelto_cantidad != null ? d.devuelto_cantidad : d.cantidad}</td>
+                <td className="py-1 pr-3 text-right">{d.devuelto_peso != null ? Number(d.devuelto_peso) : '—'}</td>
                 <td className="py-1 pr-3">{d.devuelto_condicion === 'USADO' ? 'Usada' : 'Nueva'}</td>
                 <td className="py-1 pr-3">{d.etiqueta_devuelta_codigo || '—'}</td>
                 <td className="py-1">{d.devuelto_en ? new Date(d.devuelto_en).toLocaleDateString('es-GT') : '—'}</td>

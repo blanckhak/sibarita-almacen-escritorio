@@ -39,7 +39,7 @@ router.get('/consulta/productos', verificarToken, async (req, res) => {
     const result = await pool.query(`
       SELECT g.numero_guia, g.fecha, a.nombre as almacen_nombre,
              gi.id as guia_item_id, p.nombre as producto_nombre, p.categoria,
-             gi.cantidad, gi.destino,
+             COALESCE(e.cantidad, gi.cantidad) as cantidad, gi.destino,
              e.id as etiqueta_id, e.codigo as etiqueta_codigo, e.estado as etiqueta_estado,
              e.condicion as etiqueta_condicion
       FROM guia_items gi

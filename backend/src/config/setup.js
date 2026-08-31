@@ -213,6 +213,10 @@ async function setup() {
     ALTER TABLE etiquetas DROP CONSTRAINT IF EXISTS etiquetas_condicion_check;
     ALTER TABLE etiquetas ADD CONSTRAINT etiquetas_condicion_check
       CHECK (condicion IN ('NUEVO', 'USADO'));
+    -- Cantidad propia del codigo. Solo la usan los codigos USADO generados por
+    -- una devolucion parcial (volvio menos de lo que salio). NULL = la cantidad
+    -- es la del guia_item (el caso normal de un ingreso).
+    ALTER TABLE etiquetas ADD COLUMN IF NOT EXISTS cantidad INTEGER;
     ALTER TABLE etiqueta_historial DROP CONSTRAINT IF EXISTS etiqueta_historial_evento_check;
     ALTER TABLE etiqueta_historial ADD CONSTRAINT etiqueta_historial_evento_check
       CHECK (evento IN ('GENERADA', 'IMPRESA', 'REIMPRESA', 'SALIO', 'DEVOLVIO', 'TRANSFERIDA', 'REEMPLAZADA'));
@@ -253,6 +257,13 @@ async function setup() {
       CHECK (devuelto_condicion IN ('NUEVO', 'USADO'));
     ALTER TABLE notas_salida_detalle ADD COLUMN IF NOT EXISTS devuelto_en TIMESTAMP;
     ALTER TABLE notas_salida_detalle ADD COLUMN IF NOT EXISTS etiqueta_devuelta_id INTEGER REFERENCES etiquetas(id);
+    -- Devolucion USADA: datos reales de lo que volvio (panel al marcar
+    -- "Devuelto usado"). devuelto_cantidad puede ser menor a la que salio;
+    -- devuelto_peso es opcional (kg u otra unidad). NULL mientras no se devuelve
+    -- o cuando volvio NUEVA (el mismo codigo entero).
+    ALTER TABLE notas_salida_detalle ADD COLUMN IF NOT EXISTS devuelto_cantidad INTEGER;
+    ALTER TABLE notas_salida_detalle ADD COLUMN IF NOT EXISTS devuelto_peso NUMERIC(12,2);
+    ALTER TABLE notas_salida_detalle ADD COLUMN IF NOT EXISTS devuelto_obs TEXT;
 
     CREATE TABLE IF NOT EXISTS parametros_aprobacion (
       id SERIAL PRIMARY KEY,

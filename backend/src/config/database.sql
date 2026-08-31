@@ -206,6 +206,9 @@ CREATE TABLE etiquetas (
   -- NUEVO / USADO (Bloque 4): un codigo generado por devolucion "usada"
   -- nace con condicion USADO y su stock va aparte del stock nuevo.
   condicion VARCHAR(10) NOT NULL DEFAULT 'NUEVO' CHECK (condicion IN ('NUEVO', 'USADO')),
+  -- Cantidad propia del codigo: solo la usan los codigos USADO de una
+  -- devolucion parcial. NULL = la cantidad es la del guia_item.
+  cantidad INTEGER,
   fecha_generacion TIMESTAMP DEFAULT NOW()
 );
 
@@ -250,7 +253,12 @@ CREATE TABLE notas_salida_detalle (
   -- sigue afuera.
   devuelto_condicion VARCHAR(10) CHECK (devuelto_condicion IN ('NUEVO', 'USADO')),
   devuelto_en TIMESTAMP,
-  etiqueta_devuelta_id INTEGER REFERENCES etiquetas(id)
+  etiqueta_devuelta_id INTEGER REFERENCES etiquetas(id),
+  -- Devolucion USADA: datos reales de lo que volvio (puede ser menos que lo que
+  -- salio). devuelto_peso es opcional. NULL si volvio NUEVA o sigue afuera.
+  devuelto_cantidad INTEGER,
+  devuelto_peso NUMERIC(12,2),
+  devuelto_obs TEXT
 );
 
 ALTER TABLE notas_salida ADD COLUMN requiere_devolucion BOOLEAN NOT NULL DEFAULT true;
