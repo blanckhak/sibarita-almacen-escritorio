@@ -1288,6 +1288,47 @@ PENDIENTE Fase 9:
   capturas de Fase 8 (PNG 05-09) y Fase 9.
 - Instalador .exe no regenerado; deploy Vercel/Render sin tocar.
 
+FASE 10 CERRADA (31/08/2026, code-review medium OK con 3 fixes): modulo nuevo
+"Compras Diarias" (Bloque 5). Detalle, decisiones y lo probado en
+captura/fase10_compras_diarias/NOTA.txt. Confirmado con el usuario antes de
+construir: cabecera (fecha/oficina/proveedor/solicitud opcional) + lineas con
+monto; SOLO registro (sin estados); lo cargan admin + compras (primer permiso
+de escritura del perfil "compras"); con vista de impresion. Resumen tecnico:
+- Esquema (solo tablas nuevas, ningun ALTER -> riesgo minimo, ya aplicado en
+  sibarita_db): secuencia compras_diarias_numero_seq; tabla compras_diarias
+  (numero_compra, fecha, oficina, proveedor, solicitud_id -> solicitudes_
+  materiales, usuario_id, observaciones); tabla compras_diarias_detalle
+  (descripcion, cantidad, monto_unitario). El total no se guarda, se suma al
+  leer.
+- backend/src/routes/comprasDiarias.js (NUEVO) + server.js: GET / (lista con
+  monto_total y total_lineas; filtro ?desde/?hasta), GET /:id, POST /
+  (soloRoles admin/compras, log CREAR_COMPRA_DIARIA, valida oficina + lineas
+  con descripcion/cantidad>0/monto>=0, y que la solicitud_id exista si viene).
+- frontend: pages/ComprasDiarias.jsx y CompraDiariaDetalle.jsx (NUEVAS,
+  lista+form y detalle+impresion "Registro de Compras Diarias"); rutas en
+  App.jsx (roles admin/compras, lazy); enlace en Navbar.jsx.
+- utils/fecha.js (NUEVO): hoyLocal() da la fecha de hoy en hora LOCAL (el
+  new Date().toISOString() que se usaba daba la fecha UTC -> en UTC-6 por la
+  tarde ya es el dia siguiente). Se centralizo y se cambio tambien en
+  Guias.jsx y SolicitudesMateriales.jsx (tenian la misma copia con el mismo
+  bug). Fix del code-review.
+- Otros 2 fixes del code-review: la validacion de monto ya no acepta strings
+  de solo espacios ni valores fuera del rango NUMERIC(12,2) (daban 500, ahora
+  400); cargarDatos de ComprasDiarias.jsx ahora tiene catch y muestra el
+  error en vez de un listado vacio enganoso.
+- Probado con scratchpad/test-fase10.mjs (23/23) contra copia desechable
+  sibarita_demo_f10 (borrada al terminar); smoke de /guias,
+  /solicitudes-materiales y /compras-diarias sin errores JS tras el cambio
+  de fecha.js. Build de frontend limpio; frontend-dist re-sincronizado.
+  Capturas 01-04 con Chrome headless via puppeteer.
+
+PENDIENTE Fase 10:
+- Commit PENDIENTE al cerrar esta nota.
+- La pantalla no expone todavia el filtro por fecha (?desde/?hasta ya existe
+  en el backend). Sin edicion ni borrado de una compra (mismo criterio que
+  Solicitudes / Notas de Salida).
+- Instalador .exe no regenerado; deploy Vercel/Render sin tocar.
+
 --------------------------------------------------
 ESTADO DEL PLAN DE FASES (se actualiza al cerrar cada fase)
 --------------------------------------------------
@@ -1308,7 +1349,8 @@ ESTADO DEL PLAN DE FASES (se actualiza al cerrar cada fase)
     + capturas 05-09 agregadas 31/08 (ver NOTA de esa fase)
 [x] Fase 9 - Stock en Orden de Salida + control de concurrencia
     (CERRADA 31/08, code-review medium OK con 5 fixes, commit 1f9ee04)
-[ ] Fase 10 - Modulo Compras diarias
+[x] Fase 10 - Modulo nuevo "Compras Diarias"
+    (CERRADA 31/08, code-review medium OK con 3 fixes, commit PENDIENTE)
 
 ESTADO GIT (28/08/2026): todo lo pendiente de las sesiones 25-28/08 quedo
 commiteado en master en 3 commits:
@@ -1337,6 +1379,15 @@ nuevo, pages/NotasSalida.jsx, pages/NotaSalidaDetalle.jsx), NOTAS, y las
 carpetas de capturas captura/fase8_servicio_edicion_guia/ (PNG 05-09) y
 captura/fase9_stock_orden_salida/. Sin cambios de esquema -> no hizo falta
 migrar sibarita_db. El instalador .exe no se regenero.
+ESTADO GIT (31/08/2026, Fase 10): modulo "Compras Diarias" TERMINADO. En el
+working tree: backend/server.js, backend/src/config/{database.sql,setup.js},
+backend/src/routes/comprasDiarias.js (nuevo), frontend/src/App.jsx,
+frontend/src/components/Navbar.jsx, frontend/src/pages/{ComprasDiarias.jsx,
+CompraDiariaDetalle.jsx} (nuevas), frontend/src/utils/fecha.js (nuevo) +
+frontend/src/pages/{Guias.jsx,SolicitudesMateriales.jsx} (usan fecha.js),
+NOTAS y captura/fase10_compras_diarias/. La migracion (2 tablas nuevas +
+secuencia) ya se aplico en sibarita_db (0 filas, resto intacto). Commit
+pendiente.
 
 --------------------------------------------------
 FIN DE LA NOTA

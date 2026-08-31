@@ -3,8 +3,7 @@ import { Link } from 'react-router-dom'
 import api from '../utils/api'
 import { useAuth } from '../context/AuthContext'
 import { CATEGORIAS_MATERIALES } from '../utils/categoriasMateriales'
-
-const hoy = () => new Date().toISOString().slice(0, 10)
+import { hoyLocal as hoy } from '../utils/fecha'
 
 const colorEstado = {
   PENDIENTE: 'bg-orange-100 text-orange-700',

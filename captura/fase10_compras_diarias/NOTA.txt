@@ -1,0 +1,103 @@
+FASE 10 - Modulo nuevo "Compras Diarias" (Bloque 5)
+================================================================================
+Fecha: 31/08/2026
+
+REGLA DE NEGOCIO
+---------------
+Bloque 5 del documento del cliente: "Compras diarias: Registrar asociando
+Oficina y Solicitud correspondiente." Aclarado en Fase 3 (seccion 20 de
+NOTAS_PROYECTO_SIBARITA.txt): MODULO NUEVO APARTE (fecha, oficina, proveedor,
+montos), ligado OPCIONALMENTE a una Solicitud de Materiales. No es extension
+de otro modulo ni un reporte.
+
+DECISIONES DE ESTA FASE (confirmadas con el usuario antes de construir)
+------------------------------------------------------------------
+- Estructura: CABECERA (fecha / oficina / proveedor / solicitud opcional /
+  observaciones) + N LINEAS con monto (descripcion libre, cantidad,
+  monto_unitario). El total = suma de cantidad * monto_unitario, se calcula
+  al leer, no se guarda.
+- Flujo: SOLO REGISTRO. No hay PENDIENTE/ATENDIDA/RECHAZADA (es un log de
+  compras del dia, no un tramite que alguien aprueba). No hay endpoints de
+  atender/rechazar ni de edicion/borrado.
+- Permisos: lo registran admin + compras. Es el PRIMER permiso de escritura
+  del perfil "compras" (antes era solo lectura). Incluye vista de impresion.
+- No toca inventario ni etiquetas.
+
+ESQUEMA (migraciones idempotentes en setup.js + database.sql)
+----------------------------------------------------------
+Solo tablas nuevas, ningun ALTER sobre tablas existentes -> riesgo minimo.
+- CREATE SEQUENCE compras_diarias_numero_seq START 1
+- compras_diarias (id, numero_compra VARCHAR(20) UNIQUE, fecha DATE NOT NULL,
+  oficina VARCHAR(150) NOT NULL, proveedor VARCHAR(150) null,
+  solicitud_id -> solicitudes_materiales(id) null, usuario_id -> usuarios(id),
+  fecha_registro TIMESTAMP default now(), observaciones TEXT)
+- compras_diarias_detalle (id, compra_id -> compras_diarias(id),
+  descripcion VARCHAR(200) NOT NULL, cantidad NUMERIC(12,2) NOT NULL,
+  monto_unitario NUMERIC(12,2) NOT NULL default 0)
+Ya aplicada en sibarita_db local (verificado: las 2 tablas existen, 0 filas,
+el resto de la base intacto -> 10 guias, 9 notas, 12 codigos EN_ALMACEN).
+
+BACKEND
+-------
+backend/src/routes/comprasDiarias.js (NUEVO), registrado en server.js como
+/api/compras-diarias:
+- GET /            -> lista; filtro opcional ?desde=&hasta= por fecha; trae
+  numero_solicitud, usuario_nombre, total_lineas y monto_total (SUM
+  cantidad*monto_unitario).
+- GET /:id         -> cabecera + numero_solicitud + array detalle.
+- POST /           -> soloRoles('admin','compras'), log CREAR_COMPRA_DIARIA.
+  Valida: oficina requerida; >=1 linea; cada linea con descripcion,
+  cantidad > 0 y monto_unitario >= 0. Si viene solicitud_id, verifica que
+  exista (400 si no). fecha por defecto = CURRENT_DATE. numero_compra
+  correlativo 000001, 000002... con la secuencia. Todo en una transaccion.
+
+FRONTEND
+--------
+- pages/ComprasDiarias.jsx (NUEVO): lista + formulario (fecha/oficina/
+  proveedor/select de Solicitud opcional/observaciones + lineas dinamicas
+  descripcion/cantidad/monto unit con importe por linea y total en vivo).
+- pages/CompraDiariaDetalle.jsx (NUEVO): tarjetas (solicitud asociada con
+  link, registrado por, monto total) + tabla de lineas con importe y total +
+  vista de impresion "Registro de Compras Diarias" (encabezado MALSA, tabla,
+  firmas "Registrado por" / "V.B. Compras", pie FT-GE-17).
+- App.jsx: 2 rutas nuevas (/compras-diarias y /compras-diarias/:id) con
+  roles={['admin','compras']}, carga diferida (lazy).
+- Navbar.jsx: enlace "Compras Diarias" visible para admin y compras.
+
+PROBADO (scratchpad/test-fase10.mjs, contra copia desechable sibarita_demo_f10)
+--------------------------------------------------------------------------
+21/21 asserts OK:
+- Crear compra con 2 lineas (admin) -> 201, numero 000001, total 396.5.
+- GET /:id trae el detalle; GET / trae monto_total y total_lineas agregados.
+- El rol "compras" crea -> 201 (correlativo 000002), fecha por defecto = hoy.
+- El rol "almacen" -> 403.
+- Validaciones -> 400: oficina vacia, sin lineas, descripcion vacia,
+  cantidad 0, monto negativo, solicitud_id inexistente.
+- Link opcional a una Solicitud real: el detalle trae su numero_solicitud.
+- CREAR_COMPRA_DIARIA queda en actividad_log.
+La copia sibarita_demo_f10 se borro al terminar. Build de frontend limpio
+(tsc + vite); frontend-dist re-sincronizado.
+
+CAPTURAS (Chrome headless via puppeteer, contra sibarita_demo_f10)
+--------------------------------------------------------------
+- 01_nueva_compra_form_con_lineas.png -> formulario con cabecera + 2 lineas,
+  importe por linea y total en vivo (405.60).
+- 02_lista_compras_diarias.png        -> listado con N compra, oficina,
+  proveedor, solicitud asociada, lineas y monto total.
+- 03_detalle_compra_diaria.png        -> detalle con tarjetas + tabla de
+  lineas + fila Total.
+- 04_impresion_registro_compras.png   -> vista de impresion "Registro de
+  Compras Diarias".
+
+PENDIENTE / A TENER EN CUENTA
+----------------------------
+- No hay edicion ni borrado de una compra ya registrada (mismo criterio que
+  Solicitud de Materiales / Notas de Salida). Si hay que corregir, se
+  registra otra.
+- El filtro ?desde/?hasta del GET existe en el backend pero la pantalla
+  todavia no expone controles de fecha (la lista sale completa, orden fecha
+  desc). Facil de agregar despues si el volumen lo pide.
+- Instalador .exe no regenerado; deploy Vercel/Render sin tocar.
+- Sigue vigente la DEUDA CONOCIDA de validacion de longitud de campos de
+  texto libre del backend (ver NOTA de Fase 8): oficina/proveedor/descripcion
+  no validan su VARCHAR, un valor mas largo da 500 en vez de 400.

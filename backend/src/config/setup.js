@@ -266,6 +266,32 @@ async function setup() {
       cantidad NUMERIC(12,2) NOT NULL
     );
 
+    -- Compras diarias (Fase 10, Bloque 5): modulo nuevo aparte. Es un LOG de
+    -- compras del dia (fecha, oficina, proveedor y lineas con monto), ligado
+    -- OPCIONALMENTE a una Solicitud de Materiales. No tiene flujo de estados,
+    -- no toca inventario ni etiquetas: solo se registra, se consulta e imprime.
+    CREATE SEQUENCE IF NOT EXISTS compras_diarias_numero_seq START 1;
+
+    CREATE TABLE IF NOT EXISTS compras_diarias (
+      id SERIAL PRIMARY KEY,
+      numero_compra VARCHAR(20) NOT NULL UNIQUE,
+      fecha DATE NOT NULL,
+      oficina VARCHAR(150) NOT NULL,
+      proveedor VARCHAR(150),
+      solicitud_id INTEGER REFERENCES solicitudes_materiales(id),
+      usuario_id INTEGER REFERENCES usuarios(id),
+      fecha_registro TIMESTAMP DEFAULT NOW(),
+      observaciones TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS compras_diarias_detalle (
+      id SERIAL PRIMARY KEY,
+      compra_id INTEGER REFERENCES compras_diarias(id),
+      descripcion VARCHAR(200) NOT NULL,
+      cantidad NUMERIC(12,2) NOT NULL,
+      monto_unitario NUMERIC(12,2) NOT NULL DEFAULT 0
+    );
+
     CREATE TABLE IF NOT EXISTS actividad_log (
       id SERIAL PRIMARY KEY,
       usuario_id INTEGER REFERENCES usuarios(id),

@@ -26,6 +26,7 @@ export default function Navbar() {
     { path: '/guias',       label: 'Guias',       roles: ['admin','almacen','mantenimiento','compras'] },
     { path: '/notas-salida', label: 'Notas de Salida', roles: ['admin','almacen','mantenimiento','compras'] },
     { path: '/solicitudes-materiales', label: 'Solicitud Materiales', roles: ['admin','almacen','mantenimiento','compras'] },
+    { path: '/compras-diarias', label: 'Compras Diarias', roles: ['admin','compras'] },
     { path: '/consulta-productos', label: 'Consulta', roles: ['admin','almacen','mantenimiento','compras'] },
     { path: '/movimientos', label: 'Movimientos', roles: ['admin','almacen'] },
     { path: '/reportes',    label: 'Reportes',    roles: ['admin','almacen','compras'] },

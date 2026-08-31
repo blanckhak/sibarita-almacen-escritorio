@@ -3,8 +3,8 @@ import { Link } from 'react-router-dom'
 import api from '../utils/api'
 import { useAuth } from '../context/AuthContext'
 import { extraerProveedoresConocidos } from '../utils/proveedores'
+import { hoyLocal as hoy } from '../utils/fecha'
 
-const hoy = () => new Date().toISOString().slice(0, 10)
 const LINEA_VACIA = () => ({ producto_id: '', producto_nombre: '', nuevo: false, tipo: 'PRODUCTO', cantidad: '', destino: 'ALMACEN', destino_detalle: '', unidad_medida_id: '', recogido: true, metrica: 'ENTERO', partidas: [] })
 const PARTIDA_VACIA = () => ({ cantidad: '', referencia: '' })
 const sumaPartidas = (partidas) => (partidas || []).reduce((s, p) => s + (Number(p.cantidad) || 0), 0)
