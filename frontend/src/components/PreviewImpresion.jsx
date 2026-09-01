@@ -5,7 +5,11 @@
 // componente no altera el layout (los hijos siguen con su `hidden print:block`
 // para que un Ctrl+P directo siga funcionando). Cuando esta abierto, el
 // documento se ve en pantalla y "Imprimir" dispara window.print().
-export default function PreviewImpresion({ abierto, onCerrar, children }) {
+//
+// `onImprimir` opcional: si se pasa, el boton lo llama en vez de window.print()
+// directo (el handler decide cuando imprimir; util para registrar la impresion
+// solo cuando el usuario realmente imprime).
+export default function PreviewImpresion({ abierto, onCerrar, onImprimir, children }) {
   if (!abierto) return <>{children}</>
   return (
     <div className="fixed inset-0 z-[60] bg-neutral-400/95 overflow-auto print:static print:bg-transparent print:overflow-visible print:z-auto">
@@ -13,7 +17,7 @@ export default function PreviewImpresion({ abierto, onCerrar, children }) {
         <span className="text-sm font-medium text-gray-600">Previsualizacion de impresion</span>
         <div className="flex gap-2">
           <button
-            onClick={() => window.print()}
+            onClick={() => (onImprimir ? onImprimir() : window.print())}
             className="bg-blue-700 hover:bg-blue-800 text-white text-sm px-4 py-2 rounded-lg font-medium transition"
           >
             Imprimir

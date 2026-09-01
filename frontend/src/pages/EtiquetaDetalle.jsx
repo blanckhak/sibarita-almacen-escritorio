@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import CodigoBarras from '../components/CodigoBarras'
 import { colorEtiquetaEstado } from '../utils/etiquetaEstados'
 import { claseCodigoAlmacen, estiloCodigoImpreso, codigoAlmacen } from '../utils/colorAlmacen'
+import PreviewImpresion from '../components/PreviewImpresion'
 
 const colorEvento = {
   GENERADA:    'bg-blue-100 text-blue-700',
@@ -28,6 +29,7 @@ export default function EtiquetaDetalle() {
   const [transfiriendo, setTransfiriendo]   = useState(false)
   const [ubicacion, setUbicacion]           = useState('')
   const [guardandoUbic, setGuardandoUbic]   = useState(false)
+  const [preview, setPreview]               = useState(false)
 
   const puedeGestionar = ['admin', 'almacen'].includes(usuario?.rol)
 
@@ -61,7 +63,11 @@ export default function EtiquetaDetalle() {
 
   useEffect(() => { cargar() }, [id])
 
-  const imprimir = async () => {
+  // Abre la previsualizacion; la (re)impresion se registra recien cuando el
+  // usuario aprieta "Imprimir" en el overlay.
+  const imprimir = () => setPreview(true)
+
+  const confirmarImpresion = async () => {
     try {
       await api.post(`/api/etiquetas/${id}/imprimir`)
     } catch (_) {}
@@ -214,7 +220,8 @@ export default function EtiquetaDetalle() {
       </div>
 
       {/* Vista de impresion de la etiqueta */}
-      <div className="hidden print:block">
+      <PreviewImpresion abierto={preview} onCerrar={() => setPreview(false)} onImprimir={confirmarImpresion}>
+      <div className={preview ? '' : 'hidden print:block'}>
         <div className="border border-gray-800 rounded inline-block">
           <div className="bg-gray-100 text-center font-semibold text-sm py-1.5 border-b border-gray-800 px-4">
             {etiqueta.producto_nombre}
@@ -243,6 +250,7 @@ export default function EtiquetaDetalle() {
           </div>
         </div>
       </div>
+      </PreviewImpresion>
     </div>
   )
 }

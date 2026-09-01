@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import api from '../utils/api'
+import PreviewImpresion from '../components/PreviewImpresion'
 
 const money = (n) => Number(n || 0).toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
@@ -8,6 +9,7 @@ export default function CompraDiariaDetalle() {
   const { id } = useParams()
   const [compra, setCompra]     = useState(null)
   const [cargando, setCargando] = useState(true)
+  const [preview, setPreview]   = useState(false)
 
   useEffect(() => {
     api.get(`/api/compras-diarias/${id}`)
@@ -35,7 +37,7 @@ export default function CompraDiariaDetalle() {
             </p>
           </div>
           <button
-            onClick={() => window.print()}
+            onClick={() => setPreview(true)}
             className="bg-blue-700 hover:bg-blue-800 text-white text-sm px-4 py-2 rounded-lg font-medium transition"
           >
             Imprimir
@@ -101,7 +103,8 @@ export default function CompraDiariaDetalle() {
       {/* Vista de impresion: hoja simple "Registro de Compras Diarias" con el
           encabezado de la empresa, sin bordes de talonario (no hay formato
           fisico pre-impreso para este modulo). */}
-      <div className="hidden print:block border-2 border-gray-800 rounded">
+      <PreviewImpresion abierto={preview} onCerrar={() => setPreview(false)}>
+      <div className={`${preview ? '' : 'hidden print:block'} border-2 border-gray-800 rounded`}>
         <div className="flex items-start justify-between px-4 pt-3">
           <div>
             <div className="font-bold text-lg text-gray-800">MANUFACTURA DE ALIMENTOS S.A.</div>
@@ -160,6 +163,7 @@ export default function CompraDiariaDetalle() {
           <span className="text-right">c.c. Compras, Contabilidad</span>
         </div>
       </div>
+      </PreviewImpresion>
     </div>
   )
 }
