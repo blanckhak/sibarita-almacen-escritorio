@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { colorEtiquetaEstado } from '../utils/etiquetaEstados'
 import { textoStock } from '../utils/stockResumen'
 import { enPaginas } from '../utils/paginarImpresion'
-import { claseCodigoAlmacen, estiloCodigoImpreso } from '../utils/colorAlmacen'
+import { claseCodigoAlmacen, estiloCodigoImpreso, codigoAlmacen, numeroCodigo } from '../utils/colorAlmacen'
 import PreviewImpresion from '../components/PreviewImpresion'
 import CodigoBarras from '../components/CodigoBarras'
 
@@ -94,7 +94,7 @@ export default function NotaSalidaDetalle() {
 
   const confirmarDevolucion = async (condicion) => {
     if (!lineaDevolucion) return
-    if (codigoConfirmacion.trim() !== String(lineaDevolucion.etiqueta_codigo)) {
+    if (numeroCodigo(codigoConfirmacion) !== String(lineaDevolucion.etiqueta_codigo)) {
       setMensaje({ tipo: 'error', texto: 'El codigo escrito no coincide con el de la etiqueta' })
       setTimeout(() => setMensaje(null), 3000)
       return
@@ -322,10 +322,10 @@ export default function NotaSalidaDetalle() {
                     </td>
                   )}
                   <td className="px-6 py-3 font-mono font-semibold text-gray-800">
-                    <Link to={`/etiquetas/${d.etiqueta_id}`} className={`hover:underline px-1.5 rounded ${claseCodigoAlmacen(d.almacen_nombre)}`}>{d.etiqueta_codigo}</Link>
+                    <Link to={`/etiquetas/${d.etiqueta_id}`} className={`hover:underline px-1.5 rounded ${claseCodigoAlmacen(d.almacen_nombre)}`}>{codigoAlmacen(d.etiqueta_codigo, d.almacen_nombre)}</Link>
                     {d.etiqueta_devuelta_codigo && (
                       <div className="text-xs text-amber-700 font-normal mt-0.5 flex items-center gap-2">
-                        <span>&rarr; cod. {d.etiqueta_devuelta_codigo} (usado)</span>
+                        <span>&rarr; cod. {codigoAlmacen(d.etiqueta_devuelta_codigo, d.almacen_nombre)} (usado)</span>
                         {puedeGestionar && (
                           <button
                             type="button"
@@ -385,7 +385,7 @@ export default function NotaSalidaDetalle() {
             <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-4 text-sm space-y-1">
               <div><span className="text-gray-500">Producto:</span> <span className="font-medium text-gray-800">{lineaDevolucion.producto_nombre}</span></div>
               <div><span className="text-gray-500">Cantidad esperada:</span> <span className="font-medium text-gray-800">{lineaDevolucion.cantidad}</span></div>
-              <div><span className="text-gray-500">Codigo:</span> <span className="font-mono font-bold text-gray-800">{lineaDevolucion.etiqueta_codigo}</span></div>
+              <div><span className="text-gray-500">Codigo:</span> <span className="font-mono font-bold text-gray-800">{codigoAlmacen(lineaDevolucion.etiqueta_codigo, lineaDevolucion.almacen_nombre)}</span></div>
             </div>
 
             <label className="block text-sm font-medium text-gray-600 mb-1">Escribe o escanea el codigo para confirmar</label>
@@ -394,7 +394,7 @@ export default function NotaSalidaDetalle() {
               value={codigoConfirmacion}
               onChange={e => setCodigoConfirmacion(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); confirmarDevolucion('NUEVO') } }}
-              placeholder={`Ej: ${lineaDevolucion.etiqueta_codigo}`}
+              placeholder={`Ej: ${codigoAlmacen(lineaDevolucion.etiqueta_codigo, lineaDevolucion.almacen_nombre)}`}
               className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
             />
 
@@ -509,7 +509,7 @@ export default function NotaSalidaDetalle() {
                         <td className="py-1 px-1">
                           {d ? (
                             <>
-                              <span className="font-mono font-bold px-1 mr-1 rounded" style={estiloCodigoImpreso(d.almacen_nombre)}>{d.etiqueta_codigo}</span>
+                              <span className="font-mono font-bold px-1 mr-1 rounded" style={estiloCodigoImpreso(d.almacen_nombre)}>{codigoAlmacen(d.etiqueta_codigo, d.almacen_nombre)}</span>
                               {d.producto_nombre}
                               {d.devuelto_condicion === 'USADO' && <span className="text-[10px] text-gray-500"> (devuelto usado)</span>}
                             </>
@@ -598,7 +598,7 @@ export default function NotaSalidaDetalle() {
           <tbody>
             {lineasDevueltas.map(d => (
               <tr key={d.id} className="border-b border-gray-200">
-                <td className="py-1 pr-3"><span className="font-mono font-bold px-1 rounded" style={estiloCodigoImpreso(d.almacen_nombre)}>{d.etiqueta_codigo}</span></td>
+                <td className="py-1 pr-3"><span className="font-mono font-bold px-1 rounded" style={estiloCodigoImpreso(d.almacen_nombre)}>{codigoAlmacen(d.etiqueta_codigo, d.almacen_nombre)}</span></td>
                 <td className="py-1 pr-3">{d.producto_nombre}</td>
                 <td className="py-1 pr-3 text-right">{d.cantidad}</td>
                 <td className="py-1 pr-3 text-right">{d.devuelto_cantidad != null ? d.devuelto_cantidad : d.cantidad}</td>
@@ -606,7 +606,7 @@ export default function NotaSalidaDetalle() {
                 <td className="py-1 pr-3">{d.devuelto_condicion === 'USADO' ? 'Usada' : 'Nueva'}</td>
                 <td className="py-1 pr-3">
                   {d.etiqueta_devuelta_codigo
-                    ? <span className="font-mono font-bold px-1 rounded" style={estiloCodigoImpreso(d.almacen_nombre)}>{d.etiqueta_devuelta_codigo}</span>
+                    ? <span className="font-mono font-bold px-1 rounded" style={estiloCodigoImpreso(d.almacen_nombre)}>{codigoAlmacen(d.etiqueta_devuelta_codigo, d.almacen_nombre)}</span>
                     : '—'}
                 </td>
                 <td className="py-1">{d.devuelto_en ? new Date(d.devuelto_en).toLocaleDateString('es-GT') : '—'}</td>
@@ -637,7 +637,7 @@ export default function NotaSalidaDetalle() {
             </div>
             <div className="flex">
               <div className="font-bold text-2xl flex items-center justify-center px-4 min-w-[70px]" style={estiloCodigoImpreso(lineaEtiquetaUsada.almacen_nombre)}>
-                {lineaEtiquetaUsada.etiqueta_devuelta_codigo}
+                {codigoAlmacen(lineaEtiquetaUsada.etiqueta_devuelta_codigo, lineaEtiquetaUsada.almacen_nombre)}
               </div>
               <div className="flex-1 border-l border-r border-gray-800 px-3 py-2 text-sm flex items-center">
                 {lineaEtiquetaUsada.producto_nombre}

@@ -7,7 +7,7 @@ import { extraerProveedoresConocidos } from '../utils/proveedores'
 import { colorEtiquetaEstado } from '../utils/etiquetaEstados'
 import { TIPOS_DOCUMENTO, tipoDocumentoLabel } from '../utils/tiposDocumento'
 import { enPaginas } from '../utils/paginarImpresion'
-import { claseCodigoAlmacen, estiloCodigoImpreso } from '../utils/colorAlmacen'
+import { claseCodigoAlmacen, estiloCodigoImpreso, codigoAlmacen } from '../utils/colorAlmacen'
 import PreviewImpresion from '../components/PreviewImpresion'
 
 const colorDestino = {
@@ -521,7 +521,7 @@ export default function GuiaDetalle() {
                   </td>
                   <td className="px-6 py-3 font-mono text-gray-700">
                     {it.etiqueta_id
-                      ? <Link to={`/etiquetas/${it.etiqueta_id}`} className={`hover:underline px-1.5 rounded ${claseCodigoAlmacen(guia.almacen_nombre)}`}>{it.etiqueta_codigo}</Link>
+                      ? <Link to={`/etiquetas/${it.etiqueta_id}`} className={`hover:underline px-1.5 rounded ${claseCodigoAlmacen(guia.almacen_nombre)}`}>{codigoAlmacen(it.etiqueta_codigo, guia.almacen_nombre)}</Link>
                       : '—'}
                   </td>
                   <td className="px-6 py-3">
@@ -611,7 +611,7 @@ export default function GuiaDetalle() {
               </div>
               <div className="flex">
                 <div className="font-bold text-2xl flex items-center justify-center px-4 min-w-[70px]" style={estiloCodigoImpreso(guia.almacen_nombre)}>
-                  {it.etiqueta_codigo}
+                  {codigoAlmacen(it.etiqueta_codigo, guia.almacen_nombre)}
                 </div>
                 <div className="flex-1 border-l border-r border-gray-800 px-3 py-2 text-sm flex items-center">
                   {it.producto_nombre}
@@ -686,7 +686,7 @@ export default function GuiaDetalle() {
                         <td className="py-1 px-1">
                           {it?.etiqueta_codigo && (
                             <span className="font-mono font-bold px-1 mr-1 rounded" style={estiloCodigoImpreso(guia.almacen_nombre)}>
-                              {it.etiqueta_codigo}
+                              {codigoAlmacen(it.etiqueta_codigo, guia.almacen_nombre)}
                             </span>
                           )}
                           {it ? it.producto_nombre : ''}

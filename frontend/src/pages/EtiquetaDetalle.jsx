@@ -4,7 +4,7 @@ import api from '../utils/api'
 import { useAuth } from '../context/AuthContext'
 import CodigoBarras from '../components/CodigoBarras'
 import { colorEtiquetaEstado } from '../utils/etiquetaEstados'
-import { claseCodigoAlmacen, estiloCodigoImpreso } from '../utils/colorAlmacen'
+import { claseCodigoAlmacen, estiloCodigoImpreso, codigoAlmacen } from '../utils/colorAlmacen'
 
 const colorEvento = {
   GENERADA:    'bg-blue-100 text-blue-700',
@@ -98,7 +98,7 @@ export default function EtiquetaDetalle() {
         <div className="flex items-center justify-between mt-2 mb-6">
           <div>
             <h1 className="text-3xl font-bold text-gray-800 font-mono">
-              Codigo <span className={`px-2 rounded ${claseCodigoAlmacen(etiqueta.almacen_nombre)}`}>{etiqueta.codigo}</span>
+              Codigo <span className={`px-2 rounded ${claseCodigoAlmacen(etiqueta.almacen_nombre)}`}>{codigoAlmacen(etiqueta.codigo, etiqueta.almacen_nombre)}</span>
             </h1>
             <p className="text-gray-500 mt-1">
               {etiqueta.producto_nombre} · Guia {etiqueta.numero_guia} · {etiqueta.almacen_nombre}
@@ -221,7 +221,7 @@ export default function EtiquetaDetalle() {
           </div>
           <div className="flex">
             <div className="font-bold text-2xl flex items-center justify-center px-4 min-w-[70px]" style={estiloCodigoImpreso(etiqueta.almacen_nombre)}>
-              {etiqueta.codigo}
+              {codigoAlmacen(etiqueta.codigo, etiqueta.almacen_nombre)}
             </div>
             <div className="flex-1 border-l border-r border-gray-800 px-3 py-2 text-sm flex items-center">
               {etiqueta.producto_nombre}

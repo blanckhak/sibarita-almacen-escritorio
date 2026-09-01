@@ -4,6 +4,7 @@ import api from '../utils/api'
 import { useAuth } from '../context/AuthContext'
 import { MOTIVOS } from '../utils/motivos'
 import { textoStock } from '../utils/stockResumen'
+import { codigoAlmacen, numeroCodigo } from '../utils/colorAlmacen'
 
 const colorEstado = {
   PENDIENTE:     'bg-orange-100 text-orange-700',
@@ -91,7 +92,8 @@ export default function NotasSalida() {
     let cancelado = false
     setBuscando(true)
     const params = { estado: 'EN_ALMACEN' }
-    if (buscarCodigo.trim()) params.codigo = buscarCodigo.trim()
+    // Acepta el codigo con o sin la letra del almacen (M9001 o 9001).
+    if (numeroCodigo(buscarCodigo)) params.codigo = numeroCodigo(buscarCodigo)
     const t = setTimeout(() => {
       api.get('/api/etiquetas', { params })
         .then(({ data }) => { if (!cancelado) setSugerencias(data) })
@@ -115,8 +117,9 @@ export default function NotasSalida() {
     if (!buscarCodigo.trim()) return
     setBuscando(true)
     try {
-      const { data } = await api.get('/api/etiquetas', { params: { codigo: buscarCodigo.trim(), estado: 'EN_ALMACEN' } })
-      const encontrado = data.find(e => String(e.codigo) === buscarCodigo.trim())
+      const numero = numeroCodigo(buscarCodigo)
+      const { data } = await api.get('/api/etiquetas', { params: { codigo: numero, estado: 'EN_ALMACEN' } })
+      const encontrado = data.find(e => String(e.codigo) === numero)
       if (!encontrado) {
         setMensaje({ tipo: 'error', texto: `No se encontro un codigo "${buscarCodigo.trim()}" disponible en almacen` })
         setTimeout(() => setMensaje(null), 3000)
@@ -311,7 +314,7 @@ export default function NotasSalida() {
                     onChange={e => setBuscarCodigo(e.target.value)}
                     onFocus={() => setMostrarSugerencias(true)}
                     onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); buscarYAgregar() } }}
-                    placeholder="Escribe para filtrar, o dejalo vacio para ver todos los codigos disponibles..."
+                    placeholder="Filtra por codigo (con o sin letra: M9001 o 9001), o dejalo vacio para ver todos..."
                     className="flex-1 border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                   <button
@@ -341,7 +344,7 @@ export default function NotasSalida() {
                           onClick={() => agregarEtiqueta(e)}
                           className="w-full grid grid-cols-12 gap-3 items-center px-4 py-2 text-left text-sm hover:bg-blue-50 border-b border-gray-100 last:border-b-0"
                         >
-                          <span className="col-span-2 font-mono font-bold text-gray-800">{e.codigo}</span>
+                          <span className="col-span-2 font-mono font-bold text-gray-800">{codigoAlmacen(e.codigo, e.almacen_nombre)}</span>
                           <span className="col-span-6 text-gray-700 truncate">
                             {e.producto_nombre}
                             {e.condicion === 'USADO' && <span className="ml-1 text-xs text-amber-600 font-medium">(usado)</span>}
@@ -374,7 +377,7 @@ export default function NotasSalida() {
                           : 'bg-gray-50 border-gray-200'
                       }`}
                     >
-                      <div className="col-span-2 font-mono font-bold text-gray-800">{l.etiqueta.codigo}</div>
+                      <div className="col-span-2 font-mono font-bold text-gray-800">{codigoAlmacen(l.etiqueta.codigo, l.etiqueta.almacen_nombre)}</div>
                       <div className="col-span-4 text-sm text-gray-700">
                         {l.etiqueta.producto_nombre}
                         {conflicto === l.etiqueta_id ? (

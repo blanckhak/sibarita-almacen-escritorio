@@ -4,6 +4,7 @@
 //   DEVOLUCIONES - una fila por codigo USADO (nacido de una devolucion usada)
 // Cada salida de un codigo ocupa un par de columnas CANT. | N° GUIA. Se generan
 // tantos pares como tenga la fila con mas salidas (minimo 6, como el talonario).
+import { codigoAlmacen } from './colorAlmacen'
 
 const esc = (s) => String(s ?? '')
   .replace(/&/g, '&amp;')
@@ -78,7 +79,7 @@ export function generarKardexExcel(ingresos = [], devoluciones = []) {
 
   const colsIngreso = ['ITEM', 'UBICAC', 'FECHA', 'N/I', 'O/C N° EXTERNA', 'DOC', 'N°', 'PROVEEDOR', 'DETALLE', 'MAQUINA - MOTIVO', 'UNID MED', 'CANTIDAD', 'INGRESO']
   const mapIngreso = (f) => [
-    celdaTxt(f.item),
+    celdaTxt(codigoAlmacen(f.item, f.almacen)),
     celdaTxt(f.ubicac),
     celdaTxt(fechaCorta(f.fecha)),
     celdaTxt(f.ni),
@@ -95,7 +96,7 @@ export function generarKardexExcel(ingresos = [], devoluciones = []) {
 
   const colsDev = ['ITEM', 'UBIC.', 'DESCRIPCION', 'U.M.', 'STOCK INICIAL', 'INGRESO']
   const mapDev = (f) => [
-    celdaTxt(f.item),
+    celdaTxt(codigoAlmacen(f.item, f.almacen)),
     celdaTxt(f.ubicac),
     celdaTxt(f.detalle),
     celdaTxt(f.unid_med),

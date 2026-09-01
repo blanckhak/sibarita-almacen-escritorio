@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import api from '../utils/api'
 import { exportarCSV, exportarPDF } from '../utils/exportar'
 import { colorEtiquetaEstado } from '../utils/etiquetaEstados'
-import { claseCodigoAlmacen } from '../utils/colorAlmacen'
+import { claseCodigoAlmacen, codigoAlmacen } from '../utils/colorAlmacen'
 
 const colorDestino = {
   ALMACEN:     'bg-blue-100 text-blue-700',
@@ -54,6 +54,12 @@ export default function ConsultaProductos() {
 
   const hayFiltros = filtros.almacen_id || filtros.producto_id || filtros.numero_guia
 
+  // Para exportar: el codigo sale con la letra del almacen (M/J/I), igual que en pantalla.
+  const resultadosExport = resultados.map(r => ({
+    ...r,
+    etiqueta_codigo: codigoAlmacen(r.etiqueta_codigo, r.almacen_nombre),
+  }))
+
   const columnasExport = [
     { titulo: 'N Guia',     campo: 'numero_guia' },
     { titulo: 'Codigo',     campo: 'etiqueta_codigo' },
@@ -74,13 +80,13 @@ export default function ConsultaProductos() {
         </div>
         <div className="flex gap-2">
           <button
-            onClick={() => exportarCSV(resultados, columnasExport, 'consulta_productos')}
+            onClick={() => exportarCSV(resultadosExport, columnasExport, 'consulta_productos')}
             className="bg-green-600 hover:bg-green-700 text-white text-sm px-4 py-2 rounded-lg transition"
           >
             Excel
           </button>
           <button
-            onClick={() => exportarPDF(resultados, columnasExport, 'Consulta de Productos', 'consulta_productos')}
+            onClick={() => exportarPDF(resultadosExport, columnasExport, 'Consulta de Productos', 'consulta_productos')}
             className="bg-red-600 hover:bg-red-700 text-white text-sm px-4 py-2 rounded-lg transition"
           >
             PDF
@@ -142,7 +148,7 @@ export default function ConsultaProductos() {
                   <td className="px-6 py-3 font-semibold text-gray-800">{r.numero_guia}</td>
                   <td className="px-6 py-3 font-mono text-gray-700">
                     {r.etiqueta_id
-                      ? <Link to={`/etiquetas/${r.etiqueta_id}`} className={`hover:underline px-1.5 rounded ${claseCodigoAlmacen(r.almacen_nombre)}`}>{r.etiqueta_codigo}</Link>
+                      ? <Link to={`/etiquetas/${r.etiqueta_id}`} className={`hover:underline px-1.5 rounded ${claseCodigoAlmacen(r.almacen_nombre)}`}>{codigoAlmacen(r.etiqueta_codigo, r.almacen_nombre)}</Link>
                       : '—'}
                   </td>
                   <td className="px-6 py-3 text-gray-700">{r.producto_nombre}</td>

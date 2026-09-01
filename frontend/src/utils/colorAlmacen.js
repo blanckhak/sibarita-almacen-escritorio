@@ -15,6 +15,21 @@ const NEUTRO = { bg: 'bg-gray-200', text: 'text-gray-700', hex: '#e5e7eb', hexTe
 
 export const colorAlmacen = (nombre) => COLOR_ALMACEN[nombre] || NEUTRO
 
+// Letra del almacen que se antepone al numero del codigo (pedido del cliente):
+// MALSA -> M, JOPISA -> J, INDELPAS -> I. Otro almacen: sin letra.
+export const LETRA_ALMACEN = { MALSA: 'M', JOPISA: 'J', INDELPAS: 'I' }
+export const letraAlmacen = (nombre) => LETRA_ALMACEN[nombre] || ''
+
+// Codigo visible = letra del almacen + numero. Ej: 9001 en MALSA -> "M9001".
+// El numero real (y el codigo de barras) no cambia; esto es solo para mostrar.
+export const codigoAlmacen = (codigo, nombre) =>
+  codigo == null || codigo === '' ? '' : `${letraAlmacen(nombre)}${codigo}`
+
+// Inverso: saca la letra del almacen y deja solo el numero. Sirve para buscar
+// o confirmar por el codigo tal como se ve ("M9001" o "9001" -> "9001").
+export const numeroCodigo = (valor) =>
+  String(valor ?? '').trim().replace(/^[A-Za-z]+/, '')
+
 // Clases Tailwind (fondo + texto) para un chip del codigo en pantalla. Una
 // sola llamada, para no repetir el lookup en cada className.
 export const claseCodigoAlmacen = (nombre) => {
