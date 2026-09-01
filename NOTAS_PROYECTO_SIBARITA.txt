@@ -1492,6 +1492,14 @@ commiteados en master):
   siguen siendo el entero puro. La busqueda de codigo en Nueva Salida y la
   confirmacion del panel de devolucion aceptan el codigo con o sin letra.
   Sin cambios de esquema. Evidencia en captura/colores_preview/12..15.
+- 915731d  KARDEX EXCEL: UNA HOJA POR ALMACEN. Antes 2 hojas (INGRESOS /
+  DEVOLUCIONES); ahora una pestaña por almacen (MALSA, JOPISA, INDELPAS),
+  cada una con el kardex completo de ese almacen: una fila por codigo
+  (ingresos + devoluciones juntos, columna TIPO los separa) + salidas en
+  pares CANT.|N° GUIA + TTL/S + SALDO. Las 3 hojas salen siempre; otros
+  almacenes que aparezcan se agregan al final. Solo cambia
+  frontend/src/utils/kardexExcel.js y el texto de la tarjeta en
+  Reportes.jsx. Archivo: Kardex_almacenes_<fecha>.xls.
 
 QUE QUEDA PENDIENTE (revision del proyecto, 31/08):
 - Fase 1 - Calibracion de impresion matricial (Bloque 2 "6 lineas" +
