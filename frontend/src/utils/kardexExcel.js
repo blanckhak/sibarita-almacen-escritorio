@@ -1,10 +1,14 @@
-// Genera el kardex tipo "MALSA.xlsx" como archivo SpreadsheetML 2003: un solo
-// XML que Excel abre nativamente, sin librerias extra. Dos hojas:
-//   INGRESOS     - una fila por codigo NUEVO, con su ingreso y sus salidas
-//   DEVOLUCIONES - una fila por codigo USADO (nacido de una devolucion usada)
-// Cada salida de un codigo ocupa un par de columnas CANT. | N° GUIA. Se generan
-// tantos pares como tenga la fila con mas salidas (minimo 6, como el talonario).
+// Genera el kardex como archivo SpreadsheetML 2003: un solo XML que Excel abre
+// nativamente, sin librerias extra. UNA HOJA POR ALMACEN (MALSA, JOPISA,
+// INDELPAS): cada pestaña es el kardex completo de ese almacen, con una fila
+// por codigo (ingresos y devoluciones juntos, la columna TIPO los distingue) y
+// sus salidas en pares CANT. | N° GUIA. Se generan tantos pares como tenga la
+// fila con mas salidas (minimo 6, como el talonario).
 import { codigoAlmacen } from './colorAlmacen'
+
+// Orden fijo de las pestañas; cualquier otro almacen que aparezca en los datos
+// se agrega despues, alfabetico.
+const ALMACENES_ORDEN = ['MALSA', 'JOPISA', 'INDELPAS']
 
 const esc = (s) => String(s ?? '')
   .replace(/&/g, '&amp;')
@@ -37,13 +41,31 @@ const fechaCorta = (f) => {
 
 const sumaSalidas = (salidas) => (salidas || []).reduce((s, x) => s + (Number(x.cant) || 0), 0)
 
-// Construye una hoja. `columnas` son los encabezados fijos (antes de los pares
-// de salida); `valores(fila)` devuelve el arreglo de celdas fijas ya envueltas.
-function construirHoja(nombre, titulo, subtitulo, columnasFijas, filas, mapFija) {
+const COLUMNAS = ['ITEM', 'UBICAC', 'FECHA', 'N/I', 'O/C N° EXTERNA', 'DOC', 'N°', 'PROVEEDOR', 'DETALLE', 'MAQUINA - MOTIVO', 'UNID MED', 'TIPO', 'CANTIDAD', 'INGRESO']
+
+const mapFila = (f) => [
+  celdaTxt(codigoAlmacen(f.item, f.almacen)),
+  celdaTxt(f.ubicac),
+  celdaTxt(fechaCorta(f.fecha)),
+  celdaTxt(f.ni),
+  celdaTxt(f.oc_externa),
+  celdaTxt(f.doc),
+  celdaTxt(f.nro_doc),
+  celdaTxt(f.proveedor),
+  celdaTxt(f.estado_guia === 'ANULADA' ? `ANULADA - ${f.detalle || ''}` : f.detalle),
+  celdaTxt(f.motivo),
+  celdaTxt(f.unid_med),
+  celdaTxt(f.tipo),
+  celdaNum(f.cantidad),
+  celdaNum(f.cantidad),
+]
+
+// Una hoja = un almacen. `filas` ya viene filtrada para ese almacen.
+function construirHoja(nombreHoja, titulo, subtitulo, filas) {
   const maxSalidas = Math.max(6, ...filas.map(f => (f.salidas || []).length))
   const pares = []
   for (let i = 1; i <= maxSalidas; i++) pares.push('CANT.', `N° GUIA ${i}`)
-  const encabezados = [...columnasFijas, ...pares, 'TTL / S', 'SALDO']
+  const encabezados = [...COLUMNAS, ...pares, 'TTL / S', 'SALDO']
   const totalCols = encabezados.length
 
   const filaTitulo = filaXml([celdaTxt(titulo, 'sTitulo')])
@@ -52,8 +74,7 @@ function construirHoja(nombre, titulo, subtitulo, columnasFijas, filas, mapFija)
   const filaHead = filaXml(encabezados.map(h => celdaTxt(h, 'sHead')))
 
   const filasDatos = filas.map(f => {
-    const fijas = mapFija(f)
-    const celdas = [...fijas]
+    const celdas = [...mapFila(f)]
     const salidas = f.salidas || []
     for (let i = 0; i < maxSalidas; i++) {
       const s = salidas[i]
@@ -67,7 +88,7 @@ function construirHoja(nombre, titulo, subtitulo, columnasFijas, filas, mapFija)
     return filaXml(celdas)
   })
 
-  return `<Worksheet ss:Name="${esc(nombre)}"><Table>` +
+  return `<Worksheet ss:Name="${esc(nombreHoja)}"><Table>` +
     `<Column ss:Width="70"/>`.repeat(totalCols) +
     filaTitulo + filaVacia + filaSub + filaHead + filasDatos.join('') +
     `</Table></Worksheet>`
@@ -77,32 +98,21 @@ export function generarKardexExcel(ingresos = [], devoluciones = []) {
   const hoy = new Date()
   const periodo = `${String(hoy.getDate()).padStart(2, '0')}.${String(hoy.getMonth() + 1).padStart(2, '0')}.${String(hoy.getFullYear()).slice(2)}`
 
-  const colsIngreso = ['ITEM', 'UBICAC', 'FECHA', 'N/I', 'O/C N° EXTERNA', 'DOC', 'N°', 'PROVEEDOR', 'DETALLE', 'MAQUINA - MOTIVO', 'UNID MED', 'CANTIDAD', 'INGRESO']
-  const mapIngreso = (f) => [
-    celdaTxt(codigoAlmacen(f.item, f.almacen)),
-    celdaTxt(f.ubicac),
-    celdaTxt(fechaCorta(f.fecha)),
-    celdaTxt(f.ni),
-    celdaTxt(f.oc_externa),
-    celdaTxt(f.doc),
-    celdaTxt(f.nro_doc),
-    celdaTxt(f.proveedor),
-    celdaTxt(f.estado_guia === 'ANULADA' ? `ANULADA - ${f.detalle || ''}` : f.detalle),
-    celdaTxt(f.motivo),
-    celdaTxt(f.unid_med),
-    celdaNum(f.cantidad),
-    celdaNum(f.cantidad),
+  // Ingresos y devoluciones en una sola lista, marcadas con TIPO.
+  const todas = [
+    ...ingresos.map(f => ({ ...f, tipo: 'INGRESO' })),
+    ...devoluciones.map(f => ({ ...f, tipo: 'DEVOLUCION' })),
   ]
 
-  const colsDev = ['ITEM', 'UBIC.', 'DESCRIPCION', 'U.M.', 'STOCK INICIAL', 'INGRESO']
-  const mapDev = (f) => [
-    celdaTxt(codigoAlmacen(f.item, f.almacen)),
-    celdaTxt(f.ubicac),
-    celdaTxt(f.detalle),
-    celdaTxt(f.unid_med),
-    celdaNum(f.cantidad),
-    celdaNum(f.cantidad),
-  ]
+  // Nombres de almacen: primero el orden fijo, despues cualquier otro presente.
+  const presentes = [...new Set(todas.map(f => f.almacen).filter(Boolean))]
+  const extras = presentes.filter(n => !ALMACENES_ORDEN.includes(n)).sort()
+  const hojas = [...ALMACENES_ORDEN, ...extras]
+
+  const worksheets = hojas.map(nombre => {
+    const filas = todas.filter(f => f.almacen === nombre)
+    return construirHoja(nombre, `INVENTARIO DE REPUESTO - ${nombre}`, `PERIODO AL ${periodo}`, filas)
+  }).join('')
 
   const xml =
     '<?xml version="1.0"?>\n' +
@@ -115,15 +125,14 @@ export function generarKardexExcel(ingresos = [], devoluciones = []) {
       '<Style ss:ID="sHead"><Font ss:Bold="1"/><Interior ss:Color="#D9D9D9" ss:Pattern="Solid"/>' +
         '<Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>' +
     '</Styles>' +
-    construirHoja('INGRESOS', 'INVENTARIO DE REPUESTO', `PERIODO AL ${periodo}`, colsIngreso, ingresos, mapIngreso) +
-    construirHoja('DEVOLUCIONES', 'DETALLE DE INVENTARIO', `SEMANAL AL ${periodo}`, colsDev, devoluciones, mapDev) +
+    worksheets +
     '</Workbook>'
 
   const blob = new Blob(['﻿' + xml], { type: 'application/vnd.ms-excel' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `Kardex_MALSA_${hoy.toISOString().slice(0, 10)}.xls`
+  a.download = `Kardex_almacenes_${hoy.toISOString().slice(0, 10)}.xls`
   document.body.appendChild(a)
   a.click()
   document.body.removeChild(a)

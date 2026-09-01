@@ -110,18 +110,18 @@ export default function Reportes() {
       {/* Tarjetas de reporte */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-6 mb-10">
 
-        {/* Kardex tipo MALSA (Excel de 2 hojas: INGRESOS y DEVOLUCIONES) */}
+        {/* Kardex (Excel): una hoja por almacen (MALSA, JOPISA, INDELPAS) */}
         <div className="bg-white rounded-xl shadow p-6 border border-gray-100">
           <div className="flex items-center gap-3 mb-3">
             <div className="bg-emerald-100 text-emerald-700 p-2 rounded-lg text-xl">📑</div>
             <div>
               <h3 className="font-semibold text-gray-800">Kardex (Excel)</h3>
               <p className="text-xs text-gray-400">
-                {kardex ? `${kardexIngresos} ingresos · ${kardexDevol} devoluciones` : 'Se arma al descargar'}
+                {kardex ? `${kardexIngresos + kardexDevol} codigos en 3 hojas` : 'Se arma al descargar'}
               </p>
             </div>
           </div>
-          <p className="text-sm text-gray-500 mb-4">Formato MALSA: una fila por codigo con su ingreso y sus salidas por guia.</p>
+          <p className="text-sm text-gray-500 mb-4">Una pestaña por almacen (MALSA, JOPISA, INDELPAS): una fila por codigo con su ingreso y sus salidas por guia.</p>
           <div className="flex gap-2">
             <button
               onClick={descargarKardex}
