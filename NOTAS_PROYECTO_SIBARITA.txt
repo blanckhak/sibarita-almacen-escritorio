@@ -1475,6 +1475,24 @@ commiteados en master):
   Evidencia en captura/colores_preview/ (incluye Kardex_MALSA_test.xls).
   NOTA: el .exe NO se regenero en esta tanda.
 
+- f663c61  almacenes_nombre_unique: indice unico idempotente en
+  lower(nombre) para que correr por error el seed de almacenes no vuelva a
+  duplicar MALSA/JOPISA/INDELPAS. (Se colaron 6 duplicados en sibarita_db
+  al correr database.sql -que trae \c sibarita_db- contra una copia; se
+  borraron a mano los ids 4-9, sin referencias.)
+- 2a7dce5  CODIGO CON LETRA DEL ALMACEN: el numero del codigo se muestra
+  con la inicial del almacen adelante -> MALSA "M9001", JOPISA "J9001",
+  INDELPAS "I9001". Helper codigoAlmacen(codigo, nombre) en
+  colorAlmacen.js; el inverso numeroCodigo() saca la letra. Aplicado en
+  pantalla (Consulta de Productos, Guia, Nota de Salida, EtiquetaDetalle,
+  picker de la nueva salida), en lo impreso (banda de la etiqueta + chip
+  del codigo en la columna DETALLE de la Nota de Ingreso y de Salida), en
+  el export CSV/PDF de Consulta y en la columna ITEM del Kardex Excel
+  (igual que MALSA.xlsx). EL NUMERO REAL Y EL CODIGO DE BARRAS NO CAMBIAN:
+  siguen siendo el entero puro. La busqueda de codigo en Nueva Salida y la
+  confirmacion del panel de devolucion aceptan el codigo con o sin letra.
+  Sin cambios de esquema. Evidencia en captura/colores_preview/12..15.
+
 QUE QUEDA PENDIENTE (revision del proyecto, 31/08):
 - Fase 1 - Calibracion de impresion matricial (Bloque 2 "6 lineas" +
   Bloque 6 impresora Epson FX-890 II): BLOQUEADA esperando que el usuario
