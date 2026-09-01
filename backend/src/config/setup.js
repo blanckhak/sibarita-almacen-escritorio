@@ -17,6 +17,15 @@ async function setup() {
       creado_en TIMESTAMP DEFAULT NOW()
     );
 
+    -- El nombre de almacen es unico: sin esto, correr por error el seed de
+    -- almacenes dos veces duplica MALSA/JOPISA/INDELPAS. Si ya hay duplicados
+    -- el indice no se crea y solo se avisa (hay que limpiarlos a mano).
+    DO $mig$ BEGIN
+      CREATE UNIQUE INDEX IF NOT EXISTS almacenes_nombre_unique ON almacenes (lower(nombre));
+    EXCEPTION WHEN unique_violation THEN
+      RAISE NOTICE 'almacenes_nombre_unique no creado: hay nombres de almacen duplicados';
+    END $mig$;
+
     CREATE TABLE IF NOT EXISTS usuarios (
       id SERIAL PRIMARY KEY,
       nombre VARCHAR(100) NOT NULL,
