@@ -1,0 +1,99 @@
+GUIA: QUE DEBE TENER Y COMO DEBE ESTAR LA PC DEDICADA (SERVIDOR)
+===========================================================================
+Para quien va a preparar la PC que va a hacer de servidor de Sibarita en
+la red (Opcion 1: los demas usuarios entran por navegador).
+
+---------------------------------------------------------------------------
+1) ¿DEBE ESTAR PRENDIDA 24/7?
+---------------------------------------------------------------------------
+No es obligatorio, pero SI debe estar prendida (y con el backend corriendo)
+durante TODO el horario en que alguien pueda necesitar entrar. Si se apaga
+o se suspende, nadie puede usar la app hasta que se vuelva a prender.
+
+- Si el uso es en horario fijo (ej. de 8am a 6pm, todos los dias): alcanza
+  con que este prendida en ese rango. Se puede apagar fuera de ese horario.
+- Si hay turnos variados o no se sabe cuando va a entrar cada quien: lo
+  mas simple y sin dolores de cabeza es dejarla prendida 24/7, con la
+  suspension/hibernacion desactivada. Es una PC de escritorio comun, el
+  consumo de dejarla encendida es bajo.
+- En cualquier caso, DESACTIVAR la suspension automatica de Windows
+  (Configuracion > Sistema > Energia y bateria > Pantalla y suspension ->
+  "Nunca" mientras este conectada a la corriente) para que no se corte el
+  servicio sola a media tarde.
+- Windows Update puede reiniciar la PC solo si hay actualizaciones
+  pendientes -> conviene configurar el horario activo de Windows Update
+  para que no reinicie en horas de uso, y revisar de vez en cuando que el
+  backend siga corriendo despues de un reinicio (ver punto 5).
+
+---------------------------------------------------------------------------
+2) QUE SOFTWARE DEBE TENER INSTALADO
+---------------------------------------------------------------------------
+- Windows 10 o 11, 64 bits (el instalador de Sibarita solo genera .exe
+  para Windows).
+- PostgreSQL (la misma version que se usa en desarrollo). La base de datos
+  vive AQUI, en esta misma PC - no en la nube ni en otro equipo.
+- El instalador de Sibarita (Sibarita Setup X.X.X.exe) instalado en esta
+  PC. Internamente ya trae el backend (Node/Express) y la app de
+  escritorio (Electron) - no hace falta instalar Node por separado.
+- Node NO hace falta instalarlo aparte si se usa el .exe (va incluido).
+  Si en algun momento se corre el backend "a mano" con
+  "node backend/server.js" (para dejarlo corriendo sin la ventana de
+  Electron), ahi si se necesita Node.js instalado, o usar el que trae
+  empaquetado electron (ver npm start en la raiz del proyecto).
+
+---------------------------------------------------------------------------
+3) RED / FIREWALL
+---------------------------------------------------------------------------
+- IP fija o reserva DHCP en el router, para que la direccion no cambie
+  (si cambia, hay que avisarle la nueva IP a todos los usuarios). Se
+  configura en el router o en las propiedades de red de Windows.
+- Puerto 3000 abierto en el Firewall de Windows, SOLO para redes
+  privadas/de dominio (no publicas). Ver script
+  ..\abrir_firewall_puerto_3000.ps1 (correr como administrador).
+- Puerto 5432 (Postgres) NO debe exponerse a la red - debe seguir
+  aceptando conexiones solo desde localhost (esta misma PC). Nadie mas
+  necesita hablarle directo a la base de datos.
+- Ver la IP actual con ..\ver_ip_local.ps1.
+
+---------------------------------------------------------------------------
+4) SEGURIDAD MINIMA ANTES DE USARLO CON GENTE REAL (no solo pruebas propias)
+---------------------------------------------------------------------------
+- Cambiar JWT_SECRET en backend\.env - hoy tiene un valor generico
+  (***REDACTADO***), no usarlo tal cual con datos reales.
+- Revisar que backend\.env no se distribuya ni se suba a ningun lado (ya
+  esta en .gitignore, pero verificar igual).
+- Crear un usuario por persona con su propio rol (admin / almacen /
+  compras / mantenimiento) en vez de compartir una sola cuenta - asi
+  queda registro de quien hizo que (los logs del sistema usan el usuario
+  logueado).
+- Contraseñas de Postgres y del/los usuario(s) admin de Sibarita: que no
+  sean triviales.
+- La pantalla de Login (frontend/src/pages/Login.jsx) trae botones de
+  acceso rapido con credenciales de demo visibles (admin@sibarita.com /
+  admin123, y similares para almacen/compras/mantenimiento). Sirven para
+  probar, pero antes de usar la app con datos y usuarios REALES conviene
+  quitar esos botones (o al menos cambiar esas contraseñas) para que
+  cualquiera que abra la pagina no pueda entrar como admin con un clic.
+
+---------------------------------------------------------------------------
+5) DEJAR EL BACKEND CORRIENDO DE FORMA ESTABLE
+---------------------------------------------------------------------------
+- Para pruebas cortas: abrir la app Sibarita normal y dejar la ventana
+  abierta.
+- Para uso mas prolongado (dias/semanas): mejor correr solo el backend
+  (sin la ventana de Electron) y dejarlo en una consola PowerShell
+  minimizada, o configurarlo como TAREA PROGRAMADA de Windows que arranque
+  "node backend/server.js" al iniciar sesion / al prender la PC, para que
+  se levante solo si hay un reinicio o corte de luz. (No incluido como
+  script en esta carpeta todavia - es un paso para cuando se pase de
+  "pruebas" a "uso real".)
+
+---------------------------------------------------------------------------
+6) RESPALDOS
+---------------------------------------------------------------------------
+- Ya existe scripts\backup-db.ps1 en la raiz del proyecto para respaldar
+  la base de datos. Como ahora esta PC concentra el UNICO ejemplar de los
+  datos de todos los almacenes, conviene correrlo con mas frecuencia (o
+  programarlo) que cuando la app corria solo localmente para pruebas.
+
+FIN

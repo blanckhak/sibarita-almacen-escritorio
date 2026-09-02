@@ -1,0 +1,198 @@
+{
+  "main": {
+    "id": "05668776c79dfa84",
+    "type": "split",
+    "children": [
+      {
+        "id": "ebdb685eadee5692",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "27f652ac22f2bb40",
+            "type": "leaf",
+            "state": {
+              "type": "graph",
+              "state": {},
+              "icon": "lucide-git-fork",
+              "title": "Vista gráfica"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "700eb249fc23c736",
+    "type": "split",
+    "children": [
+      {
+        "id": "e1558cee704c09e2",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "2cfacab796e2ae52",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Explorador de archivos"
+            }
+          },
+          {
+            "id": "909e6d3744eb189e",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Buscar"
+            }
+          },
+          {
+            "id": "1910d20290b4cee0",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-bookmark",
+              "title": "Marcadores"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "f3457bb3f5d9c3a4",
+    "type": "split",
+    "children": [
+      {
+        "id": "78dd7e6ab198fba7",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "5ae498a095ca4e02",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Enlaces entrantes"
+            }
+          },
+          {
+            "id": "9285a43ee16b6a67",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Enlaces salientes"
+            }
+          },
+          {
+            "id": "5668e677695dde9d",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Etiquetas"
+            }
+          },
+          {
+            "id": "123a51fd16c76ed7",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "Todas las propiedades"
+            }
+          },
+          {
+            "id": "ee2f509666b26a14",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Esquema"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Abrir selector rápido": false,
+      "graph:Abrir vista gráfica": false,
+      "canvas:Crear nuevo lienzo": false,
+      "daily-notes:Abrir la nota de hoy": false,
+      "templates:Insertar plantilla": false,
+      "command-palette:Abrir paleta de comandos": false,
+      "bases:Crear nueva base": false
+    }
+  },
+  "active": "27f652ac22f2bb40",
+  "lastOpenFiles": [
+    "dist/Sibarita Setup 1.1.0.exe.blockmap",
+    "dist/__uninstaller-nsis-sibarita-escritorio.exe",
+    "dist/Sibarita Setup 1.1.0.exe",
+    "dist/sibarita-escritorio-1.1.0-x64.nsis.7z",
+    "dist/win-unpacked/resources/elevate.exe",
+    "dist/win-unpacked/RCXED1B.tmp",
+    "dist/win-unpacked/Sibarita.exe",
+    "dist/win-unpacked/resources/app.asar",
+    "dist/win-unpacked/resources",
+    "dist/win-unpacked/LICENSE.electron.txt",
+    "dist/win-unpacked/electron.exe",
+    "node_modules/bl/LICENSE.md"
+  ]
+}

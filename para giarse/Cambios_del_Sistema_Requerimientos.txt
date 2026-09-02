@@ -1,0 +1,64 @@
+================================================================================
+           ESPECIFICACIÓN DE CAMBIOS Y REQUERIMIENTOS DEL SISTEMA
+================================================================================
+
+1. MÓDULO DE PROVEEDORES Y ORDEN DE COMPRA (O/C)
+--------------------------------------------------------------------------------
+- Proveedor no fijo (50/50 / Pueden variar).
+- Habilitar botón/opción para activar Orden de Compra cuando no la tenga (usarlo según se requiera).
+- Mantener registro / pista de la Orden de Compra.
+
+2. GESTIÓN DE GUÍAS (INGRESO Y SALIDA)
+--------------------------------------------------------------------------------
+- La guía debe permitir edición para pasar datos de la Orden de Compra y dirección.
+- Tipos de métrica:
+  * ENTERO: Debe permitir regresar / devolver la misma cantidad.
+  * EN PARTIDA: Abrir campos para rellenar datos al ingresar un producto.
+- Edición de guías:
+  * Si la guía ya no se edita, permitir modificar únicamente la cantidad y su orden.
+- Módulos de visualización y formatos:
+  * Ingreso de guías: Solo ver cargadas -> guías con estados.
+  * Formato de guías: Definir formato de 6 líneas para guías y salidas.
+  * Relación de salida: Vincular en la Nota de Salida el número de guía correspondiente para visualizar lo emitido.
+
+3. MOTIVOS, STOCKS Y CÓDIGOS DE PRODUCTO
+--------------------------------------------------------------------------------
+- Agregar "Motivo de salida" a la tabla.
+- Generar stock consolidado en la sección / campo "Motivo".
+- Generación de código nuevo:
+  * Asignar un código nuevo en "Nombre usado" / Nombre de producto.
+  * Stock considerado: Evaluar parámetros a 10 días, el total y remanentes.
+
+4. DEVOLUCIONES Y PRODUCTOS USADOS
+--------------------------------------------------------------------------------
+- Proceso de devolución (cuando llegan a Mesa):
+  * Permitir ingreso de devolución por unidad y asignación de estado ("Usado" / "Está usada").
+  * Generar un código nuevo específico para el ítem devuelto.
+  * Manejo en plataforma: Registro de Código de uso -> Usado / Cambio de uso.
+  * Imprimir comprobante / Nota de devolución.
+
+5. DESTINOS, ÁREAS Y COMPRAS DIARIAS
+--------------------------------------------------------------------------------
+- Campo Destino / Área: Agregar opción para escribir "Otro".
+- Compras diarias: Registrar asociando Oficina y Solicitud correspondiente.
+
+6. PROCESOS EN SEGUNDO PLANO Y CONTROL DE IMPRESIÓN
+--------------------------------------------------------------------------------
+- Solicitud de materiales (en la misma red): Ejecutar/dejar en segundo plano.
+- Servicios de modificación: Sin salida de stock.
+- Servicios de limpieza: Al firmar la guía, procesar en segundo plano.
+- Configuración de impresora (Epson FX-890 II):
+  * Imprimir comprobantes de Ingreso.
+  * Imprimir documentos de Salida e Ingreso.
+  * Imprimir Nota de Devolución.
+
+7. SALIDAS DE INVENTARIO, RED Y VALIDACIONES DE CONTROL
+--------------------------------------------------------------------------------
+- En la Orden de Salida: Mostrar visualmente cuánto stock queda en inventario.
+- Manejo de contingencia por pérdida de red:
+  * Si el sistema se queda sin red (se queda a la mitad), sincronizar automáticamente al retornar la conexión y reflejar los cambios en el perfil correspondiente.
+- Control de duplicidad / conflicto:
+  * Implementar alerta / aviso para verificar que los productos no se crucen durante la operación.
+- Pestaña de alcance / ventana: Mantener flujo de Ingreso Normal.
+
+================================================================================

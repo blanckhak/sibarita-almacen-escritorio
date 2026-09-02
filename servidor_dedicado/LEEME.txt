@@ -1,0 +1,60 @@
+SIBARITA COMO SERVIDOR DEDICADO - OPCION 1 (SOLO NAVEGADOR)
+===========================================================================
+Esta carpeta es para cuando uses TU PC como la "PC dedicada" (servidor)
+para que otros equipos de la red entren por navegador a Sibarita, sin
+instalar nada en esos otros equipos. Ver tambien IDEAS_ARQUITECTURA_RED.txt
+(en esta misma carpeta) para el resumen completo de opciones.
+
+No hace falta programar nada nuevo: el backend ya sirve el frontend por
+HTTP y ya escucha en todas las interfaces de red (app.listen(PORT) en
+backend/server.js, sin restringir a localhost). Solo falta la parte de
+"dejarlo accesible" en la red: firewall + saber tu IP.
+
+---------------------------------------------------------------------------
+PASOS PARA DEJAR TU PC COMO SERVIDOR
+---------------------------------------------------------------------------
+1) Que Postgres este corriendo en tu PC (ya lo tienes para desarrollo).
+
+2) Levantar el backend para que quede escuchando en la red:
+   - Opcion rapida (para pruebas): abrir la app Sibarita normal
+     (npm start en la raiz del proyecto, o el .exe instalado) y dejarla
+     abierta. Mientras esa ventana este abierta, el backend en :3000 esta
+     accesible desde la red.
+   - Opcion mas estable (si vas a dejarlo varias horas/dias): correr solo
+     el backend con "node backend/server.js" en una consola aparte y
+     dejarla abierta, sin necesidad de la ventana de Electron.
+
+3) Abrir el puerto 3000 en el Firewall de Windows para que la LAN pueda
+   entrar. Correr abrir_firewall_puerto_3000.ps1 (clic derecho ->
+   "Ejecutar con PowerShell" COMO ADMINISTRADOR, o desde una consola
+   PowerShell abierta como administrador). Sin esto, las otras PCs no van
+   a poder conectarse aunque el backend este corriendo.
+
+4) Averiguar tu IP local para pasarsela a los demas usuarios: correr
+   ver_ip_local.ps1 (no necesita administrador). Va a mostrar algo como
+   192.168.1.XX - esa es la direccion que los demas usan.
+
+5) En cada PC de usuario (Windows, Mac, Linux, tablet - cualquiera con
+   navegador), entrar a:
+       http://<TU-IP>:3000
+   Ejemplo: http://192.168.1.45:3000
+
+---------------------------------------------------------------------------
+NOTAS / COSAS A REVISAR ANTES DE USARLO CON GENTE REAL (no solo pruebas)
+---------------------------------------------------------------------------
+- Mientras sea SOLO PARA TUS PRUEBAS (tu haciendo pruebas vos mismo, o con
+  1-2 personas de confianza en la misma red), esto ya alcanza tal cual
+  esta.
+- Si mas adelante se vuelve el servidor "real" para el dia a dia:
+  * Que tu PC no se suspenda / apague durante el horario de uso.
+  * Idealmente, IP fija o reserva DHCP (si la IP cambia, hay que avisar
+    la nueva a todos).
+  * Cambiar JWT_SECRET en backend/.env (hoy es un valor generico) antes de
+    que gente real inicie sesion con datos reales.
+  * Considerar correr el backend como servicio de Windows (no depender de
+    que tu sesion de Windows quede abierta) - no incluido en esta carpeta,
+    es un paso aparte si se llega a esa etapa.
+- El puerto 5432 (Postgres) NO se abre a la red con estos scripts, y no
+  deberia abrirse: solo el 3000 (la app) necesita ser visible en la LAN.
+
+FIN

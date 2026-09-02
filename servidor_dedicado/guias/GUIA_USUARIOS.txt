@@ -1,0 +1,65 @@
+GUIA: COMO USAN SIBARITA LOS USUARIOS (PCs QUE NO SON LA DEDICADA)
+===========================================================================
+Para las personas que van a usar Sibarita desde su propia PC, celular o
+tablet, conectandose a la PC dedicada por la red. NO necesitan instalar
+nada.
+
+---------------------------------------------------------------------------
+1) QUE NECESITAN
+---------------------------------------------------------------------------
+- Estar conectados a la MISMA red (WiFi o cable) que la PC dedicada.
+- Un navegador (Chrome, Edge, Firefox - cualquiera sirve).
+- La direccion (IP) de la PC dedicada, que se las da la persona a cargo
+  (ej. 192.168.1.45). Esa IP se obtiene en la PC dedicada con el script
+  ..\ver_ip_local.ps1.
+- Su usuario y contraseña de Sibarita (se los crea el administrador desde
+  el modulo Usuarios).
+
+---------------------------------------------------------------------------
+2) COMO ENTRAR
+---------------------------------------------------------------------------
+1. Abrir el navegador.
+2. Escribir en la barra de direcciones:
+       http://<IP-de-la-PC-dedicada>:3000
+   Ejemplo:  http://192.168.1.45:3000
+   (Importante: NO es una pagina de internet, es una direccion de la red
+   local - no va a funcionar si no estan conectados a esa misma red.)
+3. Va a aparecer la pantalla de Login de Sibarita. Ingresar el correo y
+   la contraseña que les dio el administrador.
+4. Despues de iniciar sesion, cada quien ve solo lo que le corresponde
+   segun su rol (Almacen, Mantenimiento, Compras, Admin, etc.) y, si
+   aplica, su almacen asignado.
+
+CONSEJO: guardar esa direccion en Favoritos/Marcadores del navegador para
+no tener que escribirla cada vez. En el celular, se puede "Agregar a
+pantalla de inicio" desde el menu del navegador para que quede como un
+icono, casi como una app.
+
+---------------------------------------------------------------------------
+3) SI NO CARGA LA PAGINA
+---------------------------------------------------------------------------
+Revisar en este orden:
+1. ¿Estan conectados a la misma red (WiFi/cable) que la PC dedicada? Si
+   estan en datos moviles o en otra red, no va a funcionar.
+2. ¿La PC dedicada esta prendida y con Sibarita corriendo? Si esta
+   apagada o suspendida, nadie puede entrar.
+3. ¿La IP sigue siendo la misma? Si la PC dedicada se reinicio o cambio de
+   red, la IP puede haber cambiado - pedirle al administrador que la
+   confirme de nuevo con ver_ip_local.ps1.
+4. Si nada de eso resuelve, avisar al administrador de la PC dedicada
+   (puede ser el Firewall bloqueando, o el backend que no quedo
+   corriendo).
+
+---------------------------------------------------------------------------
+4) DUDAS FRECUENTES
+---------------------------------------------------------------------------
+- "¿Tengo que instalar algo?" No, solo el navegador que ya tienen.
+- "¿Funciona en celular?" Si, mientras este conectado a la misma red WiFi
+  que la PC dedicada.
+- "¿Puedo entrar desde mi casa?" No, solo funciona dentro de la misma red
+  local (LAN) donde esta la PC dedicada, salvo que en el futuro se
+  configure acceso remoto (no esta configurado hoy).
+- "¿Los datos que veo son en tiempo real?" Si, todos los usuarios ven la
+  misma base de datos en la PC dedicada - no hay que sincronizar nada.
+
+FIN

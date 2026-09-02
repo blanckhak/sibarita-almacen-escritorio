@@ -1,0 +1,124 @@
+IDEAS: ARQUITECTURA DE RED PARA SIBARITA (1 PC DEDICADA + VARIOS USUARIOS)
+===========================================================================
+Fecha: 01/09/2026
+Contexto: se iba a regenerar el instalador .exe con los ultimos cambios
+(previsualizacion en Etiqueta individual y Compra Diaria) cuando surgio la
+duda de como desplegar la app para que varios equipos de la red la usen,
+con una PC dedicada que tendria la app y/o la base de datos.
+
+ESTO ES SOLO IDEAS / DISCUSION, TODAVIA NO SE IMPLEMENTO NADA DE ESTO.
+El instalador .exe de esta sesion se quedo a medio regenerar (frontend
+reconstruido en local, pero NO se corrio electron-builder ni se toco
+package.json) hasta que se decida la arquitectura.
+
+---------------------------------------------------------------------------
+1) COMO FUNCIONA HOY (antes de tocar nada)
+---------------------------------------------------------------------------
+- El .exe es autocontenido: cada PC donde se instala levanta SU PROPIO
+  backend local (main.js hace spawn de backend/server.js, Electron carga
+  http://localhost:3000 - ver main.js linea 13 APP_URL).
+- Ese backend se conecta a Postgres usando backend/.env (DB_HOST=localhost
+  por defecto). O sea: si se instala el mismo .exe en varias PCs, cada una
+  buscaria Postgres EN SI MISMA -> no comparten datos entre si.
+- RIESGO ENCONTRADO: backend/.env tiene la contraseña real de Postgres
+  (DB_PASSWORD=***REDACTADO***) y JWT_SECRET generico
+  (***REDACTADO***) en texto plano. El package.json actual
+  empaqueta "backend/**/*" SIN excluir .env -> el instalador de hoy
+  metería esa contraseña real dentro del .exe. Pendiente excluir .env del
+  "files" de electron-builder antes de distribuir el instalador fuera de
+  la PC de desarrollo.
+
+---------------------------------------------------------------------------
+2) BUENA NOTICIA: LOS ROLES POR USUARIO/ALMACEN YA EXISTEN EN EL CODIGO
+---------------------------------------------------------------------------
+No hace falta programar nada nuevo para "3 usuarios pero pueden entrar mas,
+por almacen 1, almacen 2, mantenimiento, etc":
+- Roles ya definidos: admin, almacen, compras, mantenimiento
+  (backend/src/config/setup.js siembra la tabla roles; soloRoles(...) en
+  backend/src/middlewares/authMiddleware.js filtra cada ruta por rol).
+- Tabla usuarios ya tiene rol_id + almacen_id (opcional) por persona
+  (backend/src/routes/usuarios.js). Cada usuario tiene su propio login;
+  el sistema ya filtra que puede ver/hacer segun su rol y almacen.
+- Para sumar gente: solo crear un usuario en el modulo Usuarios con su rol
+  y almacen. No requiere cambios de arquitectura ni de codigo.
+
+---------------------------------------------------------------------------
+3) ARQUITECTURA PROPUESTA (RECOMENDADA)
+---------------------------------------------------------------------------
+                PC DEDICADA (servidor)
+                Windows 10/11
+                - PostgreSQL instalado
+                - Sibarita backend en :3000
+                - IP fija en la LAN
+                         |
+              red local (LAN/WiFi)
+       -----------------------------------------
+       |            |            |             |
+   PC Almacen1   PC Almacen2   PC Mantenim.   PC Admin/otros
+   (login propio, rol=almacen, almacen_id=1, etc.)
+
+- 1 sola base de datos central en la PC dedicada: todos ven los mismos
+  datos en tiempo real, sin sincronizar nada.
+- Cuentas independientes por persona (rol + almacen) usando el sistema de
+  roles que ya existe (punto 2).
+- Facil sumar mas usuarios/PCs despues: no cambia la arquitectura, solo se
+  crean mas cuentas.
+
+---------------------------------------------------------------------------
+4) COMO ACCEDEN LAS PCs DE LOS USUARIOS - DOS OPCIONES
+---------------------------------------------------------------------------
+OPCION 1: SOLO NAVEGADOR (recomendada, sin codigo nuevo)
+- El PC dedicado corre Postgres + backend (con el .exe de hoy, o solo el
+  backend como servicio de Windows).
+- Cada usuario abre Chrome/Edge -> http://<IP-del-dedicado>:3000. Nada que
+  instalar, nada que mantener en las otras PCs.
+- Funciona en cualquier SO con navegador (Windows/Mac/Linux/tablet).
+- Funciona YA con el codigo actual, sin cambios.
+
+OPCION 2: APP CLIENTE CON ICONO (experiencia "de escritorio")
+- Mismo servidor central, pero cada usuario tiene un icono en su escritorio
+  en vez de una pestaña de navegador.
+- Es una variante de main.js que NO hace spawn de un backend local, solo
+  abre una ventana Electron que carga la URL del servidor (sin backend ni
+  contraseña de BD adentro de esa instalacion).
+- Requiere: crear esa variante de main.js + un segundo instalador aparte
+  del que usa la PC dedicada. Solo funciona en Windows (electron-builder
+  de este proyecto solo genera .exe/NSIS).
+- NO SE HA IMPLEMENTADO, es idea pendiente de decision.
+
+OPCION 3 (descartada): instalar el mismo .exe de hoy en cada PC, cada uno
+apuntando por red a un Postgres central (DB_HOST=<IP-dedicado> en cada
+.env). Obliga a exponer el puerto 5432 de Postgres a toda la LAN y a
+repartir la contraseña real de la BD en cada maquina -> mas riesgo, sin
+ganar nada frente a las opciones 1 o 2 cuando solo hay 1 PC dedicada.
+
+---------------------------------------------------------------------------
+5) REQUISITOS DE LA PC DEDICADA
+---------------------------------------------------------------------------
+- Windows 10/11 de 64 bits (el instalador actual solo genera para Windows).
+- PostgreSQL instalado ahi (misma version que se usa en desarrollo).
+- El .exe de Sibarita instalado ahi tambien (backend + Electron, sin
+  cambios de codigo para esta parte).
+- IP fija o reserva DHCP, para que http://<IP>:3000 no cambie.
+- Que quede encendida / sin suspenderse en horario de uso, o mejor: correr
+  el backend como SERVICIO DE WINDOWS para que no dependa de que alguien
+  tenga sesion iniciada.
+- Regla de Firewall de Windows: permitir entrante TCP 3000 desde la LAN.
+  NO abrir el puerto 5432 (Postgres) a la red, ese debe seguir solo en
+  localhost.
+- Cambiar JWT_SECRET del .env (hoy es generico) antes de exponerlo a varios
+  usuarios reales.
+
+---------------------------------------------------------------------------
+6) PENDIENTE DE DECISION DEL USUARIO
+---------------------------------------------------------------------------
+- ¿Navegador (opcion 1) o app con icono (opcion 2) para las PCs de los
+  usuarios?
+- Una vez decidido: aplicar el fix de seguridad (excluir .env del
+  instalador, "!backend/.env" en package.json "files") y retomar la
+  regeneracion del instalador .exe con los ultimos cambios (previsualizacion
+  en Etiqueta individual y Compra Diaria, ya en el ultimo commit bff4957).
+- Si se elige opcion 2, ademas hay que programar la variante "cliente" de
+  main.js y agregar un segundo target de build para ese instalador.
+
+FIN DE LA NOTA
