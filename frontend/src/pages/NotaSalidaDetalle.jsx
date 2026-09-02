@@ -677,40 +677,38 @@ export default function NotaSalidaDetalle() {
                   </tbody>
                 </table>
 
-                {ultima && (
-                  <>
-                    <div className="px-4 py-2 text-xs flex">
-                      <b className="text-gray-600 mr-1">OBSERVACIONES</b>
-                      <span className="border-b border-gray-400 flex-1">{nota.observaciones || ''}</span>
-                    </div>
-                    <div className="grid grid-cols-3 gap-x-6 px-4 pt-10 pb-2 text-xs text-gray-600 text-center">
-                      <div className="border-t border-gray-800 pt-1">Solicitado por</div>
-                      <div className="border-t border-gray-800 pt-1">Revisado por</div>
-                      <div className="border-t border-gray-800 pt-1">Revisado por</div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-x-6 px-10 pt-10 pb-3 text-xs text-gray-600 text-center">
-                      <div className="border-t border-gray-800 pt-1">Revisado por</div>
-                      <div className="border-t border-gray-800 pt-1">Aprobado por</div>
-                    </div>
-                    <div className="border-t-2 border-dashed border-gray-500 mx-4" />
-                    <div className="px-4 py-3 text-xs">
-                      <div className="flex gap-6 mb-1">
-                        <span className="flex-1 flex"><b className="mr-1">Solicitado por:</b><span className="border-b border-gray-400 flex-1">&nbsp;</span></span>
-                        <span className="flex-1 flex"><b className="mr-1">V°B° Autorizado por:</b><span className="border-b border-gray-400 flex-1">&nbsp;</span></span>
-                      </div>
-                      <div className="flex"><b className="w-16 shrink-0">Nombre</b>: <span className="border-b border-gray-400 flex-1 ml-1">{nota.persona_responsable}</span></div>
-                      <div className="flex"><b className="w-16 shrink-0">Cargo</b>: <span className="border-b border-gray-400 flex-1 ml-1">&nbsp;</span></div>
-                      <div className="flex mt-1"><b className="w-16 shrink-0">Firma:</b><span className="border-b border-gray-400 flex-1 ml-1">&nbsp;</span></div>
-                    </div>
-                    <div className="px-4 py-1 text-[11px] italic text-gray-600">
-                      Nota.- Cuando no hay stock se envia una copia al area de Compras.
-                    </div>
-                    <div className="flex justify-between items-end px-4 pb-2 pt-1 text-[10px] text-gray-500 border-t border-gray-300">
-                      <span>FT-GE-17 ED. - 01</span>
-                      <span className="text-right">c.c. Almacen Materia Prima, Almacen {nota.detalle[0]?.almacen_nombre || '—'}<br />c.c. Compras</span>
-                    </div>
-                  </>
-                )}
+                {/* Observaciones y firmas van en CADA hoja (no solo la ultima): cada
+                    hoja fisica se imprime y se firma por separado. */}
+                <div className="px-4 py-2 text-xs flex">
+                  <b className="text-gray-600 mr-1">OBSERVACIONES</b>
+                  <span className="border-b border-gray-400 flex-1">{nota.observaciones || ''}</span>
+                </div>
+                <div className="grid grid-cols-3 gap-x-6 px-4 pt-10 pb-2 text-xs text-gray-600 text-center">
+                  <div className="border-t border-gray-800 pt-1">Solicitado por</div>
+                  <div className="border-t border-gray-800 pt-1">Revisado por</div>
+                  <div className="border-t border-gray-800 pt-1">Revisado por</div>
+                </div>
+                <div className="grid grid-cols-2 gap-x-6 px-10 pt-10 pb-3 text-xs text-gray-600 text-center">
+                  <div className="border-t border-gray-800 pt-1">Revisado por</div>
+                  <div className="border-t border-gray-800 pt-1">Aprobado por</div>
+                </div>
+                <div className="border-t-2 border-dashed border-gray-500 mx-4" />
+                <div className="px-4 py-3 text-xs">
+                  <div className="flex gap-6 mb-1">
+                    <span className="flex-1 flex"><b className="mr-1">Solicitado por:</b><span className="border-b border-gray-400 flex-1">&nbsp;</span></span>
+                    <span className="flex-1 flex"><b className="mr-1">V°B° Autorizado por:</b><span className="border-b border-gray-400 flex-1">&nbsp;</span></span>
+                  </div>
+                  <div className="flex"><b className="w-16 shrink-0">Nombre</b>: <span className="border-b border-gray-400 flex-1 ml-1">{nota.persona_responsable}</span></div>
+                  <div className="flex"><b className="w-16 shrink-0">Cargo</b>: <span className="border-b border-gray-400 flex-1 ml-1">&nbsp;</span></div>
+                  <div className="flex mt-1"><b className="w-16 shrink-0">Firma:</b><span className="border-b border-gray-400 flex-1 ml-1">&nbsp;</span></div>
+                </div>
+                <div className="px-4 py-1 text-[11px] italic text-gray-600">
+                  Nota.- Cuando no hay stock se envia una copia al area de Compras.
+                </div>
+                <div className="flex justify-between items-end px-4 pb-2 pt-1 text-[10px] text-gray-500 border-t border-gray-300">
+                  <span>FT-GE-17 ED. - 01</span>
+                  <span className="text-right">c.c. Almacen Materia Prima, Almacen {nota.detalle[0]?.almacen_nombre || '—'}<br />c.c. Compras</span>
+                </div>
               </div>
             )
           })}
