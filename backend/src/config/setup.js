@@ -262,7 +262,7 @@ async function setup() {
     ALTER TABLE etiquetas ADD COLUMN IF NOT EXISTS ubicacion VARCHAR(100);
     ALTER TABLE etiqueta_historial DROP CONSTRAINT IF EXISTS etiqueta_historial_evento_check;
     ALTER TABLE etiqueta_historial ADD CONSTRAINT etiqueta_historial_evento_check
-      CHECK (evento IN ('GENERADA', 'IMPRESA', 'REIMPRESA', 'SALIO', 'DEVOLVIO', 'TRANSFERIDA', 'REEMPLAZADA', 'ANULADA'));
+      CHECK (evento IN ('GENERADA', 'IMPRESA', 'REIMPRESA', 'SALIO', 'DEVOLVIO', 'TRANSFERIDA', 'REEMPLAZADA', 'ANULADA', 'CORREGIDA'));
 
     CREATE SEQUENCE IF NOT EXISTS notas_salida_numero_seq START 1;
 
@@ -307,6 +307,15 @@ async function setup() {
     ALTER TABLE notas_salida_detalle ADD COLUMN IF NOT EXISTS devuelto_cantidad INTEGER;
     ALTER TABLE notas_salida_detalle ADD COLUMN IF NOT EXISTS devuelto_peso NUMERIC(12,2);
     ALTER TABLE notas_salida_detalle ADD COLUMN IF NOT EXISTS devuelto_obs TEXT;
+    -- Unidad en la que se registra la devolucion usada (Caja, Rollo, Kilogramo,
+    -- etc del catalogo unidades_medida), en vez de asumir siempre peso.
+    ALTER TABLE notas_salida_detalle ADD COLUMN IF NOT EXISTS devuelto_unidad_medida_id INTEGER REFERENCES unidades_medida(id);
+    -- Presentacion en la que vuelve fisicamente (Caja/Rollo/Bolsa/Saco), aparte
+    -- de la unidad de medida de arriba. Lista fija (no es un catalogo admin).
+    ALTER TABLE notas_salida_detalle ADD COLUMN IF NOT EXISTS devuelto_presentacion VARCHAR(20);
+    ALTER TABLE notas_salida_detalle DROP CONSTRAINT IF EXISTS notas_salida_detalle_devuelto_presentacion_check;
+    ALTER TABLE notas_salida_detalle ADD CONSTRAINT notas_salida_detalle_devuelto_presentacion_check
+      CHECK (devuelto_presentacion IN ('CAJA', 'ROLLO', 'BOLSA', 'SACO'));
 
     CREATE TABLE IF NOT EXISTS parametros_aprobacion (
       id SERIAL PRIMARY KEY,

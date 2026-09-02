@@ -230,7 +230,7 @@ CREATE TABLE etiquetas (
 CREATE TABLE etiqueta_historial (
   id SERIAL PRIMARY KEY,
   etiqueta_id INTEGER REFERENCES etiquetas(id),
-  evento VARCHAR(20) NOT NULL CHECK (evento IN ('GENERADA', 'IMPRESA', 'REIMPRESA', 'SALIO', 'DEVOLVIO', 'TRANSFERIDA', 'REEMPLAZADA', 'ANULADA')),
+  evento VARCHAR(20) NOT NULL CHECK (evento IN ('GENERADA', 'IMPRESA', 'REIMPRESA', 'SALIO', 'DEVOLVIO', 'TRANSFERIDA', 'REEMPLAZADA', 'ANULADA', 'CORREGIDA')),
   almacen_origen_id INTEGER REFERENCES almacenes(id),
   almacen_destino_id INTEGER REFERENCES almacenes(id),
   usuario_id INTEGER REFERENCES usuarios(id),
@@ -272,7 +272,13 @@ CREATE TABLE notas_salida_detalle (
   -- salio). devuelto_peso es opcional. NULL si volvio NUEVA o sigue afuera.
   devuelto_cantidad INTEGER,
   devuelto_peso NUMERIC(12,2),
-  devuelto_obs TEXT
+  devuelto_obs TEXT,
+  -- Unidad de la devolucion usada (Caja, Rollo, Kilogramo, etc del catalogo
+  -- unidades_medida), en vez de asumir siempre peso.
+  devuelto_unidad_medida_id INTEGER REFERENCES unidades_medida(id),
+  -- Presentacion en la que vuelve fisicamente, aparte de la unidad de medida.
+  -- Lista fija (no es un catalogo admin): CAJA / ROLLO / BOLSA / SACO.
+  devuelto_presentacion VARCHAR(20) CHECK (devuelto_presentacion IN ('CAJA', 'ROLLO', 'BOLSA', 'SACO'))
 );
 
 ALTER TABLE notas_salida ADD COLUMN requiere_devolucion BOOLEAN NOT NULL DEFAULT true;

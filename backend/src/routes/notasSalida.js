@@ -7,6 +7,7 @@ const { validarLargos } = require('../utils/texto')
 const log = require('../middlewares/logMiddleware')
 
 const MOTIVOS = ['USO_INTERNO', 'PRESTAMO', 'REPARACION', 'DESECHO', 'OTRO']
+const PRESENTACIONES = ['CAJA', 'ROLLO', 'BOLSA', 'SACO']
 
 // Marca una etiqueta como salida del almacen: cambia estado, registra historial y descuenta inventario
 async function marcarSalida(client, etiqueta, numeroNota, usuarioId) {
@@ -81,6 +82,8 @@ router.get('/:id', verificarToken, async (req, res) => {
              e.condicion as etiqueta_condicion, e.almacen_id,
              p.nombre as producto_nombre, a.nombre as almacen_nombre,
              um.abreviatura as unidad_medida_abreviatura,
+             dum.nombre as devuelto_unidad_medida_nombre,
+             dum.abreviatura as devuelto_unidad_medida_abreviatura,
              en.codigo as etiqueta_devuelta_codigo,
              -- Stock actual del producto en ese almacen (Fase 9, Bloque 7):
              -- lo que queda hoy, no una foto al momento de la salida.
@@ -94,6 +97,7 @@ router.get('/:id', verificarToken, async (req, res) => {
       JOIN productos p ON e.producto_id = p.id
       JOIN almacenes a ON e.almacen_id = a.id
       LEFT JOIN unidades_medida um ON p.unidad_medida_id = um.id
+      LEFT JOIN unidades_medida dum ON d.devuelto_unidad_medida_id = dum.id
       LEFT JOIN etiquetas en ON d.etiqueta_devuelta_id = en.id
       WHERE d.nota_salida_id = $1
       ORDER BY d.id
@@ -317,12 +321,14 @@ router.post('/:id/devolucion', verificarToken, soloRoles('admin', 'almacen'),
     return res.status(400).json({ error: 'Selecciona al menos un codigo para devolver' })
   }
 
-  // Panel de devolucion USADA: cantidad/peso reales con que vuelve el item.
+  // Panel de devolucion USADA: cantidad/unidad reales con que vuelve el item.
   // Solo aplican a condicion USADO y a una sola linea a la vez (asi lo manda el
-  // modal). devuelto_cantidad puede ser menor a la que salio; devuelto_peso es
-  // opcional. Se ignoran si la devolucion es NUEVA.
+  // modal). devuelto_cantidad puede ser menor a la que salio; devuelto_unidad_
+  // medida_id es opcional (Caja, Rollo, Kilogramo, etc del catalogo unidades_
+  // medida). Se ignoran si la devolucion es NUEVA.
   let devueltoCantidad = null
-  let devueltoPeso = null
+  let devueltoUnidadMedidaId = null
+  let devueltoPresentacion = null
   let devueltoObs = null
   if (condicion === 'USADO') {
     const rawCant = req.body.devuelto_cantidad
@@ -333,18 +339,24 @@ router.post('/:id/devolucion', verificarToken, soloRoles('admin', 'almacen'),
       }
       devueltoCantidad = n
     }
-    const rawPeso = req.body.devuelto_peso
-    if (rawPeso !== undefined && rawPeso !== null && rawPeso !== '') {
-      const p = Number(rawPeso)
-      if (Number.isNaN(p) || p <= 0 || p >= 1e10) {
-        return res.status(400).json({ error: 'El peso debe ser un numero mayor a 0' })
+    const rawUnidad = req.body.devuelto_unidad_medida_id
+    if (rawUnidad !== undefined && rawUnidad !== null && rawUnidad !== '') {
+      const u = Number(rawUnidad)
+      if (!Number.isInteger(u) || u <= 0) {
+        return res.status(400).json({ error: 'Unidad de medida invalida' })
       }
-      devueltoPeso = p
+      devueltoUnidadMedidaId = u
+    }
+    if (req.body.devuelto_presentacion !== undefined && req.body.devuelto_presentacion !== null && req.body.devuelto_presentacion !== '') {
+      if (!PRESENTACIONES.includes(req.body.devuelto_presentacion)) {
+        return res.status(400).json({ error: 'Presentacion invalida' })
+      }
+      devueltoPresentacion = req.body.devuelto_presentacion
     }
     if (typeof req.body.devuelto_obs === 'string' && req.body.devuelto_obs.trim()) {
       devueltoObs = req.body.devuelto_obs.trim()
     }
-    if ((devueltoCantidad !== null || devueltoPeso !== null || devueltoObs !== null) && etiqueta_ids.length !== 1) {
+    if ((devueltoCantidad !== null || devueltoUnidadMedidaId !== null || devueltoPresentacion !== null || devueltoObs !== null) && etiqueta_ids.length !== 1) {
       return res.status(400).json({ error: 'Los datos de la devolucion usada se registran de a un codigo por vez' })
     }
   }
@@ -352,6 +364,16 @@ router.post('/:id/devolucion', verificarToken, soloRoles('admin', 'almacen'),
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
+
+    let devueltoUnidadNombre = null
+    if (devueltoUnidadMedidaId != null) {
+      const um = await client.query('SELECT nombre FROM unidades_medida WHERE id = $1', [devueltoUnidadMedidaId])
+      if (um.rows.length === 0) {
+        await client.query('ROLLBACK')
+        return res.status(400).json({ error: 'La unidad de medida indicada no existe' })
+      }
+      devueltoUnidadNombre = um.rows[0].nombre
+    }
 
     const nota = await client.query('SELECT * FROM notas_salida WHERE id = $1 FOR UPDATE', [req.params.id])
     if (nota.rows.length === 0) {
@@ -425,7 +447,8 @@ router.post('/:id/devolucion', verificarToken, soloRoles('admin', 'almacen'),
 
         const detExtra = [
           cantDevuelta !== linea.cantidad ? `cantidad ${cantDevuelta} de ${linea.cantidad}` : null,
-          devueltoPeso != null ? `peso ${devueltoPeso}` : null,
+          devueltoPresentacion ? `presentacion ${devueltoPresentacion}` : null,
+          devueltoUnidadNombre ? `unidad ${devueltoUnidadNombre}` : null,
           devueltoObs ? `obs: ${devueltoObs}` : null,
         ].filter(Boolean).join(', ')
         await client.query(
@@ -451,9 +474,9 @@ router.post('/:id/devolucion', verificarToken, soloRoles('admin', 'almacen'),
         await client.query(
           `UPDATE notas_salida_detalle
            SET devuelto_condicion = 'USADO', devuelto_en = NOW(), etiqueta_devuelta_id = $1,
-               devuelto_cantidad = $2, devuelto_peso = $3, devuelto_obs = $4
-           WHERE id = $5`,
-          [nuevaEtiquetaId, cantDevuelta, devueltoPeso, devueltoObs, linea.detalle_id]
+               devuelto_cantidad = $2, devuelto_unidad_medida_id = $3, devuelto_presentacion = $4, devuelto_obs = $5
+           WHERE id = $6`,
+          [nuevaEtiquetaId, cantDevuelta, devueltoUnidadMedidaId, devueltoPresentacion, devueltoObs, linea.detalle_id]
         )
       } else {
         await client.query(`UPDATE etiquetas SET estado = 'EN_ALMACEN' WHERE id = $1`, [eid])
@@ -497,6 +520,112 @@ router.post('/:id/devolucion', verificarToken, soloRoles('admin', 'almacen'),
 
     await client.query('COMMIT')
     res.json({ ...actualizada.rows[0], condicion, codigos_nuevos: codigosNuevos })
+  } catch (err) {
+    await client.query('ROLLBACK')
+    res.status(500).json({ error: err.message })
+  } finally {
+    client.release()
+  }
+})
+
+// Corrige los datos de una devolucion USADA ya registrada (cantidad, unidad,
+// observacion), sin rehacer el retiro del codigo viejo ni la generacion del
+// nuevo. Si la cantidad cambia, se ajusta el inventario y la cantidad del
+// codigo nuevo por la diferencia, para que sigan cuadrando con la nota.
+router.put('/:id/lineas/:etiquetaId/devolucion-usada', verificarToken, soloRoles('admin', 'almacen'),
+  log('EDITAR_DEVOLUCION_USADA', req => `Nota de salida id ${req.params.id}, etiqueta id ${req.params.etiquetaId}`),
+  async (req, res) => {
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+
+    const linea = await client.query(`
+      SELECT d.id as detalle_id, d.cantidad as cantidad_salida, d.devuelto_cantidad,
+             d.devuelto_condicion, d.etiqueta_devuelta_id,
+             en.almacen_id, en.producto_id, en.estado as etiqueta_devuelta_estado
+      FROM notas_salida_detalle d
+      LEFT JOIN etiquetas en ON d.etiqueta_devuelta_id = en.id
+      WHERE d.nota_salida_id = $1 AND d.etiqueta_id = $2
+      FOR UPDATE OF d
+    `, [req.params.id, req.params.etiquetaId])
+    if (linea.rows.length === 0) {
+      await client.query('ROLLBACK')
+      return res.status(404).json({ error: 'Ese codigo no pertenece a esta nota de salida' })
+    }
+    const l = linea.rows[0]
+    if (l.devuelto_condicion !== 'USADO') {
+      await client.query('ROLLBACK')
+      return res.status(400).json({ error: 'Ese codigo no tiene una devolucion usada registrada' })
+    }
+    if (l.etiqueta_devuelta_estado !== 'EN_ALMACEN') {
+      await client.query('ROLLBACK')
+      return res.status(400).json({ error: 'El codigo nuevo generado por esa devolucion ya no esta en almacen (fue transferido o usado); no se puede corregir' })
+    }
+
+    const rawCant = req.body.devuelto_cantidad
+    if (rawCant === undefined || rawCant === null || rawCant === '') {
+      await client.query('ROLLBACK')
+      return res.status(400).json({ error: 'La cantidad que vuelve es requerida' })
+    }
+    const nuevaCantidad = Number(rawCant)
+    if (!Number.isInteger(nuevaCantidad) || nuevaCantidad <= 0 || nuevaCantidad > l.cantidad_salida) {
+      await client.query('ROLLBACK')
+      return res.status(400).json({ error: `La cantidad que vuelve debe estar entre 1 y ${l.cantidad_salida}` })
+    }
+
+    let unidadMedidaId = null
+    const rawUnidad = req.body.devuelto_unidad_medida_id
+    if (rawUnidad !== undefined && rawUnidad !== null && rawUnidad !== '') {
+      const u = Number(rawUnidad)
+      if (!Number.isInteger(u) || u <= 0) {
+        await client.query('ROLLBACK')
+        return res.status(400).json({ error: 'Unidad de medida invalida' })
+      }
+      const um = await client.query('SELECT id FROM unidades_medida WHERE id = $1', [u])
+      if (um.rows.length === 0) {
+        await client.query('ROLLBACK')
+        return res.status(400).json({ error: 'La unidad de medida indicada no existe' })
+      }
+      unidadMedidaId = u
+    }
+    let presentacion = null
+    if (req.body.devuelto_presentacion !== undefined && req.body.devuelto_presentacion !== null && req.body.devuelto_presentacion !== '') {
+      if (!PRESENTACIONES.includes(req.body.devuelto_presentacion)) {
+        await client.query('ROLLBACK')
+        return res.status(400).json({ error: 'Presentacion invalida' })
+      }
+      presentacion = req.body.devuelto_presentacion
+    }
+    const obs = typeof req.body.devuelto_obs === 'string' && req.body.devuelto_obs.trim()
+      ? req.body.devuelto_obs.trim() : null
+
+    const delta = nuevaCantidad - l.devuelto_cantidad
+    if (delta !== 0) {
+      await client.query('UPDATE etiquetas SET cantidad = $1 WHERE id = $2', [nuevaCantidad, l.etiqueta_devuelta_id])
+      await ajustarInventario(client, {
+        almacenId: l.almacen_id,
+        productoId: l.producto_id,
+        delta,
+        descripcion: `Correccion de cantidad devolucion usada nota ${req.params.id}`,
+        tipo: 'DEVOLUCION',
+      })
+      await client.query(
+        `INSERT INTO etiqueta_historial (etiqueta_id, evento, almacen_origen_id, usuario_id, detalle)
+         VALUES ($1, 'CORREGIDA', $2, $3, $4)`,
+        [l.etiqueta_devuelta_id, l.almacen_id, req.usuario.id,
+         `Cantidad de devolucion usada corregida de ${l.devuelto_cantidad} a ${nuevaCantidad}`]
+      )
+    }
+
+    await client.query(
+      `UPDATE notas_salida_detalle
+       SET devuelto_cantidad = $1, devuelto_unidad_medida_id = $2, devuelto_presentacion = $3, devuelto_obs = $4
+       WHERE id = $5`,
+      [nuevaCantidad, unidadMedidaId, presentacion, obs, l.detalle_id]
+    )
+
+    await client.query('COMMIT')
+    res.json({ ok: true })
   } catch (err) {
     await client.query('ROLLBACK')
     res.status(500).json({ error: err.message })

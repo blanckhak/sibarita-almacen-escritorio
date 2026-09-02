@@ -6,6 +6,7 @@ import { colorEtiquetaEstado } from '../utils/etiquetaEstados'
 import { textoStock } from '../utils/stockResumen'
 import { enPaginas } from '../utils/paginarImpresion'
 import { claseCodigoAlmacen, estiloCodigoImpreso, codigoAlmacen, numeroCodigo } from '../utils/colorAlmacen'
+import { PRESENTACIONES, presentacionLabel } from '../utils/presentaciones'
 import PreviewImpresion from '../components/PreviewImpresion'
 import CodigoBarras from '../components/CodigoBarras'
 
@@ -53,10 +54,21 @@ export default function NotaSalidaDetalle() {
   const [procesandoAprobacion, setProcesandoAprobacion] = useState(false)
   const [lineaDevolucion, setLineaDevolucion] = useState(null)
   const [codigoConfirmacion, setCodigoConfirmacion] = useState('')
-  // Panel de "Devolucion usada": cantidad/peso reales con que vuelve el item.
+  // Panel de "Devolucion usada": cantidad/presentacion/unidad reales con que
+  // vuelve el item. Presentacion (Caja/Rollo/Bolsa/Saco) es como vino
+  // fisicamente; Unidad (del catalogo Unidades de Medida) es la medida.
   const [devCantidad, setDevCantidad] = useState('')
-  const [devPeso, setDevPeso]         = useState('')
+  const [devPresentacion, setDevPresentacion] = useState('')
+  const [devUnidadMedidaId, setDevUnidadMedidaId] = useState('')
   const [devObs, setDevObs]           = useState('')
+  const [unidades, setUnidades]       = useState([])
+  // Edicion de una devolucion usada ya registrada (cantidad/presentacion/unidad/obs).
+  const [lineaEditando, setLineaEditando]     = useState(null)
+  const [editCantidad, setEditCantidad]       = useState('')
+  const [editPresentacion, setEditPresentacion] = useState('')
+  const [editUnidadMedidaId, setEditUnidadMedidaId] = useState('')
+  const [editObs, setEditObs]                 = useState('')
+  const [guardandoEdicion, setGuardandoEdicion] = useState(false)
   const [marcandoNoDevuelto, setMarcandoNoDevuelto] = useState(null)
   const [modoImpresion, setModoImpresion] = useState('salida')
   // Previsualizacion: el documento se muestra en pantalla dentro de un overlay
@@ -75,6 +87,7 @@ export default function NotaSalidaDetalle() {
   }
 
   useEffect(() => { cargar() }, [id])
+  useEffect(() => { api.get('/api/unidades-medida').then(res => setUnidades(res.data)).catch(() => {}) }, [])
 
   // Cierra el preview y vuelve el modo a 'salida' para que un Ctrl+P posterior
   // no saque la nota de devolucion por error.
@@ -88,7 +101,8 @@ export default function NotaSalidaDetalle() {
     setLineaDevolucion(linea)
     setCodigoConfirmacion('')
     setDevCantidad(String(linea.cantidad ?? ''))
-    setDevPeso('')
+    setDevPresentacion('')
+    setDevUnidadMedidaId('')
     setDevObs('')
   }
 
@@ -106,18 +120,14 @@ export default function NotaSalidaDetalle() {
         setTimeout(() => setMensaje(null), 3000)
         return
       }
-      if (devPeso !== '' && (Number.isNaN(Number(devPeso)) || Number(devPeso) <= 0)) {
-        setMensaje({ tipo: 'error', texto: 'El peso debe ser un numero mayor a 0' })
-        setTimeout(() => setMensaje(null), 3000)
-        return
-      }
     }
     setGuardando(true)
     try {
       const payload = { etiqueta_ids: [lineaDevolucion.etiqueta_id], condicion }
       if (condicion === 'USADO') {
         payload.devuelto_cantidad = Number(devCantidad)
-        if (devPeso !== '') payload.devuelto_peso = Number(devPeso)
+        if (devPresentacion !== '') payload.devuelto_presentacion = devPresentacion
+        if (devUnidadMedidaId !== '') payload.devuelto_unidad_medida_id = Number(devUnidadMedidaId)
         if (devObs.trim()) payload.devuelto_obs = devObs.trim()
       }
       const { data } = await api.post(`/api/notas-salida/${id}/devolucion`, payload)
@@ -134,6 +144,41 @@ export default function NotaSalidaDetalle() {
       setMensaje({ tipo: 'error', texto: err.response?.data?.error || 'Error al registrar la devolucion' })
     } finally {
       setGuardando(false)
+      setTimeout(() => setMensaje(null), 5000)
+    }
+  }
+
+  const abrirEdicionDevolucion = (linea) => {
+    setLineaEditando(linea)
+    setEditCantidad(String(linea.devuelto_cantidad ?? ''))
+    setEditPresentacion(linea.devuelto_presentacion || '')
+    setEditUnidadMedidaId(linea.devuelto_unidad_medida_id ? String(linea.devuelto_unidad_medida_id) : '')
+    setEditObs(linea.devuelto_obs || '')
+  }
+
+  const guardarEdicionDevolucion = async () => {
+    if (!lineaEditando) return
+    const n = Number(editCantidad)
+    if (!Number.isInteger(n) || n <= 0 || n > lineaEditando.cantidad) {
+      setMensaje({ tipo: 'error', texto: `La cantidad que vuelve debe estar entre 1 y ${lineaEditando.cantidad}` })
+      setTimeout(() => setMensaje(null), 3000)
+      return
+    }
+    setGuardandoEdicion(true)
+    try {
+      await api.put(`/api/notas-salida/${id}/lineas/${lineaEditando.etiqueta_id}/devolucion-usada`, {
+        devuelto_cantidad: n,
+        devuelto_presentacion: editPresentacion || null,
+        devuelto_unidad_medida_id: editUnidadMedidaId !== '' ? Number(editUnidadMedidaId) : null,
+        devuelto_obs: editObs.trim(),
+      })
+      setMensaje({ tipo: 'ok', texto: 'Devolucion corregida correctamente' })
+      setLineaEditando(null)
+      cargar()
+    } catch (err) {
+      setMensaje({ tipo: 'error', texto: err.response?.data?.error || 'Error al corregir la devolucion' })
+    } finally {
+      setGuardandoEdicion(false)
       setTimeout(() => setMensaje(null), 5000)
     }
   }
@@ -351,13 +396,23 @@ export default function NotaSalidaDetalle() {
                     {d.devuelto_condicion && (
                       <div className={`text-xs mt-1 font-medium ${d.devuelto_condicion === 'USADO' ? 'text-amber-700' : 'text-green-700'}`}>
                         Devuelta {d.devuelto_condicion === 'USADO' ? 'usada' : 'nueva'}
-                        {d.devuelto_condicion === 'USADO' && (d.devuelto_cantidad != null || d.devuelto_peso != null) && (
+                        {d.devuelto_condicion === 'USADO' && (d.devuelto_cantidad != null || d.devuelto_presentacion || d.devuelto_unidad_medida_nombre) && (
                           <span className="block font-normal text-gray-500">
                             {d.devuelto_cantidad != null && `volvieron ${d.devuelto_cantidad} de ${d.cantidad}`}
-                            {d.devuelto_peso != null && `${d.devuelto_cantidad != null ? ' · ' : ''}${Number(d.devuelto_peso)} de peso`}
+                            {d.devuelto_presentacion && `${d.devuelto_cantidad != null ? ' · ' : ''}${presentacionLabel(d.devuelto_presentacion)}`}
+                            {d.devuelto_unidad_medida_nombre && `${(d.devuelto_cantidad != null || d.devuelto_presentacion) ? ' · ' : ''}${d.devuelto_unidad_medida_nombre}`}
                           </span>
                         )}
                         {d.devuelto_obs && <span className="block font-normal text-gray-400 italic">{d.devuelto_obs}</span>}
+                        {d.devuelto_condicion === 'USADO' && puedeGestionar && (
+                          <button
+                            type="button"
+                            onClick={() => abrirEdicionDevolucion(d)}
+                            className="text-[11px] text-blue-600 hover:underline print:hidden mt-0.5"
+                          >
+                            Editar
+                          </button>
+                        )}
                       </div>
                     )}
                   </td>
@@ -413,14 +468,26 @@ export default function NotaSalidaDetalle() {
                   <span className="text-[11px] text-gray-400">de {lineaDevolucion.cantidad} que salieron</span>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Peso (opcional)</label>
-                  <input
-                    type="number" min="0" step="0.01"
-                    value={devPeso}
-                    onChange={e => setDevPeso(e.target.value)}
-                    placeholder="Ej: 32.5"
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Presentacion (opcional)</label>
+                  <select
+                    value={devPresentacion}
+                    onChange={e => setDevPresentacion(e.target.value)}
                     className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-                  />
+                  >
+                    <option value="">Sin definir...</option>
+                    {PRESENTACIONES.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                  </select>
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Unidad de medida (opcional)</label>
+                  <select
+                    value={devUnidadMedidaId}
+                    onChange={e => setDevUnidadMedidaId(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  >
+                    <option value="">Sin definir...</option>
+                    {unidades.map(u => <option key={u.id} value={u.id}>{u.nombre}{u.abreviatura ? ` (${u.abreviatura})` : ''}</option>)}
+                  </select>
                 </div>
                 <div className="col-span-2">
                   <label className="block text-xs font-medium text-gray-600 mb-1">Observacion (opcional)</label>
@@ -453,6 +520,85 @@ export default function NotaSalidaDetalle() {
                 className="px-4 py-2 text-sm bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50"
               >
                 {guardando ? 'Registrando...' : 'Devuelta usada'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {lineaEditando && (
+        <div
+          className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 print:hidden"
+          onClick={() => setLineaEditando(null)}
+        >
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <h2 className="text-lg font-semibold text-gray-800 mb-1">Corregir devolucion usada</h2>
+            <p className="text-sm text-gray-500 mb-4">
+              Corrige la cantidad, unidad u observacion de esta devolucion ya registrada.
+              El codigo generado no cambia; si la cantidad cambia, se ajusta el inventario
+              por la diferencia.
+            </p>
+
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-4 text-sm space-y-1">
+              <div><span className="text-gray-500">Producto:</span> <span className="font-medium text-gray-800">{lineaEditando.producto_nombre}</span></div>
+              <div><span className="text-gray-500">Codigo nuevo:</span> <span className="font-mono font-bold text-gray-800">{codigoAlmacen(lineaEditando.etiqueta_devuelta_codigo, lineaEditando.almacen_nombre)}</span></div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Cantidad que vuelve</label>
+                <input
+                  type="number" min="1" step="1" max={lineaEditando.cantidad}
+                  value={editCantidad}
+                  onChange={e => setEditCantidad(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <span className="text-[11px] text-gray-400">de {lineaEditando.cantidad} que salieron</span>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Presentacion (opcional)</label>
+                <select
+                  value={editPresentacion}
+                  onChange={e => setEditPresentacion(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Sin definir...</option>
+                  {PRESENTACIONES.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                </select>
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs font-medium text-gray-600 mb-1">Unidad de medida (opcional)</label>
+                <select
+                  value={editUnidadMedidaId}
+                  onChange={e => setEditUnidadMedidaId(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Sin definir...</option>
+                  {unidades.map(u => <option key={u.id} value={u.id}>{u.nombre}{u.abreviatura ? ` (${u.abreviatura})` : ''}</option>)}
+                </select>
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs font-medium text-gray-600 mb-1">Observacion (opcional)</label>
+                <input
+                  value={editObs}
+                  onChange={e => setEditObs(e.target.value)}
+                  placeholder="En que estado vuelve..."
+                  className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-wrap justify-end gap-2">
+              <button type="button" onClick={() => setLineaEditando(null)} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={guardarEdicionDevolucion}
+                disabled={guardandoEdicion}
+                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              >
+                {guardandoEdicion ? 'Guardando...' : 'Guardar correccion'}
               </button>
             </div>
           </div>
@@ -589,7 +735,8 @@ export default function NotaSalidaDetalle() {
               <th className="text-left py-1 pr-3">Detalle</th>
               <th className="text-right py-1 pr-3">Salio</th>
               <th className="text-right py-1 pr-3">Volvio</th>
-              <th className="text-right py-1 pr-3">Peso</th>
+              <th className="text-left py-1 pr-3">Presentacion</th>
+              <th className="text-left py-1 pr-3">Unidad</th>
               <th className="text-left py-1 pr-3">Condicion</th>
               <th className="text-left py-1 pr-3">Codigo nuevo</th>
               <th className="text-left py-1">Fecha dev.</th>
@@ -602,7 +749,8 @@ export default function NotaSalidaDetalle() {
                 <td className="py-1 pr-3">{d.producto_nombre}</td>
                 <td className="py-1 pr-3 text-right">{d.cantidad}</td>
                 <td className="py-1 pr-3 text-right">{d.devuelto_cantidad != null ? d.devuelto_cantidad : d.cantidad}</td>
-                <td className="py-1 pr-3 text-right">{d.devuelto_peso != null ? Number(d.devuelto_peso) : '—'}</td>
+                <td className="py-1 pr-3">{presentacionLabel(d.devuelto_presentacion) || '—'}</td>
+                <td className="py-1 pr-3">{d.devuelto_unidad_medida_nombre || '—'}</td>
                 <td className="py-1 pr-3">{d.devuelto_condicion === 'USADO' ? 'Usada' : 'Nueva'}</td>
                 <td className="py-1 pr-3">
                   {d.etiqueta_devuelta_codigo
