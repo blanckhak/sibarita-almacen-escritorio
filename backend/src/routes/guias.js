@@ -190,13 +190,11 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
     if (it.destino === 'OTRO' && !(it.destino_detalle && it.destino_detalle.trim())) {
       return res.status(400).json({ error: 'Debes especificar el destino cuando eliges "Otro"' })
     }
-    // Oficina/Laboratorio ya recogido (Bloque 6): genera su Nota de Salida al
-    // toque, asi que se necesita saber quien lo retira. Si queda "pendiente de
-    // recoger" (recogido:false) no se pide todavia: se pide despues, al marcarlo
-    // retirado (POST /:id/items/:itemId/retirar).
-    if (DESTINOS_SALIDA_AUTO.includes(it.destino) && it.recogido !== false && !(it.persona_retira && it.persona_retira.trim())) {
-      return res.status(400).json({ error: 'Debes indicar quien retira el producto cuando el destino es Oficina o Laboratorio' })
-    }
+    // Oficina/Laboratorio ya recogido (Bloque 6): si viene "quien retira" se
+    // genera su Nota de Salida al toque. Si NO viene (o queda "pendiente de
+    // recoger", recogido:false) la linea queda en inventario con codigo y la
+    // Nota se genera despues, al marcarla retirada desde el detalle de la guia
+    // (POST /:id/items/:itemId/retirar), cuando ya se sabe quien lo retira.
     // Linea EN_PARTIDA (Fase 7): la cantidad sale de la suma de partidas, no
     // se exige el campo cantidad. Se valida cada partida por separado. La
     // metrica real del producto se comprueba dentro de la transaccion.
@@ -210,6 +208,48 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
     } else if (!esEnteroPositivo(it.cantidad)) {
       return res.status(400).json({ error: 'La cantidad debe ser un entero mayor a 0 en todas las lineas' })
     }
+  }
+
+  // --- Recomendaciones 2 y 3 (prueba de estres): resolver el producto de cada
+  // linea ANTES de abrir la transaccion de la guia.
+  //   * Si la linea ya trae producto_id (elegido del catalogo en el front) no
+  //     se toca: es el camino sin carrera.
+  //   * Si trae nombre libre, el find-or-create se hace aca en AUTOCOMMIT.
+  //     Antes se hacia dentro de la transaccion y el candado del producto nuevo
+  //     quedaba tomado durante TODA la transaccion de la guia; con muchas guias
+  //     concurrentes sobre el mismo producto nuevo eso serializaba todo y
+  //     tumbaba el backend. En autocommit el candado dura milisegundos.
+  // Si luego la guia falla puede quedar un producto de catalogo sin stock: es
+  // inocuo (producto_canon lo deduplica) y un reintento lo reutiliza.
+  try {
+    for (const it of items) {
+      if (it.tipo === 'SERVICIO' || it.producto_id) continue
+      const nombre = (it.producto_nombre || '').trim().replace(/\s+/g, ' ')
+      if (!nombre) continue
+      const existente = await pool.query(
+        'SELECT id, metrica FROM productos WHERE producto_canon(nombre) = producto_canon($1)',
+        [nombre]
+      )
+      if (existente.rows.length > 0) {
+        it.producto_id = existente.rows[0].id
+        it.__metrica = existente.rows[0].metrica
+        continue
+      }
+      const metricaNueva = ['ENTERO', 'EN_PARTIDA'].includes(it.metrica) ? it.metrica : 'ENTERO'
+      const creado = await pool.query(
+        `INSERT INTO productos (nombre, unidad_medida_id, metrica) VALUES ($1, $2, $3)
+         ON CONFLICT ((producto_canon(nombre))) DO UPDATE SET nombre = productos.nombre
+         RETURNING id, metrica`,
+        [nombre, it.unidad_medida_id || null, metricaNueva]
+      )
+      it.producto_id = creado.rows[0].id
+      it.__metrica = creado.rows[0].metrica
+    }
+  } catch (err) {
+    if (err.code === '23505') {
+      return res.status(409).json({ error: 'Conflicto al registrar un producto nuevo; intenta de nuevo.' })
+    }
+    return res.status(500).json({ error: err.message })
   }
 
   const client = await pool.connect()
@@ -264,7 +304,12 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
       // Metrica del producto (Fase 7): decide si la linea usa el campo
       // cantidad (ENTERO) o el desglose de partidas (EN_PARTIDA).
       let productoMetrica = 'ENTERO'
-      if (!productoId) {
+      // Camino normal: el producto ya se resolvio en el pre-pass autocommit de
+      // arriba (trae producto_id y __metrica). El bloque !productoId queda solo
+      // como red de seguridad por si alguna ruta no paso por ese pre-pass.
+      if (it.__metrica) {
+        productoMetrica = it.__metrica
+      } else if (!productoId) {
         // Nombre para guardar: sin espacios de mas. La comparacion contra el
         // catalogo (Bloque 3, "stock consolidado") usa producto_canon para que
         // "Tornillo 1/2", "tornillo  1 - 2" y "TORNILLO 1/2" sean el mismo
@@ -326,11 +371,17 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
         return res.status(400).json({ error: 'La cantidad debe ser un entero mayor a 0 en todas las lineas' })
       }
 
+      // Oficina/Laboratorio marcado "ya recogido" pero SIN indicar quien retira:
+      // no se puede emitir la Nota de Salida todavia (necesita responsable), asi
+      // que la linea se trata como pendiente de recoger y el responsable se
+      // asigna despues desde el detalle de la guia.
+      const sinResponsable = DESTINOS_SALIDA_AUTO.includes(it.destino) && !(it.persona_retira && it.persona_retira.trim())
       // Solo aplica a OFICINA/LABORATORIO/OTRO: si aun no lo recogen
-      // (recogido=false), se trata igual que ALMACEN (genera etiqueta y queda
-      // en inventario) hasta que lo retiren (POST /:id/items/:itemId/retirar).
-      const pendienteDeRecoger = it.destino !== 'ALMACEN' && it.recogido === false
-      const recogidoValor = it.destino === 'ALMACEN' ? null : (it.recogido !== false)
+      // (recogido=false) o falta el responsable, se trata igual que ALMACEN
+      // (genera etiqueta y queda en inventario) hasta que lo retiren
+      // (POST /:id/items/:itemId/retirar).
+      const pendienteDeRecoger = it.destino !== 'ALMACEN' && (it.recogido === false || sinResponsable)
+      const recogidoValor = it.destino === 'ALMACEN' ? null : (it.recogido !== false && !sinResponsable)
       // Oficina/Laboratorio ya recogido (Bloque 6): genera su propia Nota de
       // Salida automatica (USO_INTERNO, cerrada, sin devolucion) en el mismo
       // momento. OTRO no cambia: sigue saliendo sin dejar ningun rastro.

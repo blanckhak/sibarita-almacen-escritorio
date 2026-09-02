@@ -84,10 +84,12 @@ export default function Login({ onLogin }) {
           </p>
           <div className="space-y-2 text-xs">
             {[
-              { rol: 'Admin',         email: 'admin@sibarita.com',         pass: 'admin123',   color: 'bg-purple-100 text-purple-700' },
-              { rol: 'Almacen',       email: 'almacen@sibarita.com',       pass: 'almac123',   color: 'bg-blue-100 text-blue-700' },
-              { rol: 'Mantenimiento', email: 'mantenimiento@sibarita.com', pass: 'mant123',    color: 'bg-green-100 text-green-700' },
-              { rol: 'Compras',       email: 'compras@sibarita.com',       pass: 'compras123', color: 'bg-yellow-100 text-yellow-700' },
+              { rol: 'Admin',         email: 'admin@sibarita.com',         pass: 'admin123',    color: 'bg-purple-100 text-purple-700' },
+              { rol: 'Almacen',       email: 'almacen@sibarita.com',       pass: 'almac123',    color: 'bg-blue-100 text-blue-700' },
+              { rol: 'Almacenero 1',  email: 'almacenero1@sibarita.com',   pass: 'almacenero1', color: 'bg-sky-100 text-sky-700' },
+              { rol: 'Almacenero 2',  email: 'almacenero2@sibarita.com',   pass: 'almacenero2', color: 'bg-teal-100 text-teal-700' },
+              { rol: 'Mantenimiento', email: 'mantenimiento@sibarita.com', pass: 'mant123',     color: 'bg-green-100 text-green-700' },
+              { rol: 'Compras',       email: 'compras@sibarita.com',       pass: 'compras123',  color: 'bg-yellow-100 text-yellow-700' },
             ].map(u => (
               <button
                 key={u.rol}

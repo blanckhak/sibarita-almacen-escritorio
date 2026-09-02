@@ -259,7 +259,7 @@ export default function NotasSalida() {
                 <label className="block text-sm font-medium text-gray-600 mb-1">Seccion / destino</label>
                 <input
                   value={form.seccion}
-                  onChange={e => setForm({ ...form, seccion: e.target.value })}
+                  onChange={e => setForm({ ...form, seccion: e.target.value.toUpperCase() })}
                   placeholder="Ej: Produccion, Oficina..."
                   className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
@@ -269,7 +269,7 @@ export default function NotasSalida() {
                 <input
                   required
                   value={form.persona_responsable}
-                  onChange={e => setForm({ ...form, persona_responsable: e.target.value })}
+                  onChange={e => setForm({ ...form, persona_responsable: e.target.value.toUpperCase() })}
                   placeholder="Quien retira los productos"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
@@ -298,7 +298,7 @@ export default function NotasSalida() {
                 <label className="block text-sm font-medium text-gray-600 mb-1">Observaciones</label>
                 <input
                   value={form.observaciones}
-                  onChange={e => setForm({ ...form, observaciones: e.target.value })}
+                  onChange={e => setForm({ ...form, observaciones: e.target.value.toUpperCase() })}
                   placeholder="Notas adicionales..."
                   className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
@@ -311,7 +311,7 @@ export default function NotasSalida() {
                 <div className="relative z-20 flex gap-2">
                   <input
                     value={buscarCodigo}
-                    onChange={e => setBuscarCodigo(e.target.value)}
+                    onChange={e => setBuscarCodigo(e.target.value.toUpperCase())}
                     onFocus={() => setMostrarSugerencias(true)}
                     onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); buscarYAgregar() } }}
                     placeholder="Filtra por codigo (con o sin letra: M9001 o 9001), o dejalo vacio para ver todos..."

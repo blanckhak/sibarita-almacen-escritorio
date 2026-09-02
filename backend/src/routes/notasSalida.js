@@ -289,6 +289,50 @@ router.post('/:id/rechazar', verificarToken, soloRoles('admin', 'almacen'),
   }
 })
 
+// Edicion del encabezado de una Nota de Salida: persona responsable, seccion y
+// observaciones. Pensado sobre todo para las notas automaticas que genera una
+// guia al entregar a Oficina/Laboratorio (motivo USO_INTERNO), donde el nombre
+// de quien retira puede haberse tipeado mal o quedar pendiente de completar,
+// pero sirve para cualquier nota. NO toca motivo, estado, lineas ni inventario.
+// Una nota EN_APROBACION no se edita aca (primero se aprueba o se rechaza).
+router.put('/:id', verificarToken, soloRoles('admin', 'almacen'),
+  log('EDITAR_NOTA_SALIDA', req => `Nota de salida id ${req.params.id}, responsable ${req.body.persona_responsable}`),
+  async (req, res) => {
+  const persona_responsable = (req.body.persona_responsable || '').trim()
+  const seccion = (req.body.seccion || '').trim()
+  const observaciones = (req.body.observaciones || '').trim()
+
+  if (!persona_responsable) {
+    return res.status(400).json({ error: 'La persona responsable es requerida' })
+  }
+  const errLargo = validarLargos({
+    'seccion': [seccion, 100],
+    'persona responsable': [persona_responsable, 150],
+  })
+  if (errLargo) return res.status(400).json({ error: errLargo })
+
+  try {
+    const nota = await pool.query('SELECT estado FROM notas_salida WHERE id = $1', [req.params.id])
+    if (nota.rows.length === 0) {
+      return res.status(404).json({ error: 'Nota de salida no encontrada' })
+    }
+    if (nota.rows[0].estado === 'EN_APROBACION') {
+      return res.status(400).json({ error: 'Esta nota esta pendiente de aprobacion; primero apruebala o rechazala' })
+    }
+
+    const actualizada = await pool.query(
+      `UPDATE notas_salida
+          SET persona_responsable = $1, seccion = $2, observaciones = $3
+        WHERE id = $4
+      RETURNING *`,
+      [persona_responsable, seccion || null, observaciones || null, req.params.id]
+    )
+    res.json(actualizada.rows[0])
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // CU-03: la devolucion solo puede registrarse contra una nota de salida valida y vigente.
 // Bloque 4: cada linea puede volver como 'NUEVO' (el mismo codigo vuelve a
 // EN_ALMACEN, stock NUEVO) o 'USADO' (el codigo viejo pasa a REEMPLAZADA y se

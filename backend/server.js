@@ -24,6 +24,10 @@ const setup             = require('./src/config/setup')
 
 const app = express()
 
+// Necesario para que req.ip sea la IP real del equipo (y no la del proxy) si
+// algun dia se pone un reverse proxy delante. En LAN directa no cambia nada.
+app.set('trust proxy', true)
+
 app.use(cors())
 app.use(express.json())
 

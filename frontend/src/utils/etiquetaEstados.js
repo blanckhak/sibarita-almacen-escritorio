@@ -11,3 +11,13 @@ export const COLOR_ETIQUETA_ESTADO = {
 
 export const colorEtiquetaEstado = (estado) =>
   COLOR_ETIQUETA_ESTADO[estado] || 'bg-gray-100 text-gray-600'
+
+// Texto que se muestra al usuario. El valor real en la base sigue siendo
+// 'SALIO' (lo usan queries, historial y el CHECK de la tabla); aca solo se
+// cambia como se ve en pantalla: "SALIDA" en vez de "SALIO".
+export const LABEL_ETIQUETA_ESTADO = {
+  SALIO: 'SALIDA',
+}
+
+export const labelEtiquetaEstado = (estado) =>
+  LABEL_ETIQUETA_ESTADO[estado] || estado || '—'

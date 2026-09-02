@@ -4,7 +4,7 @@ import api from '../utils/api'
 import { useAuth } from '../context/AuthContext'
 import CodigoBarras from '../components/CodigoBarras'
 import { extraerProveedoresConocidos } from '../utils/proveedores'
-import { colorEtiquetaEstado } from '../utils/etiquetaEstados'
+import { colorEtiquetaEstado, labelEtiquetaEstado } from '../utils/etiquetaEstados'
 import { TIPOS_DOCUMENTO, tipoDocumentoLabel } from '../utils/tiposDocumento'
 import { enPaginas } from '../utils/paginarImpresion'
 import { claseCodigoAlmacen, estiloCodigoImpreso, codigoAlmacen } from '../utils/colorAlmacen'
@@ -575,16 +575,19 @@ export default function GuiaDetalle() {
                   </td>
                   <td className="px-6 py-3">
                     {it.etiqueta_estado
-                      ? <span className={`px-2 py-1 rounded-full text-xs font-bold ${colorEtiquetaEstado(it.etiqueta_estado)}`}>{it.etiqueta_estado}</span>
+                      ? <span className={`px-2 py-1 rounded-full text-xs font-bold ${colorEtiquetaEstado(it.etiqueta_estado)}`}>{labelEtiquetaEstado(it.etiqueta_estado)}</span>
                       : <span className="text-gray-400 text-xs">{it.tipo === 'SERVICIO' ? 'Servicio' : 'Salida automatica'}</span>}
                     {it.recogido === false && ['OFICINA', 'LABORATORIO'].includes(it.destino) && it.etiqueta_estado === 'EN_ALMACEN' && puedeEditar && !anulada && (
-                      <button
-                        type="button"
-                        onClick={() => abrirRetirar(it)}
-                        className="block mt-1 text-[11px] text-blue-600 hover:underline"
-                      >
-                        Marcar retirado
-                      </button>
+                      <div className="mt-1.5">
+                        <span className="block text-[11px] text-amber-600 font-medium mb-1">Falta quien retira</span>
+                        <button
+                          type="button"
+                          onClick={() => abrirRetirar(it)}
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-300 rounded-lg px-2.5 py-1 hover:bg-amber-100 transition"
+                        >
+                          Asignar responsable
+                        </button>
+                      </div>
                     )}
                   </td>
                   {puedeImprimir && (
@@ -643,11 +646,11 @@ export default function GuiaDetalle() {
       {itemRetirando && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 print:hidden" onClick={() => setItemRetirando(null)}>
           <div className="bg-white rounded-xl shadow-lg w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
-            <h2 className="text-lg font-semibold text-gray-800 mb-1">Marcar retirado</h2>
+            <h2 className="text-lg font-semibold text-gray-800 mb-1">Asignar responsable y retirar</h2>
             <p className="text-sm text-gray-500 mb-4">
               Genera la Nota de Salida de <b>{itemRetirando.producto_nombre}</b> ({itemRetirando.destino === 'OFICINA' ? 'Oficina' : 'Laboratorio'}).
             </p>
-            <label className="block text-sm font-medium text-gray-600 mb-1">Quien retira</label>
+            <label className="block text-sm font-medium text-gray-600 mb-1">Persona responsable (quien retira)</label>
             <input
               autoFocus
               value={personaRetira}

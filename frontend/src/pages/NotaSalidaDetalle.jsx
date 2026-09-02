@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import api from '../utils/api'
 import { useAuth } from '../context/AuthContext'
-import { colorEtiquetaEstado } from '../utils/etiquetaEstados'
+import { colorEtiquetaEstado, labelEtiquetaEstado } from '../utils/etiquetaEstados'
 import { textoStock } from '../utils/stockResumen'
 import { enPaginas } from '../utils/paginarImpresion'
 import { claseCodigoAlmacen, estiloCodigoImpreso, codigoAlmacen, numeroCodigo } from '../utils/colorAlmacen'
@@ -76,6 +76,13 @@ export default function NotaSalidaDetalle() {
   const [preview, setPreview] = useState(false)
   // Linea cuya etiqueta USADA (codigo nuevo de la devolucion) se va a imprimir.
   const [lineaEtiquetaUsada, setLineaEtiquetaUsada] = useState(null)
+  // Edicion del encabezado de la nota (persona responsable / seccion / obs).
+  // Sobre todo para las notas automaticas de guias a Oficina/Laboratorio.
+  const [editandoEncabezado, setEditandoEncabezado] = useState(false)
+  const [edPersona, setEdPersona] = useState('')
+  const [edSeccion, setEdSeccion] = useState('')
+  const [edObs, setEdObs]         = useState('')
+  const [guardandoEncabezado, setGuardandoEncabezado] = useState(false)
 
   const puedeGestionar = ['admin', 'almacen'].includes(usuario?.rol)
   const puedeAprobar    = ['admin', 'almacen'].includes(usuario?.rol)
@@ -241,6 +248,33 @@ export default function NotaSalidaDetalle() {
     }
   }
 
+  const abrirEdicionEncabezado = () => {
+    setEdPersona(nota.persona_responsable || '')
+    setEdSeccion(nota.seccion || '')
+    setEdObs(nota.observaciones || '')
+    setEditandoEncabezado(true)
+  }
+
+  const guardarEncabezado = async () => {
+    if (!edPersona.trim()) return
+    setGuardandoEncabezado(true)
+    try {
+      await api.put(`/api/notas-salida/${id}`, {
+        persona_responsable: edPersona.trim(),
+        seccion: edSeccion.trim(),
+        observaciones: edObs.trim(),
+      })
+      setMensaje({ tipo: 'ok', texto: 'Nota de salida actualizada' })
+      setEditandoEncabezado(false)
+      cargar()
+    } catch (err) {
+      setMensaje({ tipo: 'error', texto: err.response?.data?.error || 'Error al actualizar la nota' })
+    } finally {
+      setGuardandoEncabezado(false)
+      setTimeout(() => setMensaje(null), 4000)
+    }
+  }
+
   if (cargando) return <div className="p-6 text-center py-12 text-gray-400">Cargando nota de salida...</div>
   if (!nota) return <div className="p-6 text-center py-12 text-gray-400">Nota de salida no encontrada</div>
 
@@ -268,6 +302,14 @@ export default function NotaSalidaDetalle() {
           </div>
           <div className="flex items-center gap-3">
             <span className={`px-3 py-1.5 rounded-full text-xs font-bold ${colorEstado[nota.estado]}`}>{nota.estado}</span>
+            {puedeGestionar && nota.estado !== 'EN_APROBACION' && (
+              <button
+                onClick={abrirEdicionEncabezado}
+                className="border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm px-4 py-2 rounded-lg font-medium transition"
+              >
+                Editar
+              </button>
+            )}
             <button
               onClick={() => imprimir('salida')}
               className="bg-blue-700 hover:bg-blue-800 text-white text-sm px-4 py-2 rounded-lg font-medium transition"
@@ -307,7 +349,7 @@ export default function NotaSalidaDetalle() {
                   <label className="block text-xs font-medium text-gray-600 mb-1">Motivo de rechazo (opcional)</label>
                   <input
                     value={motivoRechazo}
-                    onChange={e => setMotivoRechazo(e.target.value)}
+                    onChange={e => setMotivoRechazo(e.target.value.toUpperCase())}
                     placeholder="Solo necesario si vas a rechazar..."
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
@@ -392,7 +434,7 @@ export default function NotaSalidaDetalle() {
                   <td className="px-6 py-3 text-right">{d.p_unitario ? Number(d.p_unitario).toFixed(2) : '—'}</td>
                   <td className="px-6 py-3 text-right">{d.total ? Number(d.total).toFixed(2) : '—'}</td>
                   <td className="px-6 py-3">
-                    <span className={`px-2 py-1 rounded-full text-xs font-bold ${colorEtiquetaEstado(d.etiqueta_estado)}`}>{d.etiqueta_estado}</span>
+                    <span className={`px-2 py-1 rounded-full text-xs font-bold ${colorEtiquetaEstado(d.etiqueta_estado)}`}>{labelEtiquetaEstado(d.etiqueta_estado)}</span>
                     {d.devuelto_condicion && (
                       <div className={`text-xs mt-1 font-medium ${d.devuelto_condicion === 'USADO' ? 'text-amber-700' : 'text-green-700'}`}>
                         Devuelta {d.devuelto_condicion === 'USADO' ? 'usada' : 'nueva'}
@@ -424,6 +466,56 @@ export default function NotaSalidaDetalle() {
 
       </div>
 
+      {editandoEncabezado && (
+        <div
+          className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 print:hidden"
+          onClick={() => setEditandoEncabezado(false)}
+        >
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
+            <h2 className="text-lg font-semibold text-gray-800 mb-1">Editar nota de salida</h2>
+            <p className="text-sm text-gray-500 mb-4">
+              Nota N.° {nota.numero_nota}. Corrige quien retira, la seccion (Oficina/Laboratorio/Servicios) o la observacion. No cambia los productos ni el inventario.
+            </p>
+            <label className="block text-sm font-medium text-gray-600 mb-1">Persona responsable (quien retira)</label>
+            <input
+              autoFocus
+              value={edPersona}
+              onChange={e => setEdPersona(e.target.value.toUpperCase())}
+              maxLength={150}
+              placeholder="Nombre de quien retira"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 mb-3"
+            />
+            <label className="block text-sm font-medium text-gray-600 mb-1">Seccion (opcional)</label>
+            <input
+              value={edSeccion}
+              onChange={e => setEdSeccion(e.target.value.toUpperCase())}
+              maxLength={100}
+              placeholder="Oficina / Laboratorio / Servicios..."
+              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 mb-3"
+            />
+            <label className="block text-sm font-medium text-gray-600 mb-1">Observacion (opcional)</label>
+            <input
+              value={edObs}
+              onChange={e => setEdObs(e.target.value.toUpperCase())}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
+            />
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setEditandoEncabezado(false)} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={guardarEncabezado}
+                disabled={guardandoEncabezado || !edPersona.trim()}
+                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              >
+                {guardandoEncabezado ? 'Guardando...' : 'Guardar cambios'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {lineaDevolucion && (
         <div
           className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 print:hidden"
@@ -447,7 +539,7 @@ export default function NotaSalidaDetalle() {
             <input
               autoFocus
               value={codigoConfirmacion}
-              onChange={e => setCodigoConfirmacion(e.target.value)}
+              onChange={e => setCodigoConfirmacion(e.target.value.toUpperCase())}
               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); confirmarDevolucion('NUEVO') } }}
               placeholder={`Ej: ${codigoAlmacen(lineaDevolucion.etiqueta_codigo, lineaDevolucion.almacen_nombre)}`}
               className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
@@ -493,7 +585,7 @@ export default function NotaSalidaDetalle() {
                   <label className="block text-xs font-medium text-gray-600 mb-1">Observacion (opcional)</label>
                   <input
                     value={devObs}
-                    onChange={e => setDevObs(e.target.value)}
+                    onChange={e => setDevObs(e.target.value.toUpperCase())}
                     placeholder="En que estado vuelve..."
                     className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
                   />
@@ -581,7 +673,7 @@ export default function NotaSalidaDetalle() {
                 <label className="block text-xs font-medium text-gray-600 mb-1">Observacion (opcional)</label>
                 <input
                   value={editObs}
-                  onChange={e => setEditObs(e.target.value)}
+                  onChange={e => setEditObs(e.target.value.toUpperCase())}
                   placeholder="En que estado vuelve..."
                   className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />

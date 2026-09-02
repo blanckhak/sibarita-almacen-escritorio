@@ -1643,10 +1643,225 @@ commiteados en master):
   para Guias (dos personas anulando/editando la misma guia a la vez) y
   para Devolucion usada, no se probaron todavia.
 
+- MULTIUSUARIO EN RED LAN + REGISTRO DE IP POR EQUIPO (02/09). Preparacion
+  para el escenario "1 PC dedicada sirve, varios usuarios entran por
+  navegador" (ver servidor_dedicado/ y IDEAS_ARQUITECTURA_RED.txt).
+  * backend/src/utils/red.js (NUEVO): helper ipDe(req) que saca una IP
+    legible de la peticion. Normaliza IPv4-mapeada en IPv6
+    ("::ffff:192.168.1.5" -> "192.168.1.5") y "::1" -> "127.0.0.1".
+  * backend/server.js: app.set('trust proxy', true) para que req.ip sea
+    la IP real del equipo si algun dia hay un reverse proxy delante. En
+    LAN directa no cambia nada.
+  * backend/src/config/setup.js: ALTER TABLE actividad_log ADD COLUMN IF
+    NOT EXISTS ip VARCHAR(45) (migracion idempotente, ya aplicada en
+    sibarita_db).
+  * backend/src/middlewares/logMiddleware.js: toda accion logueada guarda
+    ahora la IP. Se toma al ENTRAR la peticion (no en res.on('finish'))
+    porque el socket a veces ya perdio la direccion cuando termino la
+    respuesta.
+  * backend/src/controllers/authController.js: el log de LOGIN tambien
+    guarda la IP.
+  * frontend/src/pages/Historial.jsx: nueva columna "IP / Equipo" en la
+    tabla y en el buscador (se puede filtrar por IP).
+  * frontend/src/utils/api.js: baseURL paso de 'http://localhost:3000' a
+    '' (mismo origen que sirvio la pagina). Asi la misma build funciona en
+    la PC servidora (localhost:3000) y cuando otras PCs entran por
+    http://<IP-del-servidor>:3000, sin quedar clavada a "localhost".
+  * frontend/src/pages/Login.jsx: se agregaron 2 usuarios demo,
+    "Almacenero 1" (almacenero1@sibarita.com) y "Almacenero 2"
+    (almacenero2@sibarita.com), a la lista de accesos rapidos.
+  PROBADO en la app corriendo: backend arranca sin error con la migracion,
+  el Historial muestra la columna IP poblada (127.0.0.1 en accesos
+  locales; sera 192.168.x.x cuando entren PCs por LAN), el Login muestra
+  los 2 usuarios nuevos.
+
+- CONCURRENCIA - RECOMENDACIONES DE LA PRUEBA DE ESTRES APLICADAS (02/09).
+  Tras la prueba de concurrencia del 02/09 (arriba) se aplicaron 3
+  cambios de codigo para que un pico de peticiones no tumbe el backend:
+  * backend/src/config/db.js (Recomendacion 1): el Pool de pg usaba los
+    valores por defecto (max 10, sin timeouts) y un pico de peticiones
+    concurrentes lo dejaba tildado para siempre. Ahora: max 20,
+    connectionTimeoutMillis 5000 (la peticion falla claro si en 5s no hay
+    conexion libre, en vez de colgarse), idleTimeoutMillis 30000,
+    statement_timeout 20000 (Postgres aborta consultas > 20s),
+    lock_timeout 8000 (aborta una consulta que lleve 8s esperando un
+    candado -> rompe el cuello de botella cuando varias guias tocan el
+    mismo producto/inventario a la vez), idle_in_transaction_session_
+    timeout 15000 (corta transacciones abandonadas). Ademas pool.on
+    ('error') para que un error en una conexion ociosa no tumbe el
+    proceso, y se libera el client de la conexion de prueba del arranque.
+  * backend/src/routes/guias.js (Recomendaciones 2 y 3): el find-or-create
+    del producto cuando la linea trae nombre libre (no producto_id) se
+    movio a un PRE-PASS en AUTOCOMMIT, antes de abrir la transaccion de la
+    guia. Antes se hacia dentro de la transaccion y el candado del
+    producto nuevo quedaba tomado durante TODA la transaccion; con muchas
+    guias concurrentes sobre el mismo producto nuevo eso serializaba todo
+    y caia el backend. En autocommit el candado dura milisegundos. El
+    bloque !productoId dentro de la transaccion queda solo como red de
+    seguridad (usa it.__metrica ya resuelto). Si la guia falla despues
+    puede quedar un producto de catalogo sin stock: es inocuo
+    (producto_canon lo deduplica) y un reintento lo reutiliza.
+
+- GUIAS A OFICINA/LABORATORIO: "QUIEN RETIRA" PASA A OPCIONAL + BOTON
+  "ASIGNAR RESPONSABLE" VISIBLE (02/09). Ajuste sobre el Bloque 6.
+  * backend/src/routes/guias.js: al crear la guia, una linea de Oficina/
+    Laboratorio marcada "ya recogido" pero SIN indicar quien retira ya no
+    da error 400. Se trata como "pendiente de recoger": genera su etiqueta
+    con codigo, queda EN_ALMACEN, y la Nota de Salida se emite despues.
+    Si SI viene "quien retira", sigue generando la Nota de Salida al toque
+    como antes. (Nuevo flag sinResponsable en el armado de recogidoValor /
+    pendienteDeRecoger.)
+  * frontend/src/pages/Guias.jsx: el campo "Quien retira" del formulario
+    de ingreso pasa a opcional, con un aviso ambar de que sin nombre la
+    linea queda con codigo en inventario y la Nota se genera luego.
+  * frontend/src/pages/GuiaDetalle.jsx: el disparador para asignar al
+    responsable era un link de texto de 11px ("Marcar retirado") facil de
+    no ver. A pedido del usuario se cambio por un BOTON visible ("Asignar
+    responsable", pildora ambar con borde) precedido del aviso "Falta
+    quien retira" en la columna Estado. El modal se renombro a "Asignar
+    responsable y retirar" y el campo a "Persona responsable (quien
+    retira)". El endpoint no cambia (POST /api/guias/:id/items/:itemId/
+    retirar).
+  PROBADO end-to-end en la app corriendo: guia DEMO-RESPONSABLE-01 (id
+  290) con 2 lineas -> la de Oficina sin persona quedo EN_ALMACEN con el
+  boton; la de Laboratorio con "JUAN PEREZ" genero su nota al instante
+  (000040). Click en "Asignar responsable" -> "MARIA LOPEZ" -> Confirmar
+  -> nota 000041 generada y la linea paso a SALIO. (La guia demo y las
+  notas 000040/000041 quedaron en sibarita_db.)
+
+- BOTON "EDITAR" EN LA NOTA DE SALIDA (encabezado) (02/09). A pedido del
+  usuario: cuando una guia entrega a Oficina/Laboratorio y genera su Nota
+  de Salida automatica, faltaba una forma de corregir despues quien retira
+  (nombre mal tipeado) o completar la seccion/observacion. Ahora hay un
+  boton "Editar" en el encabezado del detalle de la Nota de Salida.
+  * backend/src/routes/notasSalida.js: nuevo endpoint PUT /api/notas-salida/
+    :id (roles admin/almacen) que actualiza SOLO persona_responsable
+    (requerida), seccion y observaciones. No toca motivo, estado, lineas
+    ni inventario. Bloquea si la nota esta EN_APROBACION (primero se
+    aprueba/rechaza). Valida largos (persona 150, seccion 100). Loguea
+    EDITAR_NOTA_SALIDA.
+  * frontend/src/pages/NotaSalidaDetalle.jsx: boton "Editar" (visible para
+    admin/almacen si estado != EN_APROBACION) al lado del badge de estado
+    y de "Imprimir", que abre un modal con los 3 campos precargados.
+  PROBADO end-to-end (API: edicion OK, guard responsable vacio -> 400,
+  nota inexistente -> 404; y por la UI en la app corriendo: se edito la
+  nota 000041 de "MARIA LOPEZ" a "MARIA LOPEZ QUISPE" y luego a "ANA
+  TORRES", el encabezado se actualiza al instante).
+  NOTA sobre "Servicios": una linea de guia tipo SERVICIO no genera Nota
+  de Salida (no tiene etiqueta ni movimiento de stock), asi que ahi no hay
+  nada que editar. El campo "seccion" de una Nota de Salida si acepta el
+  texto "Servicios" y es editable con este boton. Si se quiere que las
+  lineas SERVICIO de una guia tambien generen una nota, es un cambio
+  aparte (sin decidir).
+
+- ETIQUETA_ESTADO "SALIO" SE MUESTRA COMO "SALIDA" (02/09). A pedido del
+  usuario. Solo texto en pantalla; el valor real en la base sigue siendo
+  'SALIO' (lo usan queries, el CHECK de la tabla, el historial y varias
+  comparaciones en el front). Nuevo labelEtiquetaEstado() en
+  frontend/src/utils/etiquetaEstados.js (mapa { SALIO: 'SALIDA' }, el
+  resto pasa igual). Aplicado en los 4 lugares que pintan el badge de
+  estado: NotaSalidaDetalle.jsx, GuiaDetalle.jsx, ConsultaProductos.jsx
+  (pantalla + export CSV/PDF via resultadosExport), EtiquetaDetalle.jsx.
+  NO se toco el historial de eventos de la etiqueta (ahi "SALIO" es un
+  evento en pasado, junto a DEVOLVIO/TRANSFERIDA, y queda igual).
+
+- MAYUSCULAS AUTOMATICAS EN NOTA DE SALIDA (02/09). Igual que ya se hizo
+  en Guias: todos los campos de texto libre del modulo Notas de Salida se
+  convierten a mayuscula mientras se escribe (.toUpperCase() en el
+  onChange). Solo frontend.
+  * NotasSalida.jsx (form "Nueva Salida"): seccion/destino, persona
+    responsable, observaciones, y el buscador de codigo de etiqueta.
+  * NotaSalidaDetalle.jsx: motivo de rechazo, confirmacion de codigo en
+    la devolucion, observacion de la devolucion, observacion de la
+    edicion de devolucion usada, y el modal "Editar nota de salida"
+    (persona/seccion/obs, que ya lo hacia). Cantidades, precios y los
+    <select> (presentacion, unidad) no se tocan.
+
+- INSTALADOR .exe: 1.1.0 -> 1.2.0, REGENERADO E INSTALADO (02/09).
+  package.json (raiz) paso de "version": "1.1.0" a "1.2.0" y luego a
+  "1.3.0" (1.2.0 = multiusuario LAN/IP + boton asignar responsable;
+  1.3.0 = boton "Editar" en la Nota de Salida). package-lock.json
+  resincronizado con "npm install --package-lock-only". Antes de cada
+  regeneracion se corrio "npm run build" en frontend/ y se reemplazo
+  backend/frontend-dist con frontend/dist (los .jsx nuevos no estaban
+  compilados). "npm run build" (electron-builder) genero dist/Sibarita
+  Setup 1.2.0.exe y dist/Sibarita Setup 1.3.0.exe. Se desinstalo la
+  version instalada (arranco en Sibarita 1.0.0, per-user, con
+  QuietUninstallString /currentuser /S) y se instalo primero la 1.2.0 y
+  finalmente la 1.3.0 en silencio (/S). Los .exe anteriores (1.0.0, 1.1.0,
+  1.2.0) se dejaron en dist/ sin borrar. dist/ esta en .gitignore.
+  ACCIDENTE DURANTE EL PROCESO (corregido): un comando
+  `asar extract-file app.asar backend/package.json` sobrescribio el
+  package.json RAIZ con el package.json del backend (asar extract-file
+  escribe el basename en el cwd). Se restauro con `git checkout --
+  package.json` y se volvio a subir la version. El instalador 1.2.0 ya
+  estaba generado antes del accidente, no se vio afectado.
+  GOTCHA ENCONTRADO AL PROBAR LA 1.2.0 INSTALADA: la app quedaba en
+  "Cargando..." para siempre. Causa: desde el fix de seguridad d308d75 el
+  instalador NO empaqueta backend/.env, y NUNCA se puso nada en su lugar
+  -> el backend embebido arrancaba con DB_PASSWORD undefined y crasheaba
+  ("SASL: SCRAM-SERVER-FIRST-MESSAGE: client password must be a string"),
+  setup() rechaza, app.listen nunca corre, no hay :3000, la ventana espera
+  20s y se queda cargando. Afecta IGUAL a 1.0.0 y 1.1.0 (nunca se probo la
+  instalada, solo `npm start` desde la carpeta del proyecto que si tiene
+  backend/.env). FIX APLICADO EN ESTA PC: se copio backend/.env a
+  C:\Users\DRGATO\AppData\Local\Programs\sibarita-escritorio\.env . Funciona
+  porque main.js lanza el backend con cwd = carpeta del .exe y db.js hace
+  require('dotenv').config() (sin path) -> lee ese .env del cwd. Verificado:
+  backend arriba en ~2s, GET / -> 200, login -> 200, la ventana carga.
+  (Se volvio a copiar ese .env despues de instalar la 1.3.0; verificado que
+  el endpoint nuevo PUT /api/notas-salida/:id responde en la app instalada.)
+  PENDIENTE (decision del usuario): ese .env queda fuera del instalador, hay
+  que volver a copiarlo en cada reinstalacion/update. Opciones para
+  arreglarlo de raiz: (a) empaquetar un .env real en el instalador (simple,
+  password de vuelta dentro del .exe), (b) que la app en el primer arranque
+  pida los datos de Postgres y guarde el .env al lado del .exe, (c) un .bat
+  post-install que copie el .env. Sin decidir.
+
+- NOMBRE LARGO EN LA NOTA DE INGRESO -> RENGLONES DE CONTINUACION (02/09,
+  PENDIENTE, decidido el enfoque, falta el numero). Se converso el caso de
+  un servicio/compra cuyo Detalle no entra en un renglon. Hoy: la vista de
+  impresion de la guia (GuiaDetalle.jsx) pagina de a 6 ITEMS por hoja
+  (paginarImpresion.js, FILAS_POR_PAGINA=6) y la celda de detalle NO
+  recorta -> el nombre largo wrappea, la fila crece y desalinea el
+  talonario pre-impreso de 6 renglones (lo que sigue cae en el renglon
+  equivocado). Igual para PRODUCTO y para SERVICIO. Compras Diarias no
+  usa esa grilla (imprime todo seguido) asi que ahi solo wrappea sin
+  romper.
+  ENFOQUE ACORDADO (referencia del usuario: para giarse/guia1.jpg, donde
+  UNA compra se reparte en 3 renglones): partir el Detalle en trozos por
+  ancho de columna, cortando por palabra; renglon 1 = codigo + primer
+  trozo + cantidad + unidad; renglones de continuacion = solo texto, con
+  "-" en unidad y cantidad vacia; la paginacion pasa a contar RENGLONES
+  (6 por hoja), no items, y un item que no entra completo pasa entero a
+  la hoja siguiente. En pantalla queda igual (wrappea solo).
+  FALTA para implementar: cuantos caracteres entran por renglon en el
+  talonario real (guia1.jpg sugiere ~48; el codigo "M13134 " adelante en
+  el renglon 1 resta ~7). Se aplicaria igual a Nota de Salida y Solicitud
+  de Materiales (misma grilla de 6). Enganchado con la Fase 1 de abajo.
+
+- SERVICIO: RECORDATORIO DE COMPORTAMIENTO (verificado 02/09 con guia
+  SERV-DEMO-01, id 291). Una linea tipo SERVICIO: no pide destino (el
+  <select> desaparece), NO genera codigo/etiqueta, NO entra a inventario,
+  NUNCA genera Nota de Salida; solo aparece en la Nota de Ingreso con el
+  rotulo "(servicio)". Si el item es un repuesto fisico que se quiere
+  stockear, tiene que ser PRODUCTO (con codigo), no servicio.
+
+DATOS DE PRUEBA DEJADOS EN sibarita_db (02/09, se pueden anular/limpiar):
+- Guia DEMO-RESPONSABLE-01 (id 290): linea Oficina sin persona -> quedo
+  pendiente y se le asigno responsable desde el detalle (nota 000041,
+  editada despues a "ANA TORRES"); linea Laboratorio con "JUAN PEREZ" ->
+  nota 000040 al instante.
+- Guia SERV-DEMO-01 (id 291): 1 linea SERVICIO (nombre largo, sin codigo)
+  + 1 linea PRODUCTO "ACEITE LUBRICANTE ISO 68" x4 -> codigo M13134.
+
 QUE QUEDA PENDIENTE (revision del proyecto, 31/08):
 - Fase 1 - Calibracion de impresion matricial (Bloque 2 "6 lineas" +
   Bloque 6 impresora Epson FX-890 II): BLOQUEADA esperando que el usuario
   mida el talonario fisico con regla. Afecta las 4 vistas de impresion.
+  (Ver arriba "NOMBRE LARGO EN LA NOTA DE INGRESO": el enfoque de
+  renglones de continuacion depende del mismo dato -caracteres por
+  renglon- que esta Fase 1.)
 - Fase 4 - Resiliencia de red offline (Bloque 7): NO EMPEZADA, la de mayor
   arquitectura. Conviene como proyecto separado.
 - Bloque 6 "procesos en segundo plano" (solicitudes / servicios de

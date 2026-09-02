@@ -566,7 +566,7 @@ export default function Guias() {
                             className="rounded border-gray-300"
                           />
                           {DESTINOS_SALIDA_AUTO.includes(it.destino)
-                            ? 'Ya lo recogieron (genera su Nota de Salida automatica, sin quedar en inventario)'
+                            ? 'Ya lo recogieron (genera su Nota de Salida automatica si indicas quien retira; sin quedar en inventario)'
                             : 'Ya lo recogieron (sale de una vez, sin quedar en inventario ni generar codigo)'}
                           {!it.recogido && (
                             <span className="text-amber-600 font-medium">
@@ -579,14 +579,18 @@ export default function Guias() {
                         {DESTINOS_SALIDA_AUTO.includes(it.destino) && it.recogido && (
                           <div className="grid grid-cols-2 gap-3 mt-2">
                             <div>
-                              <label className="block text-xs font-medium text-gray-500 mb-1">Quien retira</label>
+                              <label className="block text-xs font-medium text-gray-500 mb-1">Quien retira <span className="text-gray-400 font-normal">(opcional)</span></label>
                               <input
-                                required
                                 value={it.persona_retira}
                                 onChange={e => actualizarLinea(i, 'persona_retira', e.target.value.toUpperCase())}
                                 placeholder="Nombre de quien retira"
                                 className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                               />
+                              {!it.persona_retira?.trim() && (
+                                <p className="text-xs text-amber-600 mt-1 leading-snug">
+                                  Sin nombre: la linea queda con codigo en inventario y generas la Nota de Salida despues, con el boton "Retirar" del detalle de la guia.
+                                </p>
+                              )}
                             </div>
                             <div>
                               <label className="block text-xs font-medium text-gray-500 mb-1">Observacion (opcional)</label>

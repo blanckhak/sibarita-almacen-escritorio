@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import api from '../utils/api'
 import { exportarCSV, exportarPDF } from '../utils/exportar'
-import { colorEtiquetaEstado } from '../utils/etiquetaEstados'
+import { colorEtiquetaEstado, labelEtiquetaEstado } from '../utils/etiquetaEstados'
 import { claseCodigoAlmacen, codigoAlmacen } from '../utils/colorAlmacen'
 
 const colorDestino = {
@@ -58,6 +58,7 @@ export default function ConsultaProductos() {
   const resultadosExport = resultados.map(r => ({
     ...r,
     etiqueta_codigo: codigoAlmacen(r.etiqueta_codigo, r.almacen_nombre),
+    etiqueta_estado: labelEtiquetaEstado(r.etiqueta_estado),
   }))
 
   const columnasExport = [
@@ -156,7 +157,7 @@ export default function ConsultaProductos() {
                   <td className="px-6 py-3">
                     <span className={`px-2 py-1 rounded-full text-xs font-bold mr-1.5 ${colorDestino[r.destino]}`}>{r.destino}</span>
                     {r.etiqueta_estado && (
-                      <span className={`px-2 py-1 rounded-full text-xs font-bold ${colorEtiquetaEstado(r.etiqueta_estado)}`}>{r.etiqueta_estado}</span>
+                      <span className={`px-2 py-1 rounded-full text-xs font-bold ${colorEtiquetaEstado(r.etiqueta_estado)}`}>{labelEtiquetaEstado(r.etiqueta_estado)}</span>
                     )}
                   </td>
                   <td className="px-6 py-3 text-gray-600 text-xs">{r.etiqueta_ubicacion || '—'}</td>

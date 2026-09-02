@@ -1,6 +1,7 @@
 const pool = require('../config/db')
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
+const { ipDe } = require('../utils/red')
 
 const login = async (req, res) => {
   const { email, password } = req.body
@@ -34,8 +35,8 @@ const login = async (req, res) => {
     )
 
     await pool.query(
-      'INSERT INTO actividad_log (usuario_id, usuario_nombre, accion, detalle) VALUES ($1,$2,$3,$4)',
-      [usuario.id, usuario.nombre, 'LOGIN', `Inicio de sesion como ${usuario.rol}`]
+      'INSERT INTO actividad_log (usuario_id, usuario_nombre, accion, detalle, ip) VALUES ($1,$2,$3,$4,$5)',
+      [usuario.id, usuario.nombre, 'LOGIN', `Inicio de sesion como ${usuario.rol}`, ipDe(req)]
     )
 
     res.json({

@@ -26,13 +26,15 @@ export default function Historial() {
   const filtrado = logs.filter(l => {
     const matchBusqueda = !busqueda ||
       l.usuario_nombre?.toLowerCase().includes(busqueda.toLowerCase()) ||
-      l.detalle?.toLowerCase().includes(busqueda.toLowerCase())
+      l.detalle?.toLowerCase().includes(busqueda.toLowerCase()) ||
+      l.ip?.toLowerCase().includes(busqueda.toLowerCase())
     const matchAccion = !filtroAccion || l.accion === filtroAccion
     return matchBusqueda && matchAccion
   })
 
   const columnas = [
     { titulo: 'Usuario',  campo: 'usuario_nombre' },
+    { titulo: 'IP',       campo: 'ip'             },
     { titulo: 'Accion',   campo: 'accion'         },
     { titulo: 'Detalle',  campo: 'detalle'        },
     { titulo: 'Fecha',    campo: 'fecha'          },
@@ -112,6 +114,7 @@ export default function Historial() {
             <thead className="bg-gray-800 text-white">
               <tr>
                 <th className="px-6 py-3 text-left">Usuario</th>
+                <th className="px-6 py-3 text-left">IP / Equipo</th>
                 <th className="px-6 py-3 text-left">Accion</th>
                 <th className="px-6 py-3 text-left">Detalle</th>
                 <th className="px-6 py-3 text-left">Fecha y Hora</th>
@@ -121,6 +124,7 @@ export default function Historial() {
               {filtrado.map((log, i) => (
                 <tr key={log.id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                   <td className="px-6 py-3 font-medium text-gray-800">{log.usuario_nombre}</td>
+                  <td className="px-6 py-3 text-gray-500 text-xs font-mono">{log.ip || '—'}</td>
                   <td className="px-6 py-3">
                     <span className={`px-2 py-1 rounded-full text-xs font-bold ${colorAccion[log.accion] || 'bg-gray-100 text-gray-600'}`}>
                       {log.accion}

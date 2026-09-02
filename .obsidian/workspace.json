@@ -4,11 +4,11 @@
     "type": "split",
     "children": [
       {
-        "id": "ebdb685eadee5692",
+        "id": "d0abb76a5f16b542",
         "type": "tabs",
         "children": [
           {
-            "id": "27f652ac22f2bb40",
+            "id": "e7a72216364223a8",
             "type": "leaf",
             "state": {
               "type": "graph",
@@ -180,19 +180,20 @@
       "bases:Crear nueva base": false
     }
   },
-  "active": "27f652ac22f2bb40",
+  "active": "e7a72216364223a8",
   "lastOpenFiles": [
-    "dist/Sibarita Setup 1.1.0.exe.blockmap",
-    "dist/__uninstaller-nsis-sibarita-escritorio.exe",
-    "dist/Sibarita Setup 1.1.0.exe",
-    "dist/sibarita-escritorio-1.1.0-x64.nsis.7z",
-    "dist/win-unpacked/resources/elevate.exe",
-    "dist/win-unpacked/RCXED1B.tmp",
-    "dist/win-unpacked/Sibarita.exe",
-    "dist/win-unpacked/resources/app.asar",
-    "dist/win-unpacked/resources",
-    "dist/win-unpacked/LICENSE.electron.txt",
-    "dist/win-unpacked/electron.exe",
+    "backend/frontend-dist/assets/Reportes-DDuRmtxh.js",
+    "backend/frontend-dist/assets/Historial-B5LqZoeg.js",
+    "backend/frontend-dist/assets/NotaSalidaDetalle-BtEQO7sO.js",
+    "backend/_stress_verify_tmp.js",
+    "backend/frontend-dist/assets/SolicitudesMateriales-BWw5Be6y.js",
+    "backend/frontend-dist/assets/Dashboard-BYn1qV-3.js",
+    "backend/_stress_test_tmp.js",
+    "backend/frontend-dist/assets/Guias-CXG1Potk.js",
+    "backend/frontend-dist/assets/exportar-Ke8mBcyY.js",
+    "backend/frontend-dist/assets/Inventario-C9fpJi3_.js",
+    "backend/frontend-dist/assets/index-BEe1IlJP.css",
+    "node_modules/accepts/node_modules/mime-db/README.md",
     "node_modules/bl/LICENSE.md"
   ]
 }

@@ -385,6 +385,9 @@ async function setup() {
       detalle TEXT,
       fecha TIMESTAMP DEFAULT NOW()
     );
+    -- IP del equipo desde donde se hizo la accion (LAN). Sirve para saber
+    -- que PC registro cada guia/nota cuando varios usuarios entran por red.
+    ALTER TABLE actividad_log ADD COLUMN IF NOT EXISTS ip VARCHAR(45);
 
     CREATE TABLE IF NOT EXISTS alertas (
       id SERIAL PRIMARY KEY,

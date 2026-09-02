@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import api from '../utils/api'
 import { useAuth } from '../context/AuthContext'
 import CodigoBarras from '../components/CodigoBarras'
-import { colorEtiquetaEstado } from '../utils/etiquetaEstados'
+import { colorEtiquetaEstado, labelEtiquetaEstado } from '../utils/etiquetaEstados'
 import { claseCodigoAlmacen, estiloCodigoImpreso, codigoAlmacen } from '../utils/colorAlmacen'
 import PreviewImpresion from '../components/PreviewImpresion'
 
@@ -114,7 +114,7 @@ export default function EtiquetaDetalle() {
             {etiqueta.condicion === 'USADO' && (
               <span className="px-3 py-1.5 rounded-full text-xs font-bold bg-amber-100 text-amber-700">USADO</span>
             )}
-            <span className={`px-3 py-1.5 rounded-full text-xs font-bold ${colorEtiquetaEstado(etiqueta.estado)}`}>{etiqueta.estado}</span>
+            <span className={`px-3 py-1.5 rounded-full text-xs font-bold ${colorEtiquetaEstado(etiqueta.estado)}`}>{labelEtiquetaEstado(etiqueta.estado)}</span>
             {puedeGestionar && (
               <button onClick={imprimir} className="bg-blue-700 hover:bg-blue-800 text-white text-sm px-4 py-2 rounded-lg font-medium transition">
                 Imprimir / Reimprimir
