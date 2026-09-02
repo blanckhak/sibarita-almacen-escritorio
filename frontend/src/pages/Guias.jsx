@@ -6,7 +6,10 @@ import { extraerProveedoresConocidos } from '../utils/proveedores'
 import { hoyLocal as hoy } from '../utils/fecha'
 import { TIPOS_DOCUMENTO, tipoDocumentoLabel } from '../utils/tiposDocumento'
 
-const LINEA_VACIA = () => ({ producto_id: '', producto_nombre: '', nuevo: false, tipo: 'PRODUCTO', cantidad: '', destino: 'ALMACEN', destino_detalle: '', unidad_medida_id: '', recogido: true, metrica: 'ENTERO', partidas: [] })
+const LINEA_VACIA = () => ({ producto_id: '', producto_nombre: '', nuevo: false, tipo: 'PRODUCTO', cantidad: '', destino: 'ALMACEN', destino_detalle: '', unidad_medida_id: '', recogido: true, metrica: 'ENTERO', partidas: [], persona_retira: '', retira_obs: '' })
+// Destinos que generan su propia Nota de Salida automatica al guardar la guia
+// (si ya lo recogieron) o al marcarlos retirados despues (Bloque 6).
+const DESTINOS_SALIDA_AUTO = ['OFICINA', 'LABORATORIO']
 const PARTIDA_VACIA = () => ({ cantidad: '', referencia: '' })
 const sumaPartidas = (partidas) => (partidas || []).reduce((s, p) => s + (Number(p.cantidad) || 0), 0)
 
@@ -219,11 +222,14 @@ export default function Guias() {
         }),
       }
       const { data } = await api.post('/api/guias', payload)
+      const notasTexto = data.notas_salida_generadas?.length > 0
+        ? ` Se genero${data.notas_salida_generadas.length > 1 ? 'n' : ''} la nota de salida ${data.notas_salida_generadas.map(n => n.numero_nota).join(', ')} (Oficina/Laboratorio).`
+        : ''
       setMensaje({
         tipo: 'ok',
-        texto: data.etiquetas.length > 0
+        texto: (data.etiquetas.length > 0
           ? `Guia registrada. Se generaron ${data.etiquetas.length} etiqueta(s), lista(s) para imprimir.`
-          : 'Guia registrada correctamente.',
+          : 'Guia registrada correctamente.') + notasTexto,
       })
       setMostrarForm(false)
       cargarDatos()
@@ -280,7 +286,7 @@ export default function Guias() {
                   <input
                     required
                     value={form.numero_guia}
-                    onChange={e => setForm({ ...form, numero_guia: e.target.value })}
+                    onChange={e => setForm({ ...form, numero_guia: e.target.value.toUpperCase() })}
                     placeholder="Ej: G-04521, F-001-123, B-045"
                     className="flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
@@ -322,7 +328,7 @@ export default function Guias() {
                   <input
                     autoFocus
                     value={form.proveedor}
-                    onChange={e => setForm({ ...form, proveedor: e.target.value })}
+                    onChange={e => setForm({ ...form, proveedor: e.target.value.toUpperCase() })}
                     placeholder="Nombre del proveedor nuevo..."
                     className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm mt-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
@@ -332,7 +338,7 @@ export default function Guias() {
                 <label className="block text-sm font-medium text-gray-600 mb-1">N° de Orden de Compra <span className="text-gray-400 font-normal">(opcional, se puede agregar despues)</span></label>
                 <input
                   value={form.numero_oc}
-                  onChange={e => setForm({ ...form, numero_oc: e.target.value })}
+                  onChange={e => setForm({ ...form, numero_oc: e.target.value.toUpperCase() })}
                   placeholder="Ej: OC-1234"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
@@ -374,7 +380,7 @@ export default function Guias() {
                           <input
                             required
                             value={it.producto_nombre}
-                            onChange={e => actualizarLinea(i, 'producto_nombre', e.target.value)}
+                            onChange={e => actualizarLinea(i, 'producto_nombre', e.target.value.toUpperCase())}
                             placeholder="Ej: Mantenimiento de torno, servicio de limpieza..."
                             className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                           />
@@ -396,7 +402,7 @@ export default function Guias() {
                                   required
                                   autoFocus
                                   value={it.producto_nombre}
-                                  onChange={e => actualizarLinea(i, 'producto_nombre', e.target.value)}
+                                  onChange={e => actualizarLinea(i, 'producto_nombre', e.target.value.toUpperCase())}
                                   placeholder="Nombre del producto nuevo..."
                                   className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm mt-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 />
@@ -465,7 +471,7 @@ export default function Guias() {
                               required
                               autoFocus
                               value={it.destino_detalle}
-                              onChange={e => actualizarLinea(i, 'destino_detalle', e.target.value)}
+                              onChange={e => actualizarLinea(i, 'destino_detalle', e.target.value.toUpperCase())}
                               placeholder="Ej: Cliente, evento..."
                               className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm mt-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
@@ -525,7 +531,7 @@ export default function Guias() {
                               />
                               <input
                                 value={pt.referencia}
-                                onChange={e => actualizarPartida(i, j, 'referencia', e.target.value)}
+                                onChange={e => actualizarPartida(i, j, 'referencia', e.target.value.toUpperCase())}
                                 placeholder="Referencia / paquete (ej. Caja 3 de 12)"
                                 className="col-span-8 border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                               />
@@ -551,18 +557,48 @@ export default function Guias() {
                     )}
 
                     {!esServicio && it.destino !== 'ALMACEN' && (
-                      <label className="flex items-center gap-2 mt-3 text-sm text-gray-600">
-                        <input
-                          type="checkbox"
-                          checked={it.recogido}
-                          onChange={e => actualizarLinea(i, 'recogido', e.target.checked)}
-                          className="rounded border-gray-300"
-                        />
-                        Ya lo recogieron (sale de una vez, sin quedar en inventario ni generar codigo)
-                        {!it.recogido && (
-                          <span className="text-amber-600 font-medium">— Aun no: quedara en inventario con codigo hasta que lo recojan</span>
+                      <div className="mt-3">
+                        <label className="flex items-center gap-2 text-sm text-gray-600">
+                          <input
+                            type="checkbox"
+                            checked={it.recogido}
+                            onChange={e => actualizarLinea(i, 'recogido', e.target.checked)}
+                            className="rounded border-gray-300"
+                          />
+                          {DESTINOS_SALIDA_AUTO.includes(it.destino)
+                            ? 'Ya lo recogieron (genera su Nota de Salida automatica, sin quedar en inventario)'
+                            : 'Ya lo recogieron (sale de una vez, sin quedar en inventario ni generar codigo)'}
+                          {!it.recogido && (
+                            <span className="text-amber-600 font-medium">
+                              {DESTINOS_SALIDA_AUTO.includes(it.destino)
+                                ? '— Aun no: quedara en inventario con codigo hasta que lo marques retirado en el detalle de la guia'
+                                : '— Aun no: quedara en inventario con codigo hasta que lo recojan'}
+                            </span>
+                          )}
+                        </label>
+                        {DESTINOS_SALIDA_AUTO.includes(it.destino) && it.recogido && (
+                          <div className="grid grid-cols-2 gap-3 mt-2">
+                            <div>
+                              <label className="block text-xs font-medium text-gray-500 mb-1">Quien retira</label>
+                              <input
+                                required
+                                value={it.persona_retira}
+                                onChange={e => actualizarLinea(i, 'persona_retira', e.target.value.toUpperCase())}
+                                placeholder="Nombre de quien retira"
+                                className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-500 mb-1">Observacion (opcional)</label>
+                              <input
+                                value={it.retira_obs}
+                                onChange={e => actualizarLinea(i, 'retira_obs', e.target.value.toUpperCase())}
+                                className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              />
+                            </div>
+                          </div>
                         )}
-                      </label>
+                      </div>
                     )}
                   </div>
                 )

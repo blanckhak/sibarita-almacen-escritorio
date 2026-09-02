@@ -3,31 +3,12 @@ const router = express.Router()
 const pool = require('../config/db')
 const { verificarToken, soloRoles } = require('../middlewares/authMiddleware')
 const { ajustarInventario } = require('../utils/inventario')
+const { marcarSalida } = require('../utils/salida')
 const { validarLargos } = require('../utils/texto')
 const log = require('../middlewares/logMiddleware')
 
 const MOTIVOS = ['USO_INTERNO', 'PRESTAMO', 'REPARACION', 'DESECHO', 'OTRO']
 const PRESENTACIONES = ['CAJA', 'ROLLO', 'BOLSA', 'SACO']
-
-// Marca una etiqueta como salida del almacen: cambia estado, registra historial y descuenta inventario
-async function marcarSalida(client, etiqueta, numeroNota, usuarioId) {
-  await client.query(`UPDATE etiquetas SET estado = 'SALIO' WHERE id = $1`, [etiqueta.id])
-
-  await client.query(
-    `INSERT INTO etiqueta_historial (etiqueta_id, evento, almacen_origen_id, usuario_id, detalle)
-     VALUES ($1, 'SALIO', $2, $3, $4)`,
-    [etiqueta.id, etiqueta.almacen_id, usuarioId, `Nota de salida ${numeroNota}`]
-  )
-
-  // Un codigo USADO (devolucion) tiene su stock en el bucket DEVOLUCION; al
-  // volver a salir hay que descontarlo de ahi, no del stock NUEVO.
-  await ajustarInventario(client, {
-    almacenId: etiqueta.almacen_id,
-    productoId: etiqueta.producto_id,
-    delta: -etiqueta.cantidad,
-    tipo: etiqueta.condicion === 'USADO' ? 'DEVOLUCION' : 'NUEVO',
-  })
-}
 
 router.get('/', verificarToken, async (req, res) => {
   const { numero_nota, estado } = req.query

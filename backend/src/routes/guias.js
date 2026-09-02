@@ -3,10 +3,15 @@ const router = express.Router()
 const pool = require('../config/db')
 const { verificarToken, soloRoles } = require('../middlewares/authMiddleware')
 const { ajustarInventario } = require('../utils/inventario')
+const { crearNotaSalidaAutomatica } = require('../utils/salida')
 const { validarLargos } = require('../utils/texto')
 const log = require('../middlewares/logMiddleware')
 
 const DESTINOS = ['ALMACEN', 'OFICINA', 'LABORATORIO', 'OTRO']
+// Destinos que generan su propia Nota de Salida automatica (Bloque 6): el
+// material se entrega directo, no se maneja como stock normal de almacen.
+const DESTINOS_SALIDA_AUTO = ['OFICINA', 'LABORATORIO']
+const DESTINO_LABEL = { OFICINA: 'Oficina', LABORATORIO: 'Laboratorio' }
 
 // guia_items.cantidad y guia_item_partidas.cantidad son columnas INTEGER:
 // un decimal (ej. "1.5") reventaria como error crudo de Postgres (500), asi
@@ -164,6 +169,7 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
     const errItem = validarLargos({
       'producto / servicio': [it.producto_nombre, 150],
       'destino (Otro)': [it.destino_detalle, 200],
+      'persona que retira': [it.persona_retira, 150],
     })
     if (errItem) return res.status(400).json({ error: errItem })
     for (const pt of (Array.isArray(it.partidas) ? it.partidas : [])) {
@@ -183,6 +189,13 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
     }
     if (it.destino === 'OTRO' && !(it.destino_detalle && it.destino_detalle.trim())) {
       return res.status(400).json({ error: 'Debes especificar el destino cuando eliges "Otro"' })
+    }
+    // Oficina/Laboratorio ya recogido (Bloque 6): genera su Nota de Salida al
+    // toque, asi que se necesita saber quien lo retira. Si queda "pendiente de
+    // recoger" (recogido:false) no se pide todavia: se pide despues, al marcarlo
+    // retirado (POST /:id/items/:itemId/retirar).
+    if (DESTINOS_SALIDA_AUTO.includes(it.destino) && it.recogido !== false && !(it.persona_retira && it.persona_retira.trim())) {
+      return res.status(400).json({ error: 'Debes indicar quien retira el producto cuando el destino es Oficina o Laboratorio' })
     }
     // Linea EN_PARTIDA (Fase 7): la cantidad sale de la suma de partidas, no
     // se exige el campo cantidad. Se valida cada partida por separado. La
@@ -228,6 +241,11 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
     const guia = guiaResult.rows[0]
 
     const etiquetasGeneradas = []
+    const notasSalidaGeneradas = []
+    // Agrupa las lineas de salida automatica (Oficina/Laboratorio ya
+    // recogido) por destino+persona+observacion, para generar una sola Nota
+    // de Salida por grupo en vez de una por producto.
+    const salidaAutoGrupos = new Map()
 
     for (const it of items) {
       // Linea SERVICIO (Fase 8): no usa el catalogo de productos. Se guarda la
@@ -308,12 +326,15 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
         return res.status(400).json({ error: 'La cantidad debe ser un entero mayor a 0 en todas las lineas' })
       }
 
-      // Solo aplica a OFICINA/LABORATORIO: si aun no lo recogen (recogido=false),
-      // se trata igual que ALMACEN (genera etiqueta y queda en inventario) hasta
-      // que lo retiren. Si ya lo recogieron (recogido=true o no enviado), sale
-      // automatico sin etiqueta, como antes.
+      // Solo aplica a OFICINA/LABORATORIO/OTRO: si aun no lo recogen
+      // (recogido=false), se trata igual que ALMACEN (genera etiqueta y queda
+      // en inventario) hasta que lo retiren (POST /:id/items/:itemId/retirar).
       const pendienteDeRecoger = it.destino !== 'ALMACEN' && it.recogido === false
       const recogidoValor = it.destino === 'ALMACEN' ? null : (it.recogido !== false)
+      // Oficina/Laboratorio ya recogido (Bloque 6): genera su propia Nota de
+      // Salida automatica (USO_INTERNO, cerrada, sin devolucion) en el mismo
+      // momento. OTRO no cambia: sigue saliendo sin dejar ningun rastro.
+      const salidaAutoInmediata = DESTINOS_SALIDA_AUTO.includes(it.destino) && !pendienteDeRecoger
 
       const itemResult = await client.query(
         `INSERT INTO guia_items (guia_id, producto_id, cantidad, destino, destino_detalle, recogido, tipo) VALUES ($1, $2, $3, $4, $5, $6, 'PRODUCTO') RETURNING id`,
@@ -330,7 +351,7 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
         }
       }
 
-      if (it.destino === 'ALMACEN' || pendienteDeRecoger) {
+      if (it.destino === 'ALMACEN' || pendienteDeRecoger || salidaAutoInmediata) {
         const codigoResult = await client.query(`SELECT nextval('etiquetas_codigo_seq') as codigo`)
         const codigo = codigoResult.rows[0].codigo
 
@@ -339,7 +360,7 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
            VALUES ($1, $2, $3, $4, 'EN_ALMACEN') RETURNING *`,
           [codigo, guiaItemId, productoId, almacen_id]
         )
-        const etiqueta = etiquetaResult.rows[0]
+        const etiqueta = { ...etiquetaResult.rows[0], cantidad: it.cantidad }
 
         await client.query(
           `INSERT INTO etiqueta_historial (etiqueta_id, evento, almacen_destino_id, usuario_id, detalle)
@@ -354,8 +375,37 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
           descripcion: `Ingreso guia ${numero_guia.trim()}`,
         })
 
-        etiquetasGeneradas.push({ ...etiqueta, cantidad: it.cantidad })
+        if (salidaAutoInmediata) {
+          // No se crea la nota todavia: se agrupan las etiquetas de todas las
+          // lineas con el mismo destino + persona que retira + observacion, y
+          // se genera UNA sola Nota de Salida con todas juntas (no una por
+          // producto) despues del loop.
+          const clave = `${it.destino}::${it.persona_retira.trim()}::${(it.retira_obs || '').trim()}`
+          if (!salidaAutoGrupos.has(clave)) {
+            salidaAutoGrupos.set(clave, {
+              destino: it.destino,
+              personaRetira: it.persona_retira.trim(),
+              retiraObs: (it.retira_obs || '').trim() || null,
+              etiquetas: [],
+            })
+          }
+          salidaAutoGrupos.get(clave).etiquetas.push(etiqueta)
+        } else {
+          etiquetasGeneradas.push(etiqueta)
+        }
       }
+    }
+
+    for (const grupo of salidaAutoGrupos.values()) {
+      const notaAuto = await crearNotaSalidaAutomatica(client, {
+        guiaId: guia.id,
+        etiquetas: grupo.etiquetas,
+        seccion: DESTINO_LABEL[grupo.destino],
+        personaResponsable: grupo.personaRetira,
+        observaciones: grupo.retiraObs,
+        usuarioId: req.usuario.id,
+      })
+      notasSalidaGeneradas.push({ numero_nota: notaAuto.numero_nota, nota_id: notaAuto.id, productos: grupo.etiquetas.length })
     }
 
     await client.query('COMMIT')
@@ -376,12 +426,78 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
       etiquetasConDetalle = detalle.rows.map(e => ({ ...e, cantidad: cantidadPorEtiqueta[e.id] }))
     }
 
-    res.status(201).json({ guia, etiquetas: etiquetasConDetalle })
+    res.status(201).json({ guia, etiquetas: etiquetasConDetalle, notas_salida_generadas: notasSalidaGeneradas })
   } catch (err) {
     await client.query('ROLLBACK')
     if (err.code === '23505') {
       return res.status(409).json({ error: 'Conflicto al guardar la guia: otro usuario registro el mismo numero de guia o producto al mismo tiempo. Intenta de nuevo.' })
     }
+    res.status(500).json({ error: err.message })
+  } finally {
+    client.release()
+  }
+})
+
+// Marca como retirado un item de Oficina/Laboratorio que habia quedado
+// "pendiente de recoger" (Bloque 6): genera su Nota de Salida automatica
+// (USO_INTERNO, cerrada, sin devolucion) recien en este momento, cuando ya se
+// sabe quien lo retira.
+router.post('/:id/items/:itemId/retirar', verificarToken, soloRoles('admin', 'almacen'),
+  log('RETIRAR_ITEM_GUIA', req => `Guia id ${req.params.id}, item id ${req.params.itemId}`),
+  async (req, res) => {
+  const personaRetira = (req.body.persona_retira || '').trim()
+  if (!personaRetira) {
+    return res.status(400).json({ error: 'Debes indicar quien retira el producto' })
+  }
+  const errLargo = validarLargos({ 'persona que retira': [personaRetira, 150] })
+  if (errLargo) return res.status(400).json({ error: errLargo })
+
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+
+    const item = await client.query(`
+      SELECT gi.id, gi.destino, gi.recogido, e.id as etiqueta_id, e.estado as etiqueta_estado,
+             e.almacen_id, e.producto_id, e.condicion,
+             COALESCE(e.cantidad, gi.cantidad) as cantidad
+      FROM guia_items gi
+      LEFT JOIN etiquetas e ON e.guia_item_id = gi.id AND e.estado <> 'REEMPLAZADA'
+      WHERE gi.guia_id = $1 AND gi.id = $2
+      FOR UPDATE OF gi
+    `, [req.params.id, req.params.itemId])
+    if (item.rows.length === 0) {
+      await client.query('ROLLBACK')
+      return res.status(404).json({ error: 'Ese item no pertenece a esta guia' })
+    }
+    const it = item.rows[0]
+    if (!DESTINOS_SALIDA_AUTO.includes(it.destino)) {
+      await client.query('ROLLBACK')
+      return res.status(400).json({ error: 'Ese item no es de Oficina ni Laboratorio' })
+    }
+    if (it.recogido !== false) {
+      await client.query('ROLLBACK')
+      return res.status(400).json({ error: 'Ese item ya fue retirado' })
+    }
+    if (!it.etiqueta_id || it.etiqueta_estado !== 'EN_ALMACEN') {
+      await client.query('ROLLBACK')
+      return res.status(400).json({ error: 'Ese item ya no esta disponible en almacen para retirar' })
+    }
+
+    const nota = await crearNotaSalidaAutomatica(client, {
+      guiaId: Number(req.params.id),
+      etiquetas: [{ id: it.etiqueta_id, almacen_id: it.almacen_id, producto_id: it.producto_id, condicion: it.condicion, cantidad: it.cantidad }],
+      seccion: DESTINO_LABEL[it.destino],
+      personaResponsable: personaRetira,
+      observaciones: (req.body.retira_obs || '').trim() || null,
+      usuarioId: req.usuario.id,
+    })
+
+    await client.query(`UPDATE guia_items SET recogido = true WHERE id = $1`, [it.id])
+
+    await client.query('COMMIT')
+    res.json({ ok: true, numero_nota: nota.numero_nota, nota_id: nota.id })
+  } catch (err) {
+    await client.query('ROLLBACK')
     res.status(500).json({ error: err.message })
   } finally {
     client.release()
