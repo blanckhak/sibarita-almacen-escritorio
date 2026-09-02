@@ -1613,6 +1613,36 @@ commiteados en master):
   estaba correcta: 10 lineas -> hoja 1 con 6, hoja 2 con 4 + 2 filas
   vacias.
 
+- VERSIONADO DEL INSTALADOR: package.json (raiz) paso de "version": "1.0.0"
+  a "1.1.0" (semver: minor porque esta tanda agrego funcionalidad nueva,
+  no solo fixes). A partir de ahora, cada vez que se regenere el .exe con
+  cambios, subir la version antes de correr "npm run build", asi el
+  nombre del instalador (Sibarita Setup X.X.X.exe) identifica cada tanda
+  en vez de pisar siempre el mismo archivo 1.0.0. package-lock.json
+  resincronizado con "npm install --package-lock-only" (sin tocar
+  node_modules). El .exe anterior (1.0.0) se dejo en dist/ sin borrar.
+
+- PRUEBAS DE CALIDAD: CONCURRENCIA (02/09, sin cambios de codigo -> ya
+  funcionaba bien, solo se verifico). A pedido del usuario, se probaron
+  dos escenarios reales de "dos usuarios/almacenistas al mismo tiempo"
+  contra el backend en corrida:
+  * Mismo usuario logueado en dos sesiones a la vez (dos logins
+    paralelos con las mismas credenciales): ambas sesiones quedan
+    activas y funcionando sin bloqueo -> es una decision de diseño (no
+    hay "sesion unica"), no un bug.
+  * Dos personas intentando sacar el MISMO codigo para una Nota de
+    Salida al mismo milisegundo (Promise.all con 2 requests reales en
+    paralelo, no secuenciales): una gana (201), la otra recibe
+    automaticamente 409 "El codigo <N> ya no esta disponible en
+    almacen" con el codigo/id en conflicto (para que el formulario
+    marque esa linea puntual). Verificado sin doble descuento de
+    inventario, sin nota duplicada, inventario nunca queda negativo. La
+    proteccion ya existia en notasSalida.js (SELECT ... FOR UPDATE sobre
+    las etiquetas antes de chequear su estado) y funciona correctamente.
+  Pendiente si se quiere mas cobertura: la misma prueba de "carrera"
+  para Guias (dos personas anulando/editando la misma guia a la vez) y
+  para Devolucion usada, no se probaron todavia.
+
 QUE QUEDA PENDIENTE (revision del proyecto, 31/08):
 - Fase 1 - Calibracion de impresion matricial (Bloque 2 "6 lineas" +
   Bloque 6 impresora Epson FX-890 II): BLOQUEADA esperando que el usuario
