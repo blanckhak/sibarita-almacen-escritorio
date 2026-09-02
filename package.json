@@ -39,7 +39,8 @@
       "icon.ico",
       "backend/**/*",
       "!backend/node_modules/**/*",
-      "!backend/frontend-dist/**/*.map"
+      "!backend/frontend-dist/**/*.map",
+      "!backend/.env"
     ],
     "directories": {
       "output": "dist"
