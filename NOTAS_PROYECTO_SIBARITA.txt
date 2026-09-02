@@ -1541,11 +1541,77 @@ commiteados en master):
   backend/src/config/{database.sql,setup.js},
   frontend/src/pages/NotaSalidaDetalle.jsx,
   frontend/src/utils/presentaciones.js (nuevo).
-  PROBADO manualmente en la app corriendo localmente (npm start): backend
-  arranca sin errores tras la migracion, columnas verificadas en
-  sibarita_db (devuelto_unidad_medida_id, devuelto_presentacion). Falta
-  probar el flujo completo end-to-end en pantalla (registrar una
-  devolucion usada con presentacion+unidad, y despues editarla).
+  PROBADO end-to-end por API contra el backend en corrida (login, guia,
+  nota de salida, devolucion usada con presentacion+unidad, edicion
+  posterior, y el bloqueo si el codigo ya se movio de almacen). Datos de
+  prueba limpiados despues, sin residuo.
+
+- GUIAS A OFICINA/LABORATORIO: GENERAN SU PROPIA NOTA DE SALIDA (Bloque 6).
+  Antes, una linea de guia con destino Oficina o Laboratorio no dejaba
+  ningun rastro (si "ya recogido") o quedaba en inventario esperando un
+  retiro manual sin fecha (si "pendiente de recoger"), sin conectar nunca
+  con el modulo de Notas de Salida. Ahora:
+  * "Ya lo recogieron" (caso inmediato): el formulario de la guia pide
+    "Quien retira" (obligatorio) y "Observacion" (opcional) por linea. Al
+    guardar la guia, TODAS las lineas de esa guia con el mismo destino +
+    la misma persona que retira + la misma observacion quedan agrupadas
+    en UNA sola Nota de Salida (no una por producto) -> motivo fijo
+    USO_INTERNO, seccion = "Oficina"/"Laboratorio", estado CERRADO,
+    requiere_devolucion = false (no se espera que vuelva). La etiqueta se
+    genera y se marca SALIO en el mismo momento (inventario neto 0, nunca
+    "vive" como stock del almacen).
+  * "Pendiente de recoger" (recogido:false): sigue generando su etiqueta y
+    quedando EN_ALMACEN como antes, PERO ahora hay un boton nuevo "Marcar
+    retirado" en el detalle de la guia (GuiaDetalle.jsx) para cuando esa
+    persona realmente pasa a buscarlo: pide el nombre en ese momento y
+    recien ahi genera la Nota de Salida (mismo formato que el caso
+    inmediato). Reintentar retirar un item ya retirado da 400.
+  * Destino "Otro" NO cambia: sigue sin generar etiqueta ni nota si no se
+    marca pendiente de recoger (comportamiento previo intacto, probado).
+  Nuevo util compartido backend/src/utils/salida.js (marcarSalida +
+  crearNotaSalidaAutomatica, esta ultima recibe un ARRAY de etiquetas para
+  agrupar varias en una sola nota) reemplaza la funcion local que tenia
+  notasSalida.js. Nuevo endpoint POST /api/guias/:id/items/:itemId/retirar.
+  Archivos: backend/src/routes/{guias.js,notasSalida.js},
+  backend/src/utils/salida.js (nuevo), frontend/src/pages/{Guias.jsx,
+  GuiaDetalle.jsx}.
+  BUG ENCONTRADO Y CORREGIDO en el desarrollo: la primera version de
+  "Marcar retirado" pasaba el id del guia_item en vez del id de la
+  etiqueta a crearNotaSalidaAutomatica -> violaba la llave foranea de
+  notas_salida_detalle (500). Se corrigio construyendo el objeto etiqueta
+  con el id correcto (it.etiqueta_id). Tambien se detecto en pruebas que
+  la primera version generaba UNA NOTA POR PRODUCTO en vez de agrupar
+  (una guia de 10 productos a Oficina generaba 10 notas separadas) -> se
+  corrigio agrupando por destino+persona+observacion antes de crear la
+  nota, ahora una guia de 10 productos al mismo destino/persona genera
+  UNA sola nota con las 10 lineas.
+  PROBADO end-to-end por API (3 casos: Oficina ya recogido, Laboratorio
+  pendiente + marcar retirado + reintento bloqueado, Otro sin cambios) y
+  con una guia real de 10 productos a Oficina (dejada a proposito en la
+  base para revision visual en la app: guia PRUEBA-OFICINA-10, nota
+  000032 con las 10 lineas).
+
+- MAYUSCULAS AUTOMATICAS EN GUIAS. A pedido del usuario, todos los campos
+  de texto libre de Guias (encabezado: N° de guia, proveedor, N° de O.C.,
+  direccion, guia de remision, factura; por linea: producto nuevo/
+  servicio, destino "Otro", referencia de partida, quien retira,
+  observacion; anular: motivo) se convierten a mayuscula mientras se
+  escribe (.toUpperCase() en cada onChange). Solo frontend, sin cambios de
+  esquema ni backend.
+
+- OBSERVACIONES Y FIRMAS EN CADA HOJA IMPRESA (no solo la ultima). Bug
+  real encontrado a partir de una prueba del usuario (guia de 10
+  productos -> 2 hojas de 6+4): el bloque de OBSERVACIONES + las firmas
+  (V°B°, Revisado por, etc.) estaba condicionado a `ultima &&`, asi que
+  solo aparecia en la ultima hoja impresa; el resto de hojas quedaban sin
+  espacio para firmar, aunque cada hoja fisica se firma por separado. Se
+  quito esa condicion (queda incondicional) en los 3 documentos que usan
+  el mismo patron de paginacion de 6 filas: GuiaDetalle.jsx,
+  NotaSalidaDetalle.jsx y SolicitudMaterialesDetalle.jsx. El TOTAL sigue
+  saliendo solo en la ultima hoja (no se toco, no se pidio). Verificado
+  que la logica de paginacion en si (enPaginas, 6 filas por hoja) ya
+  estaba correcta: 10 lineas -> hoja 1 con 6, hoja 2 con 4 + 2 filas
+  vacias.
 
 QUE QUEDA PENDIENTE (revision del proyecto, 31/08):
 - Fase 1 - Calibracion de impresion matricial (Bloque 2 "6 lineas" +
