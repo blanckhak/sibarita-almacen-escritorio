@@ -1500,6 +1500,52 @@ commiteados en master):
   almacenes que aparezcan se agregan al final. Solo cambia
   frontend/src/utils/kardexExcel.js y el texto de la tarjeta en
   Reportes.jsx. Archivo: Kardex_almacenes_<fecha>.xls.
+- bff4957  PREVISUALIZACION TAMBIEN EN ETIQUETA INDIVIDUAL Y COMPRA DIARIA.
+  Ya las 4 vistas de impresion de la app pasan por el overlay de
+  PreviewImpresion (Nota de Ingreso, Nota de Salida, Solicitud de
+  Materiales, Etiqueta individual y Compra Diaria).
+- d308d75  INSTALADOR: NO EMPAQUETAR backend/.env. El .env con la
+  contraseña real de Postgres se estaba metiendo dentro del .exe
+  distribuible (electron-builder "files": "backend/**/*" sin excluirlo).
+  Se agrego "!backend/.env" al package.json; queda backend/.env.example
+  (plantilla vacia) como lo unico que se empaqueta. Verificado con
+  `asar list` sobre el instalador regenerado: solo aparece .env.example.
+- 14ed89c  DEVOLUCION USADA: PRESENTACION + UNIDAD
+  EN VEZ DE PESO, Y EDICION POSTERIOR. El panel de "Devuelta usada" (Nota
+  de Salida) tenia un campo numerico libre "Peso (opcional)" que asumia
+  que todo se pesaba; se reemplazo por dos selects:
+  * Presentacion (opcional): lista fija CAJA/ROLLO/BOLSA/SACO (como vino
+    fisicamente). Nuevo frontend/src/utils/presentaciones.js. Columna
+    notas_salida_detalle.devuelto_presentacion VARCHAR(20) con CHECK.
+  * Unidad de medida (opcional): select con el catalogo Unidades de
+    Medida (Unidad, Caja, Rollo, Kilogramo, Metro, Metro cuadrado, Litro,
+    Plancha - el mismo catalogo de Productos). Nueva columna
+    notas_salida_detalle.devuelto_unidad_medida_id -> unidades_medida(id).
+  Ambas columnas + el CHECK de etiqueta_historial.evento (se agrego el
+  valor 'CORREGIDA') migran solas al arrancar el backend (setup.js,
+  idempotente) y quedan tambien en database.sql para instalaciones
+  nuevas.
+  EDICION POSTERIOR: como el usuario pidio poder corregir un error de
+  tipeo despues de guardado, se agrego un boton "Editar" junto a cada
+  linea con devolucion usada, que abre un modal para corregir Cantidad/
+  Presentacion/Unidad/Observacion sin rehacer el retiro del codigo viejo
+  ni la generacion del nuevo. DECISION (confirmada con el usuario): si la
+  Cantidad cambia, SI se ajusta el inventario y la cantidad del codigo
+  nuevo generado por la diferencia (delta), para que no queden
+  desincronizados; si el codigo nuevo ya se transfirio o se uso en otra
+  salida (ya no esta EN_ALMACEN), la correccion se bloquea con un error
+  claro en vez de corromper ese otro movimiento.
+  Nuevo endpoint: PUT /api/notas-salida/:id/lineas/:etiquetaId/devolucion-
+  usada (roles admin/almacen). GET /:id trae el nombre de la unidad via
+  join nuevo (dum). Archivos: backend/src/routes/notasSalida.js,
+  backend/src/config/{database.sql,setup.js},
+  frontend/src/pages/NotaSalidaDetalle.jsx,
+  frontend/src/utils/presentaciones.js (nuevo).
+  PROBADO manualmente en la app corriendo localmente (npm start): backend
+  arranca sin errores tras la migracion, columnas verificadas en
+  sibarita_db (devuelto_unidad_medida_id, devuelto_presentacion). Falta
+  probar el flujo completo end-to-end en pantalla (registrar una
+  devolucion usada con presentacion+unidad, y despues editarla).
 
 QUE QUEDA PENDIENTE (revision del proyecto, 31/08):
 - Fase 1 - Calibracion de impresion matricial (Bloque 2 "6 lineas" +
