@@ -377,8 +377,6 @@ export default function NotaSalidaDetalle() {
                 <th className="px-6 py-3 text-left">Almacen</th>
                 <th className="px-6 py-3 text-right">Cantidad</th>
                 <th className="px-6 py-3 text-left">Stock actual</th>
-                <th className="px-6 py-3 text-right">P. Unitario</th>
-                <th className="px-6 py-3 text-right">Total</th>
                 <th className="px-6 py-3 text-left">Estado</th>
               </tr>
             </thead>
@@ -431,8 +429,6 @@ export default function NotaSalidaDetalle() {
                   <td className="px-6 py-3 text-gray-500 text-xs">
                     {textoStock(d.stock_agregado_actual, d.codigos_disponibles_actual)}
                   </td>
-                  <td className="px-6 py-3 text-right">{d.p_unitario ? Number(d.p_unitario).toFixed(2) : '—'}</td>
-                  <td className="px-6 py-3 text-right">{d.total ? Number(d.total).toFixed(2) : '—'}</td>
                   <td className="px-6 py-3">
                     <span className={`px-2 py-1 rounded-full text-xs font-bold ${colorEtiquetaEstado(d.etiqueta_estado)}`}>{labelEtiquetaEstado(d.etiqueta_estado)}</span>
                     {d.devuelto_condicion && (
