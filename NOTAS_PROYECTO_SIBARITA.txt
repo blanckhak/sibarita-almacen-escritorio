@@ -1868,11 +1868,17 @@ commiteados en master):
   "npm run build" (electron-builder) genero dist/Sibarita Setup 1.4.0.exe
   (firma omitida, sin cert, igual que las anteriores). Los .exe previos
   (1.0.0..1.3.0) se dejaron en dist/ sin borrar. dist/ esta en
-  .gitignore. PENDIENTE: instalar la 1.4.0 (las anteriores se instalaban
-  en silencio con /S y despues habia que volver a copiar backend/.env a
-  C:\Users\DRGATO\AppData\Local\Programs\sibarita-escritorio\.env porque
-  el instalador no lo empaqueta; ver el bloque del instalador 1.2.0/1.3.0
-  arriba). Esta vez solo se regenero el .exe, no se reinstalo.
+  .gitignore. INSTALADA (03/09): se cerraron los electron abiertos, se
+  corrio "Sibarita Setup 1.4.0.exe" /S (exit 0), quedo "Sibarita 1.4.0"
+  en el registro (HKCU Uninstall) y Sibarita.exe con ProductVersion
+  1.4.0.0. Como siempre, el instalador borro el .env de la carpeta
+  instalada -> se volvio a copiar backend/.env a
+  C:\Users\DRGATO\AppData\Local\Programs\sibarita-escritorio\.env .
+  Verificado: app arriba, GET / -> 200, login admin -> 200, y el app.asar
+  instalado trae el bundle nuevo (NotaSalidaDetalle-B3ySfSyP.js, sin
+  columnas de precio). Sigue PENDIENTE de raiz que el .env no se empaqueta
+  (hay que recopiarlo en cada update; ver opciones a/b/c en el bloque del
+  instalador 1.2.0/1.3.0 arriba).
 
 DATOS DE PRUEBA DEJADOS EN sibarita_db (02/09, se pueden anular/limpiar):
 - Guia DEMO-RESPONSABLE-01 (id 290): linea Oficina sin persona -> quedo
