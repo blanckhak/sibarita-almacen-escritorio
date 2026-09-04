@@ -27,6 +27,65 @@ router.get('/', verificarToken, async (req, res) => {
   }
 })
 
+// "Posibles duplicados" (complemento al Bloque 3 "stock consolidado"):
+// producto_canon (setup.js) solo normaliza tildes/espacios/simbolos, no
+// separa por palabra -- no agarra variantes de singular/plural ("CERDA" vs
+// "CERDAS") ni palabras en otro orden ("BOLSAS EN ROLLO X 250 GR." vs
+// "BOLSAS X 250 GR. EN ROLLO"). Esto es SOLO UN REPORTE de lectura: no
+// fusiona ni cambia nada en la base. El admin decide a mano si renombrar dos
+// productos para que caigan bajo el mismo producto_canon real.
+// IMPORTANTE: definida antes de "/:id" en otras rutas de este archivo no
+// aplica porque este router no tiene GET "/:id" -- si algun dia se agrega
+// uno, esta ruta debe seguir yendo ANTES para que "posibles-duplicados" no
+// se interprete como un id.
+function quitarTildes(s) {
+  return s
+    .replace(/[áàäâ]/g, 'a').replace(/[éèëê]/g, 'e').replace(/[íìïî]/g, 'i')
+    .replace(/[óòöô]/g, 'o').replace(/[úùüû]/g, 'u').replace(/ñ/g, 'n')
+}
+
+// Singulariza una palabra de forma naive: solo saca una "s" final si tiene
+// 5+ letras, para no tocar palabras cortas donde la "s" no es plural (mas,
+// gas, atras, dos, tres, seis...) ni codigos numericos.
+function singularizar(palabra) {
+  if (palabra.length >= 5 && palabra.endsWith('s') && !/^[0-9]+$/.test(palabra)) {
+    return palabra.slice(0, -1)
+  }
+  return palabra
+}
+
+function claveAgresiva(nombre) {
+  const limpio = quitarTildes((nombre || '').toLowerCase())
+  return limpio
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean)
+    .map(singularizar)
+    .sort()
+    .join('|')
+}
+
+router.get('/posibles-duplicados', verificarToken, soloRoles('admin'), async (req, res) => {
+  try {
+    const productos = await pool.query('SELECT id, nombre FROM productos ORDER BY id')
+    const stock = await pool.query(`SELECT producto_id, SUM(cantidad) AS total FROM inventario GROUP BY producto_id`)
+    const stockPorProducto = {}
+    for (const r of stock.rows) stockPorProducto[r.producto_id] = Number(r.total)
+
+    const grupos = {}
+    for (const p of productos.rows) {
+      const clave = claveAgresiva(p.nombre)
+      if (!clave) continue
+      if (!grupos[clave]) grupos[clave] = []
+      grupos[clave].push({ id: p.id, nombre: p.nombre, stock_total: stockPorProducto[p.id] || 0 })
+    }
+
+    const candidatos = Object.values(grupos).filter(g => g.length > 1)
+    res.json(candidatos)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 router.post('/', verificarToken, soloRoles('admin'), async (req, res) => {
   const { nombre, categoria, unidad_medida_id, codigo_interno, metrica } = req.body
   if (!nombre || !nombre.trim()) {

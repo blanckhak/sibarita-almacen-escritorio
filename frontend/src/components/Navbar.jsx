@@ -32,6 +32,7 @@ export default function Navbar() {
     { path: '/reportes',    label: 'Reportes',    roles: ['admin','almacen','compras'] },
     { path: '/historial',   label: 'Historial',   roles: ['admin','almacen','compras'] },
     { path: '/usuarios',    label: 'Usuarios',    roles: ['admin'] },
+    { path: '/posibles-duplicados', label: 'Duplicados', roles: ['admin'] },
   ]
 
   const enlacesFiltrados = enlaces.filter(e =>

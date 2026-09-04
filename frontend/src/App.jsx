@@ -21,6 +21,7 @@ const CompraDiariaDetalle = lazy(() => import('./pages/CompraDiariaDetalle'))
 const ConsultaProductos  = lazy(() => import('./pages/ConsultaProductos'))
 const EtiquetaDetalle    = lazy(() => import('./pages/EtiquetaDetalle'))
 const Usuarios           = lazy(() => import('./pages/Usuarios'))
+const PosiblesDuplicados = lazy(() => import('./pages/PosiblesDuplicados'))
 const Movimientos        = lazy(() => import('./pages/Movimientos'))
 const Almacenes          = lazy(() => import('./pages/Almacenes'))
 const Reportes           = lazy(() => import('./pages/Reportes'))
@@ -168,6 +169,12 @@ function AppContent() {
         <Route path="/usuarios" element={
           <RutaProtegida roles={['admin']}>
             <Usuarios />
+          </RutaProtegida>
+        } />
+
+        <Route path="/posibles-duplicados" element={
+          <RutaProtegida roles={['admin']}>
+            <PosiblesDuplicados />
           </RutaProtegida>
         } />
 
