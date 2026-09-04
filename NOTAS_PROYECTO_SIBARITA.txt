@@ -1880,6 +1880,59 @@ commiteados en master):
   (hay que recopiarlo en cada update; ver opciones a/b/c en el bloque del
   instalador 1.2.0/1.3.0 arriba).
 
+SESION 04/09 - Revision de codigo (commit e4cec8d) y reporte "Posibles
+Duplicados" (commit f273eea):
+- Revision de los commits de la sesion 02-03/09 (ca1a74f..91db6eb) via
+  /code-review. 3 hallazgos, los 3 corregidos:
+  * Login "Almacenero 1/2": setup.js solo creaba usuarios con la tabla
+    vacia -> en una instalacion ya usada (como esta, instalador 1.4.0)
+    esas dos cuentas de prueba del Login.jsx nunca se creaban y el boton
+    tiraba "Credenciales incorrectas". Fix: INSERT ... ON CONFLICT (email)
+    DO NOTHING corriendo SIEMPRE (no solo tabla vacia), rol almacen +
+    almacen MALSA.
+  * server.js: "trust proxy" estaba en true sin que exista un proxy real
+    delante (LAN directa) -> cualquier PC de la red podia mandar un
+    X-Forwarded-For falso y mentir en actividad_log.ip. Fix: trust proxy
+    a false.
+  * guias.js/notasSalida.js: el lock_timeout de 8s (db.js, prueba de
+    estres) tiraba el error crudo de Postgres (500) si dos guias chocaban
+    sobre el mismo producto/almacen -- el catch solo manejaba 23505.
+    Fix: nuevo backend/src/utils/dbErrores.js (mensajeConcurrencia) que
+    traduce 55P03/40P01/57014 a un aviso claro (503), aplicado en los 8
+    puntos transaccionales con ROLLBACK de ambos archivos.
+  Nota con el detalle de cada fix: Revision_2026-09-04_sesion-02-03-09.md
+  (Obsidian, raiz del proyecto).
+- "Posibles Duplicados": producto_canon (Bloque 3, "stock consolidado")
+  normaliza tildes/espacios/simbolos pero NO separa por palabra -> no
+  agarra singular/plural ("CERDA" vs "CERDAS") ni palabras en otro orden
+  ("BOLSAS EN ROLLO X 250 GR." vs "BOLSAS X 250 GR. EN ROLLO"), casos
+  reales encontrados en la lista "Materiales de Limpieza" (para
+  giarse/gia1.jpeg, 28/08). Se decidio NO tocar el canon real (indice
+  unico, fusion automatica) por riesgo de fusionar productos distintos
+  sin revision humana. En cambio: GET /api/productos/posibles-duplicados
+  (solo admin) agrupa el catalogo con una clave mas agresiva (singulariza
+  cada palabra, ordena, junta) y devuelve los grupos de mas de un
+  producto + su stock total, de solo lectura. Pantalla
+  /posibles-duplicados (solo admin), link "Duplicados" en el navbar.
+  Probado con el catalogo real (35 productos, sin duplicados todavia).
+
+- INSTALADOR .exe: 1.4.0 -> 1.5.0, REGENERADO E INSTALADO (04/09).
+  package.json (raiz) "version" 1.4.0 -> 1.5.0 (revision de codigo +
+  reporte Posibles Duplicados de arriba). package-lock.json
+  resincronizado con "npm install --package-lock-only". Se corrio
+  "npm run build" en frontend/ y se reemplazo backend/frontend-dist con
+  frontend/dist antes de empaquetar. "npm run build" (electron-builder)
+  genero dist/Sibarita Setup 1.5.0.exe (firma omitida, sin cert, igual
+  que las anteriores). Los .exe previos (1.0.0..1.4.0) se dejaron en
+  dist/ sin borrar. INSTALADA (04/09): no habia electron/Sibarita
+  corriendo, se corrio "Sibarita Setup 1.5.0.exe" /S (exit 0). Como
+  siempre, el instalador borro el .env de la carpeta instalada -> se
+  volvio a copiar backend/.env a
+  C:\Users\DRGATO\AppData\Local\Programs\sibarita-escritorio\.env .
+  Verificado: app arriba, GET / -> 200, login admin -> 200. Sigue
+  PENDIENTE de raiz que el .env no se empaqueta (ver opciones a/b/c en
+  el bloque del instalador 1.2.0/1.3.0 arriba).
+
 DATOS DE PRUEBA DEJADOS EN sibarita_db (02/09, se pueden anular/limpiar):
 - Guia DEMO-RESPONSABLE-01 (id 290): linea Oficina sin persona -> quedo
   pendiente y se le asigno responsable desde el detalle (nota 000041,
