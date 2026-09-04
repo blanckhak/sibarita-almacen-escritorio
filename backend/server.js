@@ -24,9 +24,12 @@ const setup             = require('./src/config/setup')
 
 const app = express()
 
-// Necesario para que req.ip sea la IP real del equipo (y no la del proxy) si
-// algun dia se pone un reverse proxy delante. En LAN directa no cambia nada.
-app.set('trust proxy', true)
+// false: no hay reverse proxy real delante (LAN directa). Con 'true' cualquier
+// cliente podria mandar un header X-Forwarded-For falso y hacer que
+// actividad_log.ip registre una IP inventada en vez de la real -- justo lo
+// contrario de para que sirve ese log. Si algun dia se agrega un proxy real,
+// esto se cambia a la IP/subred de ESE proxy (no 'true' = confiar en todos).
+app.set('trust proxy', false)
 
 app.use(cors())
 app.use(express.json())

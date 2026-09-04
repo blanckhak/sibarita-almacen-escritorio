@@ -498,6 +498,26 @@ async function setup() {
     console.log('Usuarios creados')
   }
 
+  // Almacenero 1 / Almacenero 2 (rol 'almacen', mismo almacen MALSA): dos
+  // cuentas para probar el multiusuario LAN (dos PCs guardando guias del
+  // mismo almacen a la vez). A diferencia del bloque de arriba, esto corre
+  // siempre -- no solo en tabla vacia -- porque instalaciones existentes
+  // (instalador 1.4.0 sobre una BD ya usada) nunca pasan por ese bloque, y
+  // los botones de "Usuarios de prueba" del login los necesitan igual.
+  const almaceneroDemo = [
+    { nombre: 'Almacenero 1', email: 'almacenero1@sibarita.com', pass: 'almacenero1' },
+    { nombre: 'Almacenero 2', email: 'almacenero2@sibarita.com', pass: 'almacenero2' },
+  ]
+  for (const u of almaceneroDemo) {
+    const hash = await bcrypt.hash(u.pass, 10)
+    await pool.query(
+      `INSERT INTO usuarios (nombre,email,password,rol_id,almacen_id)
+       VALUES ($1,$2,$3,2,1)
+       ON CONFLICT (email) DO NOTHING`,
+      [u.nombre, u.email, hash]
+    )
+  }
+
   console.log('Base de datos lista.')
 }
 

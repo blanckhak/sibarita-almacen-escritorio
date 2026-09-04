@@ -5,6 +5,7 @@ const { verificarToken, soloRoles } = require('../middlewares/authMiddleware')
 const { ajustarInventario } = require('../utils/inventario')
 const { crearNotaSalidaAutomatica } = require('../utils/salida')
 const { validarLargos } = require('../utils/texto')
+const { mensajeConcurrencia } = require('../utils/dbErrores')
 const log = require('../middlewares/logMiddleware')
 
 const DESTINOS = ['ALMACEN', 'OFICINA', 'LABORATORIO', 'OTRO']
@@ -483,6 +484,8 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
     if (err.code === '23505') {
       return res.status(409).json({ error: 'Conflicto al guardar la guia: otro usuario registro el mismo numero de guia o producto al mismo tiempo. Intenta de nuevo.' })
     }
+    const msgConcurrencia = mensajeConcurrencia(err)
+    if (msgConcurrencia) return res.status(503).json({ error: msgConcurrencia })
     res.status(500).json({ error: err.message })
   } finally {
     client.release()
@@ -549,6 +552,8 @@ router.post('/:id/items/:itemId/retirar', verificarToken, soloRoles('admin', 'al
     res.json({ ok: true, numero_nota: nota.numero_nota, nota_id: nota.id })
   } catch (err) {
     await client.query('ROLLBACK')
+    const msgConcurrencia = mensajeConcurrencia(err)
+    if (msgConcurrencia) return res.status(503).json({ error: msgConcurrencia })
     res.status(500).json({ error: err.message })
   } finally {
     client.release()
@@ -707,6 +712,8 @@ router.put('/:id', verificarToken, soloRoles('admin', 'almacen'),
     res.json(guiaFinal)
   } catch (err) {
     await client.query('ROLLBACK')
+    const msgConcurrencia = mensajeConcurrencia(err)
+    if (msgConcurrencia) return res.status(503).json({ error: msgConcurrencia })
     res.status(500).json({ error: err.message })
   } finally {
     client.release()
@@ -805,6 +812,8 @@ router.post('/:id/anular', verificarToken, soloRoles('admin', 'almacen'),
     res.json({ ...actualizada.rows[0], codigos_retirados: ets.rows.length })
   } catch (err) {
     await client.query('ROLLBACK')
+    const msgConcurrencia = mensajeConcurrencia(err)
+    if (msgConcurrencia) return res.status(503).json({ error: msgConcurrencia })
     res.status(500).json({ error: err.message })
   } finally {
     client.release()

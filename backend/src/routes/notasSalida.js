@@ -5,6 +5,7 @@ const { verificarToken, soloRoles } = require('../middlewares/authMiddleware')
 const { ajustarInventario } = require('../utils/inventario')
 const { marcarSalida } = require('../utils/salida')
 const { validarLargos } = require('../utils/texto')
+const { mensajeConcurrencia } = require('../utils/dbErrores')
 const log = require('../middlewares/logMiddleware')
 
 const MOTIVOS = ['USO_INTERNO', 'PRESTAMO', 'REPARACION', 'DESECHO', 'OTRO']
@@ -203,6 +204,8 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
     res.status(201).json({ ...nota, numero_guia: null, detalle_generado: lineas.length, monto_total: montoTotal })
   } catch (err) {
     await client.query('ROLLBACK')
+    const msgConcurrencia = mensajeConcurrencia(err)
+    if (msgConcurrencia) return res.status(503).json({ error: msgConcurrencia })
     res.status(500).json({ error: err.message })
   } finally {
     client.release()
@@ -256,6 +259,8 @@ router.post('/:id/aprobar', verificarToken, soloRoles('admin', 'almacen'),
     res.json(actualizada.rows[0])
   } catch (err) {
     await client.query('ROLLBACK')
+    const msgConcurrencia = mensajeConcurrencia(err)
+    if (msgConcurrencia) return res.status(503).json({ error: msgConcurrencia })
     res.status(500).json({ error: err.message })
   } finally {
     client.release()
@@ -547,6 +552,8 @@ router.post('/:id/devolucion', verificarToken, soloRoles('admin', 'almacen'),
     res.json({ ...actualizada.rows[0], condicion, codigos_nuevos: codigosNuevos })
   } catch (err) {
     await client.query('ROLLBACK')
+    const msgConcurrencia = mensajeConcurrencia(err)
+    if (msgConcurrencia) return res.status(503).json({ error: msgConcurrencia })
     res.status(500).json({ error: err.message })
   } finally {
     client.release()
@@ -653,6 +660,8 @@ router.put('/:id/lineas/:etiquetaId/devolucion-usada', verificarToken, soloRoles
     res.json({ ok: true })
   } catch (err) {
     await client.query('ROLLBACK')
+    const msgConcurrencia = mensajeConcurrencia(err)
+    if (msgConcurrencia) return res.status(503).json({ error: msgConcurrencia })
     res.status(500).json({ error: err.message })
   } finally {
     client.release()
