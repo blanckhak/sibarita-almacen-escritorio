@@ -315,14 +315,28 @@ export default function GuiaDetalle() {
 
   const conEtiqueta = guia.items.filter(it => it.etiqueta_id)
   const itemsAImprimir = imprimiendo ? guia.items.filter(it => imprimiendo.includes(it.etiqueta_id)) : []
-  // Fase 11 (R4): en la Nota de Ingreso las lineas con el mismo ID de
-  // agrupacion van juntas; las que no tienen ID quedan al final en su orden.
-  const itemsImpresion = [...guia.items].sort((a, b) => {
-    const ga = a.id_agrupador || '￿'
-    const gb = b.id_agrupador || '￿'
-    if (ga !== gb) return ga < gb ? -1 : 1
-    return a.id - b.id
-  })
+  // Fase 11 (R4 + guia1.jpg): en la Nota de Ingreso las lineas con el mismo ID
+  // de agrupacion van juntas (las sin ID quedan al final), y cada linea recibe
+  // un ITEM que reinicia dentro de cada grupo: "1 A1", "2 A1", "1 B2"...
+  const itemsImpresion = (() => {
+    const arr = [...guia.items].sort((a, b) => {
+      const ga = a.id_agrupador || '￿'
+      const gb = b.id_agrupador || '￿'
+      if (ga !== gb) return ga < gb ? -1 : 1
+      return a.id - b.id
+    })
+    const contador = {}
+    return arr.map(it => {
+      const grupo = it.id_agrupador || ''
+      contador[grupo] = (contador[grupo] || 0) + 1
+      return { ...it, _itm: grupo ? `${contador[grupo]} ${grupo}` : String(contador[grupo]) }
+    })
+  })()
+
+  // guia1.jpg: DOC abreviado y numero del documento fisico del proveedor.
+  const DOC_ABREV = { GUIA: 'G/R', FACTURA: 'FAC', BOLETA: 'BOL', OTRO: 'OTRO' }
+  const docAbrev = DOC_ABREV[guia.tipo_documento] || 'G/R'
+  const nroDocProveedor = guia.guia_remision || guia.factura || ''
 
   return (
     <div className="p-6">
@@ -932,56 +946,67 @@ export default function GuiaDetalle() {
                   {todas.length > 1 && <span className="text-gray-500 font-normal text-xs ml-2">Hoja {pi + 1} de {todas.length}</span>}
                 </div>
 
-                <div className="px-4 py-3 text-sm space-y-1">
-                  <div className="flex"><b className="text-gray-600 w-40 shrink-0">PROVEEDOR:</b><span className="border-b border-gray-400 flex-1">{guia.proveedor || ''}</span></div>
-                  <div className="flex"><b className="text-gray-600 w-40 shrink-0">ORDEN DE COMPRA:</b><span className="border-b border-gray-400 flex-1">{guia.numero_oc || ''}</span></div>
-                  <div className="flex"><b className="text-gray-600 w-40 shrink-0">GUIA DE REMISION:</b><span className="border-b border-gray-400 flex-1">{guia.guia_remision || ''}</span></div>
-                  <div className="flex"><b className="text-gray-600 w-40 shrink-0">FACTURA:</b><span className="border-b border-gray-400 flex-1">{guia.factura || ''}</span></div>
-                </div>
-
-                <table className="w-full text-xs table-fixed" style={{ width: 'calc(100% - 2rem)', margin: '0 auto' }}>
+                {/* Contenido segun guia1.jpg (para giarse): una fila por linea con
+                    ITEM (n por grupo + ID) / UBICAC / Fecha / N-I / O.C. externa /
+                    DOC / N doc / Proveedor / Detalle / Maquina-Motivo / Unid.med /
+                    Cantidad. Los datos de cabecera se repiten en cada fila. */}
+                <table className="w-full table-fixed border-collapse text-[9px] leading-tight" style={{ width: 'calc(100% - 1rem)', margin: '0.5rem auto' }}>
+                  <colgroup>
+                    <col className="w-10" /><col className="w-14" /><col className="w-14" /><col className="w-12" />
+                    <col className="w-20" /><col className="w-9" /><col className="w-20" /><col className="w-28" />
+                    <col /><col className="w-24" /><col className="w-12" /><col className="w-12" />
+                  </colgroup>
                   <thead>
-                    <tr className="bg-gray-100 border-y-2 border-gray-800">
-                      <th className="text-center py-1 tracking-widest">D E T A L L E</th>
-                      <th className="text-center py-1 border-l border-gray-800 w-20">CANTIDAD</th>
-                      <th className="text-center py-1 border-l border-gray-800 w-16">P. UNIT.</th>
-                      <th className="text-center py-1 border-l border-gray-800 w-20">TOTAL</th>
+                    <tr className="bg-gray-100 border-y-2 border-gray-800 [&>th]:border-l [&>th]:border-gray-800 [&>th]:px-1 [&>th]:py-1 [&>th]:font-semibold [&>th]:text-center">
+                      <th className="!border-l-0">ITEM</th>
+                      <th>UBICAC</th>
+                      <th>Fecha</th>
+                      <th>N/I</th>
+                      <th>O/C Nº Externa</th>
+                      <th>DOC</th>
+                      <th>Nº</th>
+                      <th>Proveedor</th>
+                      <th>Detalle</th>
+                      <th>Máquina - MOTIVO</th>
+                      <th>UNID MED</th>
+                      <th>Cantidad</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filas.map((it, ri) => (
-                      <tr key={ri} className="border-b border-gray-400 h-7 align-top">
-                        <td className="py-1 px-1">
-                          {it?.id_agrupador && (
-                            <span className="font-mono font-bold mr-1">[{it.id_agrupador}]</span>
-                          )}
-                          {(it?.codigo_impresion || it?.etiqueta_codigo) && (
-                            <span className="font-mono font-bold px-1 mr-1 rounded" style={estiloCodigoImpreso(guia.almacen_nombre)}>
-                              {it.codigo_impresion || codigoAlmacen(it.etiqueta_codigo, guia.almacen_nombre)}
-                            </span>
+                      <tr key={ri} className="border-b border-gray-400 align-top [&>td]:border-l [&>td]:border-gray-400 [&>td]:px-1 [&>td]:py-1" style={{ minHeight: '1.4rem' }}>
+                        <td className="!border-l-0 text-center font-mono font-bold">{it ? it._itm : ''}</td>
+                        <td className="break-words">{it?.etiqueta_ubicacion || ''}</td>
+                        <td className="text-center whitespace-nowrap">{it ? `${dd}.${mm}.${(yy || '').slice(2)}` : ''}</td>
+                        <td className="text-center">{it ? guia.numero_guia : ''}</td>
+                        <td className="text-center break-words">{it ? (guia.numero_oc || '') : ''}</td>
+                        <td className="text-center">{it ? docAbrev : ''}</td>
+                        <td className="text-center break-words">{it ? nroDocProveedor : ''}</td>
+                        <td className="break-words">{it ? (guia.proveedor || '') : ''}</td>
+                        <td className="break-words">
+                          {it?.codigo_impresion && (
+                            <span className="font-mono font-bold mr-1" style={estiloCodigoImpreso(guia.almacen_nombre)}>{it.codigo_impresion}</span>
                           )}
                           {it ? it.producto_nombre : ''}
-                          {it?.tipo === 'SERVICIO' && <span className="text-[10px] text-gray-500"> (servicio)</span>}
+                          {it?.tipo === 'SERVICIO' && <span className="text-gray-500"> (servicio)</span>}
                           {it?.partidas?.length > 0 && (
-                            <span className="block text-[10px] text-gray-500">
+                            <span className="block text-gray-500">
                               {it.partidas.map(pt => `${fmtCantidad(pt.cantidad)}${pt.referencia ? ` (${pt.referencia})` : ''}`).join(' · ')}
                             </span>
                           )}
-                          {it?.observaciones && (
-                            <span className="block text-[10px] text-gray-500 italic">{it.observaciones}</span>
-                          )}
+                          {it?.observaciones && <span className="block text-gray-500 italic">{it.observaciones}</span>}
                         </td>
-                        <td className="py-1 text-center border-l border-gray-400">{it ? `${fmtCantidad(it.cantidad)}${it.unidad_medida_abreviatura ? ` ${it.unidad_medida_abreviatura}` : ''}` : ''}</td>
-                        <td className="py-1 border-l border-gray-400">&nbsp;</td>
-                        <td className="py-1 border-l border-gray-400">&nbsp;</td>
+                        <td className="break-words">{it ? (it.destino_detalle || it.destino || '') : ''}</td>
+                        <td className="text-center">{it ? (it.unidad_medida_abreviatura || it.unidad_medida_nombre || '-') : ''}</td>
+                        <td className="text-right pr-1 font-semibold">{it ? fmtCantidad(it.cantidad) : ''}</td>
                       </tr>
                     ))}
                     {ultima && (
-                      <tr className="border-y-2 border-gray-800 h-7 font-semibold">
-                        <td className="py-1 text-right pr-2">TOTAL</td>
-                        <td className="border-l border-gray-800">&nbsp;</td>
-                        <td className="border-l border-gray-800">&nbsp;</td>
-                        <td className="border-l border-gray-800">&nbsp;</td>
+                      <tr className="border-y-2 border-gray-800 font-semibold [&>td]:border-l [&>td]:border-gray-800 [&>td]:px-1 [&>td]:py-1">
+                        <td className="!border-l-0" colSpan={11}>TOTAL</td>
+                        <td className="text-right pr-1">
+                          {fmtCantidad(itemsImpresion.reduce((s, it) => s + Number(it.cantidad || 0), 0))}
+                        </td>
                       </tr>
                     )}
                   </tbody>

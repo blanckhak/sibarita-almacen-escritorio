@@ -2106,6 +2106,28 @@ comun; R7 va ultimo porque consume todo lo anterior.
     observacion de cabecera y de linea guardadas; PUT codigo_impresion
     "MANUAL-001" -> guardado, etiqueta_codigo real 9003 intacto.
   * frontend build OK, copiado a backend/frontend-dist, app reiniciada.
+- Paso 11.10b HECHO (10/09): la tabla de la Nota de Ingreso impresa pasa
+  al layout de "para giarse/guia1.jpg" (pedido del usuario).
+  * Se reemplaza la tabla DETALLE|CANTIDAD|P.UNIT|TOTAL por una planilla
+    ancha, una fila por linea, con columnas:
+    ITEM | UBICAC | Fecha | N/I | O/C Nº Externa | DOC | Nº | Proveedor |
+    Detalle | Maquina - MOTIVO | UNID MED | Cantidad.
+  * ITEM = numero que reinicia dentro de cada id_agrupador + la letra/ID
+    del grupo ("1 A1", "2 A1", "1 B2"); sin ID -> correlativo simple.
+  * DOC = abreviatura del tipo_documento (GUIA->G/R, FACTURA->FAC,
+    BOLETA->BOL, OTRO->OTRO). Nº = guia_remision o factura. Fecha =
+    DD.MM.YY. Los datos de cabecera (Fecha/N-I/O.C./DOC/Nº/Proveedor) se
+    repiten en cada fila, como en la imagen.
+  * Maquina-MOTIVO = destino_detalle o destino. UNID MED = abreviatura de
+    la unidad. Cantidad con fmtCantidad (decimales). Fila TOTAL suma las
+    cantidades.
+  * Se quito el bloque PROVEEDOR/O.C./GUIA DE REMISION/FACTURA de arriba
+    (ahora esos datos van en cada fila). Se mantiene el marco del
+    talonario: encabezado MANUFACTURA DE ALIMENTOS S.A., caja FECHA, N.
+    en rojo, OBSERVACIONES, texto de conformidad y firmas.
+  * Nota: el ancho de 12 columnas todavia depende de la calibracion de
+    impresion matricial (Fase 1, BLOQUEADA por la medicion del talonario).
+  * frontend build OK, copiado, app levantada.
 
 QUE QUEDA PENDIENTE (revision del proyecto, 31/08):
 - Fase 1 - Calibracion de impresion matricial (Bloque 2 "6 lineas" +
