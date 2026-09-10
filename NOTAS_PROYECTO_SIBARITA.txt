@@ -2027,6 +2027,24 @@ comun; R7 va ultimo porque consume todo lo anterior.
     transferencia). inventario.js/alertas.js NO se tocan: SUM(int) ya
     devolvia bigint=string, el front ya lo maneja.
   * node -c OK en los 5 archivos.
+- Paso 11.6 HECHO (10/09): frontend acepta y muestra decimales.
+  * Nuevo frontend/src/utils/fmt.js: fmtCantidad (muestra sin ceros de
+    mas: "3.500"->"3.5") y sumarCantidades (suma redondeada a 3 dec).
+  * Guias.jsx: por linea se calcula permiteDecimal segun la unidad de
+    medida (permite_decimal true = KG/M/M2/L) -> el input de cantidad y
+    el de partidas usan step 0.001/min 0.001 en vez de step 1; aviso
+    "admite decimales". Validacion de partidas: Number.isFinite/>0 en vez
+    de Number.isInteger. stockConsolidado usa sumarCantidades.
+  * GuiaDetalle.jsx / NotaSalidaDetalle.jsx: fmtCantidad en tabla,
+    partidas, plantillas de impresion y modales de devolucion; inputs de
+    devolucion a step 0.001; validacion Number.isFinite en vez de
+    Number.isInteger.
+  * Inventario/Movimientos: sus formularios manuales de cantidad quedan
+    en entero (min 1) hasta auditar sus backends -> pendiente polish.
+  * ConsultaProductos / EtiquetaDetalle: sin cambios, ya renderizan bien
+    los numeros gracias a los casts ::float8 del backend.
+  * frontend construido sin errores (npm run build) y copiado a
+    backend/frontend-dist para probar en la app.
 
 QUE QUEDA PENDIENTE (revision del proyecto, 31/08):
 - Fase 1 - Calibracion de impresion matricial (Bloque 2 "6 lineas" +

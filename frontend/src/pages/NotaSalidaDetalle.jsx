@@ -9,6 +9,7 @@ import { claseCodigoAlmacen, estiloCodigoImpreso, codigoAlmacen, numeroCodigo } 
 import { PRESENTACIONES, presentacionLabel } from '../utils/presentaciones'
 import PreviewImpresion from '../components/PreviewImpresion'
 import CodigoBarras from '../components/CodigoBarras'
+import { fmtCantidad } from '../utils/fmt'
 
 const colorEstado = {
   PENDIENTE:     'bg-orange-100 text-orange-700',
@@ -122,8 +123,8 @@ export default function NotaSalidaDetalle() {
     }
     if (condicion === 'USADO') {
       const n = Number(devCantidad)
-      if (!Number.isInteger(n) || n <= 0 || n > lineaDevolucion.cantidad) {
-        setMensaje({ tipo: 'error', texto: `La cantidad que vuelve debe estar entre 1 y ${lineaDevolucion.cantidad}` })
+      if (!Number.isFinite(n) || n <= 0 || n > lineaDevolucion.cantidad) {
+        setMensaje({ tipo: 'error', texto: `La cantidad que vuelve debe ser mayor a 0 y hasta ${fmtCantidad(lineaDevolucion.cantidad)}` })
         setTimeout(() => setMensaje(null), 3000)
         return
       }
@@ -166,8 +167,8 @@ export default function NotaSalidaDetalle() {
   const guardarEdicionDevolucion = async () => {
     if (!lineaEditando) return
     const n = Number(editCantidad)
-    if (!Number.isInteger(n) || n <= 0 || n > lineaEditando.cantidad) {
-      setMensaje({ tipo: 'error', texto: `La cantidad que vuelve debe estar entre 1 y ${lineaEditando.cantidad}` })
+    if (!Number.isFinite(n) || n <= 0 || n > lineaEditando.cantidad) {
+      setMensaje({ tipo: 'error', texto: `La cantidad que vuelve debe ser mayor a 0 y hasta ${fmtCantidad(lineaEditando.cantidad)}` })
       setTimeout(() => setMensaje(null), 3000)
       return
     }
@@ -425,7 +426,7 @@ export default function NotaSalidaDetalle() {
                   </td>
                   <td className="px-6 py-3 text-gray-700">{d.producto_nombre}</td>
                   <td className="px-6 py-3 text-gray-500">{d.almacen_nombre}</td>
-                  <td className="px-6 py-3 text-right">{d.cantidad}</td>
+                  <td className="px-6 py-3 text-right">{fmtCantidad(d.cantidad)}</td>
                   <td className="px-6 py-3 text-gray-500 text-xs">
                     {textoStock(d.stock_agregado_actual, d.codigos_disponibles_actual)}
                   </td>
@@ -436,7 +437,7 @@ export default function NotaSalidaDetalle() {
                         Devuelta {d.devuelto_condicion === 'USADO' ? 'usada' : 'nueva'}
                         {d.devuelto_condicion === 'USADO' && (d.devuelto_cantidad != null || d.devuelto_presentacion || d.devuelto_unidad_medida_nombre) && (
                           <span className="block font-normal text-gray-500">
-                            {d.devuelto_cantidad != null && `volvieron ${d.devuelto_cantidad} de ${d.cantidad}`}
+                            {d.devuelto_cantidad != null && `volvieron ${fmtCantidad(d.devuelto_cantidad)} de ${fmtCantidad(d.cantidad)}`}
                             {d.devuelto_presentacion && `${d.devuelto_cantidad != null ? ' · ' : ''}${presentacionLabel(d.devuelto_presentacion)}`}
                             {d.devuelto_unidad_medida_nombre && `${(d.devuelto_cantidad != null || d.devuelto_presentacion) ? ' · ' : ''}${d.devuelto_unidad_medida_nombre}`}
                           </span>
@@ -527,7 +528,7 @@ export default function NotaSalidaDetalle() {
 
             <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-4 text-sm space-y-1">
               <div><span className="text-gray-500">Producto:</span> <span className="font-medium text-gray-800">{lineaDevolucion.producto_nombre}</span></div>
-              <div><span className="text-gray-500">Cantidad esperada:</span> <span className="font-medium text-gray-800">{lineaDevolucion.cantidad}</span></div>
+              <div><span className="text-gray-500">Cantidad esperada:</span> <span className="font-medium text-gray-800">{fmtCantidad(lineaDevolucion.cantidad)}</span></div>
               <div><span className="text-gray-500">Codigo:</span> <span className="font-mono font-bold text-gray-800">{codigoAlmacen(lineaDevolucion.etiqueta_codigo, lineaDevolucion.almacen_nombre)}</span></div>
             </div>
 
@@ -548,12 +549,12 @@ export default function NotaSalidaDetalle() {
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Cantidad que vuelve</label>
                   <input
-                    type="number" min="1" step="1" max={lineaDevolucion.cantidad}
+                    type="number" min="0.001" step="0.001" max={lineaDevolucion.cantidad}
                     value={devCantidad}
                     onChange={e => setDevCantidad(e.target.value)}
                     className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
                   />
-                  <span className="text-[11px] text-gray-400">de {lineaDevolucion.cantidad} que salieron</span>
+                  <span className="text-[11px] text-gray-400">de {fmtCantidad(lineaDevolucion.cantidad)} que salieron</span>
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Presentacion (opcional)</label>
@@ -636,12 +637,12 @@ export default function NotaSalidaDetalle() {
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Cantidad que vuelve</label>
                 <input
-                  type="number" min="1" step="1" max={lineaEditando.cantidad}
+                  type="number" min="0.001" step="0.001" max={lineaEditando.cantidad}
                   value={editCantidad}
                   onChange={e => setEditCantidad(e.target.value)}
                   className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
-                <span className="text-[11px] text-gray-400">de {lineaEditando.cantidad} que salieron</span>
+                <span className="text-[11px] text-gray-400">de {fmtCantidad(lineaEditando.cantidad)} que salieron</span>
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Presentacion (opcional)</label>
@@ -749,7 +750,7 @@ export default function NotaSalidaDetalle() {
                             </>
                           ) : ''}
                         </td>
-                        <td className="py-1 text-center border-l border-gray-400">{d ? d.cantidad : ''}</td>
+                        <td className="py-1 text-center border-l border-gray-400">{d ? fmtCantidad(d.cantidad) : ''}</td>
                         <td className="py-1 text-right px-1 border-l border-gray-400">{d?.p_unitario ? Number(d.p_unitario).toFixed(2) : ''}</td>
                         <td className="py-1 text-right px-1 border-l border-gray-400">{d?.total ? Number(d.total).toFixed(2) : ''}</td>
                       </tr>
@@ -833,8 +834,8 @@ export default function NotaSalidaDetalle() {
               <tr key={d.id} className="border-b border-gray-200">
                 <td className="py-1 pr-3"><span className="font-mono font-bold px-1 rounded" style={estiloCodigoImpreso(d.almacen_nombre)}>{codigoAlmacen(d.etiqueta_codigo, d.almacen_nombre)}</span></td>
                 <td className="py-1 pr-3">{d.producto_nombre}</td>
-                <td className="py-1 pr-3 text-right">{d.cantidad}</td>
-                <td className="py-1 pr-3 text-right">{d.devuelto_cantidad != null ? d.devuelto_cantidad : d.cantidad}</td>
+                <td className="py-1 pr-3 text-right">{fmtCantidad(d.cantidad)}</td>
+                <td className="py-1 pr-3 text-right">{fmtCantidad(d.devuelto_cantidad != null ? d.devuelto_cantidad : d.cantidad)}</td>
                 <td className="py-1 pr-3">{presentacionLabel(d.devuelto_presentacion) || '—'}</td>
                 <td className="py-1 pr-3">{d.devuelto_unidad_medida_nombre || '—'}</td>
                 <td className="py-1 pr-3">{d.devuelto_condicion === 'USADO' ? 'Usada' : 'Nueva'}</td>
@@ -880,7 +881,7 @@ export default function NotaSalidaDetalle() {
                 {lineaEtiquetaUsada.unidad_medida_abreviatura || ''}
               </div>
               <div className="font-bold flex items-center justify-center px-4 min-w-[40px]" style={estiloCodigoImpreso(lineaEtiquetaUsada.almacen_nombre)}>
-                {lineaEtiquetaUsada.devuelto_cantidad != null ? lineaEtiquetaUsada.devuelto_cantidad : lineaEtiquetaUsada.cantidad}
+                {fmtCantidad(lineaEtiquetaUsada.devuelto_cantidad != null ? lineaEtiquetaUsada.devuelto_cantidad : lineaEtiquetaUsada.cantidad)}
               </div>
             </div>
             <div className="flex justify-center py-1.5 border-t border-gray-800">

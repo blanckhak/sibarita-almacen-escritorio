@@ -7,6 +7,7 @@ import { extraerProveedoresConocidos } from '../utils/proveedores'
 import { colorEtiquetaEstado, labelEtiquetaEstado } from '../utils/etiquetaEstados'
 import { TIPOS_DOCUMENTO, tipoDocumentoLabel } from '../utils/tiposDocumento'
 import { enPaginas } from '../utils/paginarImpresion'
+import { fmtCantidad } from '../utils/fmt'
 import { claseCodigoAlmacen, estiloCodigoImpreso, codigoAlmacen } from '../utils/colorAlmacen'
 import PreviewImpresion from '../components/PreviewImpresion'
 
@@ -450,7 +451,7 @@ export default function GuiaDetalle() {
                       </span>
                       {li.editable ? (
                         <input
-                          type="number" min="1" step="1"
+                          type="number" min="0.001" step="0.001"
                           value={li.cantidad}
                           onChange={e => setFormEdicion(f => {
                             const items = [...f.items]
@@ -461,7 +462,7 @@ export default function GuiaDetalle() {
                         />
                       ) : (
                         <span className="text-gray-400 text-xs text-right">
-                          {li.cantidad} · {li.motivo}
+                          {fmtCantidad(li.cantidad)} · {li.motivo}
                         </span>
                       )}
                     </div>
@@ -525,12 +526,12 @@ export default function GuiaDetalle() {
                     {it.partidas?.length > 0 && (
                       <ul className="mt-1 text-xs font-normal text-gray-500 list-disc list-inside">
                         {it.partidas.map(pt => (
-                          <li key={pt.id}>{pt.cantidad}{pt.referencia ? ` — ${pt.referencia}` : ''}</li>
+                          <li key={pt.id}>{fmtCantidad(pt.cantidad)}{pt.referencia ? ` — ${pt.referencia}` : ''}</li>
                         ))}
                       </ul>
                     )}
                   </td>
-                  <td className="px-6 py-3 text-right">{it.cantidad}</td>
+                  <td className="px-6 py-3 text-right">{fmtCantidad(it.cantidad)}</td>
                   <td className="px-6 py-3 text-gray-500">
                     {it.unidad_medida_nombre
                       ? `${it.unidad_medida_nombre}${it.unidad_medida_abreviatura ? ` (${it.unidad_medida_abreviatura})` : ''}`
@@ -702,7 +703,7 @@ export default function GuiaDetalle() {
                   {it.unidad_medida_abreviatura || it.unidad_medida_nombre || ''}
                 </div>
                 <div className="font-bold flex items-center justify-center px-4 min-w-[40px]" style={estiloCodigoImpreso(guia.almacen_nombre)}>
-                  {it.cantidad}
+                  {fmtCantidad(it.cantidad)}
                 </div>
               </div>
               {it.etiqueta_ubicacion && (
@@ -775,11 +776,11 @@ export default function GuiaDetalle() {
                           {it?.tipo === 'SERVICIO' && <span className="text-[10px] text-gray-500"> (servicio)</span>}
                           {it?.partidas?.length > 0 && (
                             <span className="block text-[10px] text-gray-500">
-                              {it.partidas.map(pt => `${pt.cantidad}${pt.referencia ? ` (${pt.referencia})` : ''}`).join(' · ')}
+                              {it.partidas.map(pt => `${fmtCantidad(pt.cantidad)}${pt.referencia ? ` (${pt.referencia})` : ''}`).join(' · ')}
                             </span>
                           )}
                         </td>
-                        <td className="py-1 text-center border-l border-gray-400">{it ? `${it.cantidad}${it.unidad_medida_abreviatura ? ` ${it.unidad_medida_abreviatura}` : ''}` : ''}</td>
+                        <td className="py-1 text-center border-l border-gray-400">{it ? `${fmtCantidad(it.cantidad)}${it.unidad_medida_abreviatura ? ` ${it.unidad_medida_abreviatura}` : ''}` : ''}</td>
                         <td className="py-1 border-l border-gray-400">&nbsp;</td>
                         <td className="py-1 border-l border-gray-400">&nbsp;</td>
                       </tr>
