@@ -1999,6 +1999,18 @@ comun; R7 va ultimo porque consume todo lo anterior.
   con scripts/backup-db.ps1 -> backups/sibarita_db_20260910_114441.sql
   (exit 0, copiado a OneDrive). node -c de server.js y setup.js OK.
   PLAN_cambios_almacen_guias.md agregado a la raiz.
+- Paso 11.2 HECHO (10/09): migracion INTEGER -> NUMERIC(12,3) de las 7
+  columnas de cantidad (guia_items, guia_item_partidas, etiquetas,
+  notas_salida_detalle.cantidad + devuelto_cantidad, inventario,
+  movimientos). Bloque DO $mig$ en setup.js que solo convierte si la
+  columna sigue siendo integer (widening losless: 3 -> 3.000). Ademas
+  unidades_medida.permite_decimal BOOLEAN (true para KG/M/M2/L). CREATE
+  TABLE de setup.js y database.sql actualizados a NUMERIC(12,3) para que
+  instalaciones nuevas ya nazcan bien. Verificado: setup corrido 2 veces
+  sin error (idempotente); information_schema muestra numeric(12,3) en las
+  7 columnas; permite_decimal correcto. La BD de dev esta vacia (sin datos
+  historicos que revisar); la conversion es widening losless para la BD
+  real al instalar.
 
 QUE QUEDA PENDIENTE (revision del proyecto, 31/08):
 - Fase 1 - Calibracion de impresion matricial (Bloque 2 "6 lineas" +
