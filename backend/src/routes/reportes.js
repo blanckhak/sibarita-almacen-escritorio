@@ -96,7 +96,7 @@ router.get('/kardex', verificarToken, async (req, res) => {
              COALESCE(g.guia_remision, g.factura)   AS nro_doc,
              g.proveedor                            AS proveedor,
              g.estado                               AS estado_guia,
-             p.nombre                               AS detalle,
+             COALESCE(p.nombre, gi.descripcion)     AS detalle,
              a.nombre                               AS almacen,
              COALESCE(gi.destino_detalle, gi.destino) AS motivo,
              um.abreviatura                         AS unid_med,
@@ -114,7 +114,7 @@ router.get('/kardex', verificarToken, async (req, res) => {
       FROM etiquetas e
       JOIN guia_items gi ON e.guia_item_id = gi.id
       JOIN guias g       ON gi.guia_id = g.id
-      JOIN productos p   ON e.producto_id = p.id
+      LEFT JOIN productos p ON e.producto_id = p.id
       JOIN almacenes a   ON e.almacen_id = a.id
       LEFT JOIN unidades_medida um ON p.unidad_medida_id = um.id
       ORDER BY a.nombre, g.fecha, e.codigo

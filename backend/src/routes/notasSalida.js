@@ -67,7 +67,9 @@ router.get('/:id', verificarToken, async (req, res) => {
              d.total_consumido::float8 as total_consumido,
              e.codigo as etiqueta_codigo, e.estado as etiqueta_estado,
              e.condicion as etiqueta_condicion, e.almacen_id,
-             p.nombre as producto_nombre, a.nombre as almacen_nombre,
+             -- Fase 13 (R3): en una linea de servicio EXTERNO no hay etiqueta;
+             -- el nombre viene de d.descripcion_servicio.
+             COALESCE(p.nombre, d.descripcion_servicio) as producto_nombre, a.nombre as almacen_nombre,
              um.abreviatura as unidad_medida_abreviatura,
              dum.nombre as devuelto_unidad_medida_nombre,
              dum.abreviatura as devuelto_unidad_medida_abreviatura,
@@ -80,9 +82,9 @@ router.get('/:id', verificarToken, async (req, res) => {
                 WHERE e2.almacen_id = e.almacen_id AND e2.producto_id = e.producto_id
                   AND e2.estado = 'EN_ALMACEN') as codigos_disponibles_actual
       FROM notas_salida_detalle d
-      JOIN etiquetas e ON d.etiqueta_id = e.id
-      JOIN productos p ON e.producto_id = p.id
-      JOIN almacenes a ON e.almacen_id = a.id
+      LEFT JOIN etiquetas e ON d.etiqueta_id = e.id
+      LEFT JOIN productos p ON e.producto_id = p.id
+      LEFT JOIN almacenes a ON e.almacen_id = a.id
       LEFT JOIN unidades_medida um ON p.unidad_medida_id = um.id
       LEFT JOIN unidades_medida dum ON d.devuelto_unidad_medida_id = dum.id
       LEFT JOIN etiquetas en ON d.etiqueta_devuelta_id = en.id

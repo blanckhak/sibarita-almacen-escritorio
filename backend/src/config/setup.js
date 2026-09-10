@@ -179,7 +179,7 @@ async function setup() {
       cantidad NUMERIC(12,3) NOT NULL,
       tipo VARCHAR(20) NOT NULL DEFAULT 'PRODUCTO' CHECK (tipo IN ('PRODUCTO', 'SERVICIO')),
       descripcion VARCHAR(200),
-      destino VARCHAR(20) CHECK (destino IS NULL OR destino IN ('ALMACEN', 'OFICINA', 'LABORATORIO', 'OTRO'))
+      destino VARCHAR(20) CHECK (destino IS NULL OR destino IN ('ALMACEN', 'COMPRAS_DIARIAS', 'OTRO'))
     );
 
     ALTER TABLE guia_items ADD COLUMN IF NOT EXISTS recogido BOOLEAN;
@@ -216,9 +216,13 @@ async function setup() {
     -- destino pasa a ser NULLABLE (las lineas SERVICIO lo dejan en NULL). El
     -- CHECK se recrea admitiendo NULL. Idempotente (DROP/ADD).
     ALTER TABLE guia_items ALTER COLUMN destino DROP NOT NULL;
+    -- Fase 12 (R5): OFICINA y LABORATORIO se unifican en COMPRAS_DIARIAS. Los
+    -- datos se migran ACA, antes de recrear el CHECK, para que una 2a corrida
+    -- (con filas ya en COMPRAS_DIARIAS) no choque contra la lista vieja.
+    UPDATE guia_items SET destino = 'COMPRAS_DIARIAS' WHERE destino IN ('OFICINA', 'LABORATORIO');
     ALTER TABLE guia_items DROP CONSTRAINT IF EXISTS guia_items_destino_check;
     ALTER TABLE guia_items ADD CONSTRAINT guia_items_destino_check
-      CHECK (destino IS NULL OR destino IN ('ALMACEN', 'OFICINA', 'LABORATORIO', 'OTRO'));
+      CHECK (destino IS NULL OR destino IN ('ALMACEN', 'COMPRAS_DIARIAS', 'OTRO'));
 
     CREATE TABLE IF NOT EXISTS etiquetas (
       id SERIAL PRIMARY KEY,
@@ -468,16 +472,27 @@ async function setup() {
     -- en las rutas). El usuario de demo se siembra mas abajo.
     INSERT INTO roles (nombre) VALUES ('almacenero3') ON CONFLICT (nombre) DO NOTHING;
 
-    -- Los destinos OFICINA y LABORATORIO se unifican en COMPRAS_DIARIAS. Se
-    -- migran los datos y se recrea el CHECK (idempotente: la 2a corrida no
-    -- encuentra filas y el CHECK ya admite el valor nuevo).
-    UPDATE guia_items SET destino = 'COMPRAS_DIARIAS' WHERE destino IN ('OFICINA', 'LABORATORIO');
-    ALTER TABLE guia_items DROP CONSTRAINT IF EXISTS guia_items_destino_check;
-    ALTER TABLE guia_items ADD  CONSTRAINT guia_items_destino_check
-      CHECK (destino IS NULL OR destino IN ('ALMACEN', 'COMPRAS_DIARIAS', 'OTRO'));
+    -- La migracion de datos y el CHECK de guia_items.destino
+    -- (OFICINA/LABORATORIO -> COMPRAS_DIARIAS) estan mas arriba, junto al
+    -- ALTER COLUMN destino DROP NOT NULL, para respetar el orden.
     -- Cosmetico: las notas de salida automaticas viejas guardaban la seccion
     -- como texto 'Oficina' / 'Laboratorio'.
     UPDATE notas_salida SET seccion = 'Compras Diarias' WHERE seccion IN ('Oficina', 'Laboratorio');
+
+    -- ==========================================================
+    -- FASE 13 (R3): servicio EXTERNO / INTERNO
+    -- ==========================================================
+    -- Un servicio (guia_items.tipo='SERVICIO') puede ser EXTERNO (al guardar la
+    -- guia se genera su Nota de Salida automatica, sin etiqueta ni inventario)
+    -- o INTERNO (genera un codigo unico, queda retenido en almacen, tampoco
+    -- mueve inventario). servicio_modo solo aplica cuando tipo='SERVICIO'.
+    ALTER TABLE guia_items ADD COLUMN IF NOT EXISTS servicio_modo VARCHAR(10);
+    ALTER TABLE guia_items DROP CONSTRAINT IF EXISTS guia_items_servicio_modo_check;
+    ALTER TABLE guia_items ADD  CONSTRAINT guia_items_servicio_modo_check
+      CHECK (servicio_modo IS NULL OR servicio_modo IN ('EXTERNO', 'INTERNO'));
+    -- Detalle de nota de salida SIN etiqueta: linea de servicio EXTERNO. La
+    -- descripcion del servicio va aca (etiqueta_id ya es NULLABLE).
+    ALTER TABLE notas_salida_detalle ADD COLUMN IF NOT EXISTS descripcion_servicio VARCHAR(200);
   `)
 
   const rolesExist = await pool.query('SELECT COUNT(*) FROM roles')

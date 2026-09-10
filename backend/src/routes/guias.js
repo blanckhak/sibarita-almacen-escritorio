@@ -3,7 +3,7 @@ const router = express.Router()
 const pool = require('../config/db')
 const { verificarToken, soloRoles } = require('../middlewares/authMiddleware')
 const { ajustarInventario } = require('../utils/inventario')
-const { crearNotaSalidaAutomatica } = require('../utils/salida')
+const { crearNotaSalidaAutomatica, crearNotaSalidaServicios } = require('../utils/salida')
 const { validarLargos } = require('../utils/texto')
 const { mensajeConcurrencia } = require('../utils/dbErrores')
 const log = require('../middlewares/logMiddleware')
@@ -114,7 +114,7 @@ router.get('/:id', verificarToken, async (req, res) => {
 
     const items = await pool.query(`
       SELECT gi.id, gi.producto_id, gi.cantidad::float8 as cantidad, gi.tipo, gi.destino, gi.destino_detalle, gi.recogido,
-             gi.id_agrupador, gi.observaciones, gi.codigo_impresion,
+             gi.id_agrupador, gi.observaciones, gi.codigo_impresion, gi.servicio_modo,
              COALESCE(p.nombre, gi.descripcion) as producto_nombre, p.metrica as producto_metrica,
              um.nombre as unidad_medida_nombre, um.abreviatura as unidad_medida_abreviatura,
              e.id as etiqueta_id, e.codigo as etiqueta_codigo, e.estado as etiqueta_estado,
@@ -189,11 +189,15 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
       const errRef = validarLargos({ 'referencia de partida': [pt.referencia, 200] })
       if (errRef) return res.status(400).json({ error: errRef })
     }
-    // Linea SERVICIO (Fase 8): solo se registra e imprime -> sin destino, sin
-    // partidas, sin etiqueta. Solo se valida la cantidad.
+    // Linea SERVICIO (Fase 8): sin destino ni partidas. Fase 13 (R3): ademas
+    // exige servicio_modo EXTERNO (genera Nota de Salida automatica, sin
+    // etiqueta) o INTERNO (genera codigo y queda en almacen).
     if (it.tipo === 'SERVICIO') {
       if (!esCantidadPositiva(it.cantidad)) {
         return res.status(400).json({ error: 'La cantidad debe ser mayor a 0 (hasta 3 decimales) en todas las lineas' })
+      }
+      if (!['EXTERNO', 'INTERNO'].includes(it.servicio_modo)) {
+        return res.status(400).json({ error: 'Cada servicio debe ser Externo o Interno' })
       }
       continue
     }
@@ -300,6 +304,9 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
     // recogido) por destino+persona+observacion, para generar una sola Nota
     // de Salida por grupo en vez de una por producto.
     const salidaAutoGrupos = new Map()
+    // Fase 13 (R3): servicios EXTERNO de esta guia -> una sola Nota de Salida
+    // al final (sin etiqueta, sin inventario).
+    const serviciosExternos = []
 
     for (const it of items) {
       // Fase 11 (R4): id de agrupacion y observacion por linea, comunes a
@@ -307,15 +314,34 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
       const idAgrupador = (it.id_agrupador || '').trim() || null
       const obsItem = (it.observaciones || '').trim() || null
 
-      // Linea SERVICIO (Fase 8): no usa el catalogo de productos. Se guarda la
-      // descripcion libre y nada mas: producto_id NULL, sin etiqueta, sin
-      // inventario, sin partidas ni destino.
+      // Linea SERVICIO (Fase 8 + Fase 13 R3): no usa el catalogo. EXTERNO ->
+      // guia_item + queda para la Nota de Salida automatica del final.
+      // INTERNO -> guia_item + etiqueta (codigo unico, EN_ALMACEN), SIN mover
+      // inventario (un servicio no es stock fisico).
       if (it.tipo === 'SERVICIO') {
-        await client.query(
-          `INSERT INTO guia_items (guia_id, producto_id, descripcion, cantidad, tipo, destino, destino_detalle, recogido, id_agrupador, observaciones)
-           VALUES ($1, NULL, $2, $3, 'SERVICIO', NULL, NULL, NULL, $4, $5)`,
-          [guia.id, (it.producto_nombre || '').trim(), it.cantidad, idAgrupador, obsItem]
+        const descripcionServicio = (it.producto_nombre || '').trim()
+        const itemResult = await client.query(
+          `INSERT INTO guia_items (guia_id, producto_id, descripcion, cantidad, tipo, destino, destino_detalle, recogido, id_agrupador, observaciones, servicio_modo)
+           VALUES ($1, NULL, $2, $3, 'SERVICIO', NULL, NULL, NULL, $4, $5, $6) RETURNING id`,
+          [guia.id, descripcionServicio, it.cantidad, idAgrupador, obsItem, it.servicio_modo]
         )
+        if (it.servicio_modo === 'INTERNO') {
+          const codigoResult = await client.query(`SELECT nextval('etiquetas_codigo_seq') as codigo`)
+          const codigo = codigoResult.rows[0].codigo
+          const etiquetaResult = await client.query(
+            `INSERT INTO etiquetas (codigo, guia_item_id, producto_id, almacen_id, estado)
+             VALUES ($1, $2, NULL, $3, 'EN_ALMACEN') RETURNING *`,
+            [codigo, itemResult.rows[0].id, almacen_id]
+          )
+          await client.query(
+            `INSERT INTO etiqueta_historial (etiqueta_id, evento, almacen_destino_id, usuario_id, detalle)
+             VALUES ($1, 'GENERADA', $2, $3, $4)`,
+            [etiquetaResult.rows[0].id, almacen_id, req.usuario.id, `Servicio interno, guia ${numero_guia.trim()}`]
+          )
+          etiquetasGeneradas.push({ ...etiquetaResult.rows[0], cantidad: it.cantidad })
+        } else {
+          serviciosExternos.push({ descripcion: descripcionServicio, cantidad: it.cantidad })
+        }
         continue
       }
 
@@ -479,6 +505,17 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
         usuarioId: req.usuario.id,
       })
       notasSalidaGeneradas.push({ numero_nota: notaAuto.numero_nota, nota_id: notaAuto.id, productos: grupo.etiquetas.length })
+    }
+
+    // Fase 13 (R3): una Nota de Salida por todos los servicios EXTERNO de la
+    // guia (sin etiqueta, sin inventario, cerrada, sin devolucion).
+    if (serviciosExternos.length > 0) {
+      const notaServ = await crearNotaSalidaServicios(client, {
+        guiaId: guia.id,
+        servicios: serviciosExternos,
+        usuarioId: req.usuario.id,
+      })
+      notasSalidaGeneradas.push({ numero_nota: notaServ.numero_nota, nota_id: notaServ.id, productos: serviciosExternos.length })
     }
 
     await client.query('COMMIT')

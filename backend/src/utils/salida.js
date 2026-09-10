@@ -51,4 +51,30 @@ async function crearNotaSalidaAutomatica(client, { guiaId, etiquetas, seccion, p
   return nota
 }
 
-module.exports = { marcarSalida, crearNotaSalidaAutomatica }
+// Fase 13 (R3): Nota de Salida ya CERRADA para uno o varios servicios EXTERNO
+// de una guia. No hay etiquetas ni inventario: cada linea guarda solo la
+// descripcion del servicio y la cantidad. seccion 'Servicios', motivo
+// USO_INTERNO, sin devolucion.
+async function crearNotaSalidaServicios(client, { guiaId, servicios, usuarioId }) {
+  const numeroResult = await client.query(`SELECT nextval('notas_salida_numero_seq') as n`)
+  const numeroNota = String(numeroResult.rows[0].n).padStart(6, '0')
+
+  const notaResult = await client.query(
+    `INSERT INTO notas_salida (numero_nota, seccion, persona_responsable, motivo, guia_id, usuario_id, estado, requiere_devolucion, fecha_salida)
+     VALUES ($1, 'Servicios', 'SERVICIO EXTERNO', 'USO_INTERNO', $2, $3, 'CERRADO', false, NOW()) RETURNING *`,
+    [numeroNota, guiaId, usuarioId]
+  )
+  const nota = notaResult.rows[0]
+
+  for (const s of servicios) {
+    await client.query(
+      `INSERT INTO notas_salida_detalle (nota_salida_id, etiqueta_id, cantidad, descripcion_servicio)
+       VALUES ($1, NULL, $2, $3)`,
+      [nota.id, s.cantidad, s.descripcion]
+    )
+  }
+
+  return nota
+}
+
+module.exports = { marcarSalida, crearNotaSalidaAutomatica, crearNotaSalidaServicios }

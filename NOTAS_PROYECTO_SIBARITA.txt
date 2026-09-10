@@ -2194,6 +2194,44 @@ Datos de prueba nuevos en sibarita_db (borrables): guia TEST-F12-... (id
 
 PENDIENTE: 12.7 = bump instalador 1.6.0 -> 1.7.0 + merge fase-12 a master.
 
+--------------------------------------------------
+24. FASE 13 (R3 + R1): servicio externo/interno + impresion parametrizada (10/09/2026)
+--------------------------------------------------
+Rama fase-13-servicios-impresion (stack sobre fase-12-roles-destinos).
+
+--- R3: servicio EXTERNO / INTERNO (HECHO) ---
+- BD (setup.js bloque Fase 13 + database.sql): guia_items.servicio_modo
+  VARCHAR(10) CHECK IN ('EXTERNO','INTERNO') (solo cuando tipo='SERVICIO');
+  notas_salida_detalle.descripcion_servicio VARCHAR(200) (etiqueta_id ya
+  era NULLABLE).
+- FIX de migracion (Fase 12): el ADD CONSTRAINT guia_items_destino_check
+  con la lista vieja (OFICINA/LABORATORIO) estaba ANTES del bloque Fase 12
+  que migraba los datos -> en una 2a corrida, con filas ya en
+  COMPRAS_DIARIAS, reventaba (23514). Se movio el UPDATE
+  OFICINA/LABORATORIO->COMPRAS_DIARIAS y el CHECK nuevo al mismo lugar que
+  el ALTER COLUMN destino DROP NOT NULL (antes). setup corre 2x OK.
+- guias.js POST /: el bloque SERVICIO exige servicio_modo. EXTERNO ->
+  guia_item + se acumula en serviciosExternos; despues del loop se crea UNA
+  Nota de Salida (crearNotaSalidaServicios en utils/salida.js: seccion
+  'Servicios', persona 'SERVICIO EXTERNO', USO_INTERNO, CERRADO, sin
+  devolucion, lineas con descripcion_servicio y etiqueta_id NULL). NO mueve
+  inventario. INTERNO -> guia_item + etiqueta (nextval etiquetas_codigo_seq,
+  EN_ALMACEN, producto_id NULL, historial GENERADA); NO mueve inventario;
+  se puede imprimir su etiqueta.
+- Queries con JOIN productos/etiquetas -> LEFT JOIN + COALESCE(p.nombre,
+  gi.descripcion / d.descripcion_servicio): notasSalida GET /:id detalle,
+  etiquetas.js GET / y GET /:id (+ gi.tipo, gi.servicio_modo), reportes.js
+  kardex. guias GET /:id ya era LEFT JOIN (+ gi.servicio_modo agregado).
+- Frontend: Guias.jsx (LINEA_VACIA.servicio_modo='EXTERNO'; radio
+  Externo/Interno al lado del toggle Producto/Servicio, con texto de que
+  hace cada uno). GuiaDetalle.jsx: badge "SERVICIO EXTERNO/INTERNO".
+- Probado contra el server: guia con 1 servicio EXTERNO + 1 INTERNO + 1
+  producto -> EXTERNO sin etiqueta + Nota de Salida 000003 seccion
+  "Servicios"; INTERNO -> etiqueta 9007 EN_ALMACEN; inventario NO tiene los
+  servicios; servicio sin modo -> 400. Datos de prueba: guia TEST-F13-...
+
+--- R1: impresion parametrizada + 2 lineas: PENDIENTE (pasos 13.5-13.8) ---
+
 PENDIENTE NUEVO (10/09, de para giarse/):
 - Formato "NOTA DE INGRESO DE ACTIVOS - DESUSO" (para giarse/desuso.png,
   N. 001383): documento fisico APARTE para material usado / que vuelve a

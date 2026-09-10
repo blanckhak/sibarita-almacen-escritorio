@@ -652,7 +652,7 @@ export default function GuiaDetalle() {
                     {it.producto_nombre}
                     {it.tipo === 'SERVICIO' && (
                       <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-700 align-middle">
-                        SERVICIO
+                        SERVICIO{it.servicio_modo ? ` ${it.servicio_modo}` : ''}
                       </span>
                     )}
                     {it.producto_metrica === 'EN_PARTIDA' && it.tipo !== 'SERVICIO' && (

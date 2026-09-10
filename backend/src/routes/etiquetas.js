@@ -38,8 +38,9 @@ router.get('/', verificarToken, async (req, res) => {
     const result = await pool.query(`
       SELECT e.id, e.codigo, e.estado, e.condicion, e.almacen_id, e.producto_id,
              e.ubicacion,
-             p.nombre as producto_nombre, a.nombre as almacen_nombre,
+             COALESCE(p.nombre, gi.descripcion) as producto_nombre, a.nombre as almacen_nombre,
              COALESCE(e.cantidad, gi.cantidad)::float8 as cantidad, g.numero_guia,
+             gi.tipo as guia_item_tipo, gi.servicio_modo,
              um.nombre as unidad_medida_nombre, um.abreviatura as unidad_medida_abreviatura,
              -- Stock del producto en ese almacen (Fase 9, Bloque 7): total
              -- agregado (tabla inventario, NUEVO + DEVOLUCION) y conteo de
@@ -49,7 +50,7 @@ router.get('/', verificarToken, async (req, res) => {
              COALESCE(inv.total, 0)::float8 as stock_agregado,
              COALESCE(disp.n, 0)::int as codigos_disponibles
       FROM etiquetas e
-      JOIN productos p ON e.producto_id = p.id
+      LEFT JOIN productos p ON e.producto_id = p.id
       JOIN almacenes a ON e.almacen_id = a.id
       JOIN guia_items gi ON e.guia_item_id = gi.id
       JOIN guias g ON gi.guia_id = g.id
@@ -96,12 +97,13 @@ router.get('/reportes/reimpresiones', verificarToken, async (req, res) => {
 router.get('/:id', verificarToken, async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT e.*, p.nombre as producto_nombre,
+      SELECT e.*, COALESCE(p.nombre, gi.descripcion) as producto_nombre,
+             gi.tipo as guia_item_tipo, gi.servicio_modo,
              um.nombre as unidad_medida_nombre, um.abreviatura as unidad_medida_abreviatura,
              a.nombre as almacen_nombre, gi.cantidad::float8 as gi_cantidad, g.numero_guia,
              e.cantidad::float8 as cantidad
       FROM etiquetas e
-      JOIN productos p ON e.producto_id = p.id
+      LEFT JOIN productos p ON e.producto_id = p.id
       LEFT JOIN unidades_medida um ON p.unidad_medida_id = um.id
       JOIN almacenes a ON e.almacen_id = a.id
       JOIN guia_items gi ON e.guia_item_id = gi.id

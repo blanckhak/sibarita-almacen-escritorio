@@ -7,7 +7,7 @@ import { hoyLocal as hoy } from '../utils/fecha'
 import { TIPOS_DOCUMENTO, tipoDocumentoLabel } from '../utils/tiposDocumento'
 import { fmtCantidad, sumarCantidades } from '../utils/fmt'
 
-const LINEA_VACIA = () => ({ producto_id: '', producto_nombre: '', nuevo: false, tipo: 'PRODUCTO', cantidad: '', destino: 'ALMACEN', destino_detalle: '', unidad_medida_id: '', recogido: true, metrica: 'ENTERO', partidas: [], persona_retira: '', retira_obs: '', id_agrupador: '', observaciones: '' })
+const LINEA_VACIA = () => ({ producto_id: '', producto_nombre: '', nuevo: false, tipo: 'PRODUCTO', cantidad: '', destino: 'ALMACEN', destino_detalle: '', unidad_medida_id: '', recogido: true, metrica: 'ENTERO', partidas: [], persona_retira: '', retira_obs: '', id_agrupador: '', observaciones: '', servicio_modo: 'EXTERNO' })
 // Destinos que generan su propia Nota de Salida automatica al guardar la guia
 // (si ya lo recogieron) o al marcarlos retirados despues (Bloque 6).
 const DESTINOS_SALIDA_AUTO = ['COMPRAS_DIARIAS']
@@ -155,6 +155,7 @@ export default function Guias() {
       base.recogido = true
       base.metrica = 'ENTERO'
       base.partidas = []
+      if (!base.servicio_modo) base.servicio_modo = 'EXTERNO'
     } else {
       const prod = productos.find(p => p.id === Number(base.producto_id))
       const metrica = prod?.metrica || 'ENTERO'
@@ -389,7 +390,25 @@ export default function Guias() {
                         </button>
                       ))}
                       {esServicio && (
-                        <span className="text-xs text-gray-400 self-center">Se registra e imprime · no genera codigo ni mueve inventario</span>
+                        <div className="flex items-center gap-2 self-center">
+                          {['EXTERNO', 'INTERNO'].map(m => (
+                            <button
+                              type="button"
+                              key={m}
+                              onClick={() => actualizarLinea(i, 'servicio_modo', m)}
+                              className={`px-2.5 py-1 rounded-full text-xs font-semibold border transition ${
+                                it.servicio_modo === m ? 'bg-slate-700 text-white border-slate-700' : 'bg-white text-gray-500 border-gray-300 hover:bg-gray-50'
+                              }`}
+                            >
+                              {m === 'EXTERNO' ? 'Externo' : 'Interno'}
+                            </button>
+                          ))}
+                          <span className="text-[11px] text-gray-400">
+                            {it.servicio_modo === 'EXTERNO'
+                              ? 'genera Nota de Salida automatica (sin codigo)'
+                              : 'genera un codigo y queda en almacen'}
+                          </span>
+                        </div>
                       )}
                     </div>
                     <div className="grid grid-cols-12 gap-3 items-start">

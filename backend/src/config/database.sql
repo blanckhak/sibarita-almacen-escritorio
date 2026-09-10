@@ -210,7 +210,12 @@ CREATE TABLE guia_items (
   -- codigo de barras.
   id_agrupador VARCHAR(30),
   observaciones VARCHAR(300),
-  codigo_impresion VARCHAR(30)
+  codigo_impresion VARCHAR(30),
+  -- Fase 13 (R3): solo cuando tipo='SERVICIO'. EXTERNO = al guardar la guia
+  -- genera su Nota de Salida automatica (sin etiqueta ni inventario). INTERNO
+  -- = genera un codigo unico y queda retenido en almacen (tampoco mueve
+  -- inventario).
+  servicio_modo VARCHAR(10) CHECK (servicio_modo IS NULL OR servicio_modo IN ('EXTERNO', 'INTERNO'))
 );
 
 -- Desglose de una linea de guia cuyo producto se maneja EN_PARTIDA
@@ -277,11 +282,14 @@ CREATE TABLE notas_salida (
 CREATE TABLE notas_salida_detalle (
   id SERIAL PRIMARY KEY,
   nota_salida_id INTEGER REFERENCES notas_salida(id),
+  -- NULL en lineas de servicio EXTERNO (Fase 13): no hay etiqueta, la
+  -- descripcion va en descripcion_servicio.
   etiqueta_id INTEGER REFERENCES etiquetas(id),
   cantidad NUMERIC(12,3) NOT NULL,
   p_unitario NUMERIC(12,2),
   total NUMERIC(12,2),
   observaciones TEXT,
+  descripcion_servicio VARCHAR(200),
   -- Devolucion (Bloque 4): condicion en la que volvio la linea, cuando volvio,
   -- y el codigo nuevo generado si volvio "usada". NULL mientras la linea
   -- sigue afuera.
