@@ -120,4 +120,153 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
   }
 })
 
+// Snapshot de stock del almacen (por producto) -> se guarda como APERTURA o
+// CIERRE de un periodo.
+async function guardarSnapshot(client, periodoId, tipo, almacenId) {
+  await client.query(
+    `INSERT INTO periodos_saldos (periodo_id, tipo, producto_id, stock_nuevo, stock_devolucion)
+     SELECT $1, $2, producto_id,
+            COALESCE(SUM(cantidad) FILTER (WHERE tipo = 'NUEVO'), 0),
+            COALESCE(SUM(cantidad) FILTER (WHERE tipo = 'DEVOLUCION'), 0)
+     FROM inventario WHERE almacen_id = $3 AND producto_id IS NOT NULL
+     GROUP BY producto_id
+     ON CONFLICT (periodo_id, tipo, producto_id) DO NOTHING`,
+    [periodoId, tipo, almacenId]
+  )
+}
+
+// POST /api/periodos/:id/cerrar  { fecha_fin?, nombre_siguiente? }
+// Congela la foto de CIERRE, cierra el periodo y abre el siguiente con
+// APERTURA = ese CIERRE (arrastre de saldo).
+router.post('/:id/cerrar', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
+  log('CERRAR_PERIODO', req => `Periodo id ${req.params.id}`),
+  async (req, res) => {
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    const per = await client.query('SELECT * FROM periodos WHERE id = $1 FOR UPDATE', [req.params.id])
+    if (per.rows.length === 0) {
+      await client.query('ROLLBACK')
+      return res.status(404).json({ error: 'Periodo no encontrado' })
+    }
+    const p = per.rows[0]
+    if (p.estado !== 'ACTIVO') {
+      await client.query('ROLLBACK')
+      return res.status(400).json({ error: 'Ese periodo no esta activo' })
+    }
+
+    // La fecha de fin (default hoy) se resuelve y valida en SQL para no pelear
+    // con el tipo Date de pg ni con zonas horarias.
+    const info = await client.query(
+      `SELECT COALESCE($1::date, CURRENT_DATE)            AS fecha_fin,
+              COALESCE($1::date, CURRENT_DATE) < $2::date AS fin_invalida`,
+      [req.body.fecha_fin || null, p.fecha_inicio]
+    )
+    if (info.rows[0].fin_invalida) {
+      await client.query('ROLLBACK')
+      return res.status(400).json({ error: 'La fecha de fin no puede ser anterior al inicio del periodo' })
+    }
+    const fechaFin = info.rows[0].fecha_fin
+
+    // Foto de CIERRE = stock actual del almacen.
+    await guardarSnapshot(client, p.id, 'CIERRE', p.almacen_id)
+    await client.query(
+      `UPDATE periodos SET estado = 'CERRADO', fecha_fin = $1, cerrado_por = $2, cerrado_en = NOW()
+       WHERE id = $3`,
+      [fechaFin, req.usuario.id, p.id]
+    )
+
+    // Periodo siguiente ACTIVO, con APERTURA = CIERRE del anterior (arrastre).
+    const cuenta = await client.query('SELECT COUNT(*)::int n FROM periodos WHERE almacen_id = $1', [p.almacen_id])
+    const nombreSig = (req.body.nombre_siguiente || '').trim() || `Periodo ${cuenta.rows[0].n + 1}`
+    const errLargo = validarLargos({ 'nombre del periodo siguiente': [nombreSig, 60] })
+    if (errLargo) { await client.query('ROLLBACK'); return res.status(400).json({ error: errLargo }) }
+
+    const sig = await client.query(
+      `INSERT INTO periodos (almacen_id, nombre, fecha_inicio, estado, periodo_anterior_id, usuario_id)
+       VALUES ($1, $2, ($3::date + 1), 'ACTIVO', $4, $5) RETURNING *`,
+      [p.almacen_id, nombreSig, fechaFin, p.id, req.usuario.id]
+    )
+    await client.query(
+      `INSERT INTO periodos_saldos (periodo_id, tipo, producto_id, stock_nuevo, stock_devolucion)
+       SELECT $1, 'APERTURA', producto_id, stock_nuevo, stock_devolucion
+       FROM periodos_saldos WHERE periodo_id = $2 AND tipo = 'CIERRE'`,
+      [sig.rows[0].id, p.id]
+    )
+
+    await client.query('COMMIT')
+    res.json({ cerrado: { ...p, estado: 'CERRADO', fecha_fin: fechaFin }, siguiente: sig.rows[0] })
+  } catch (err) {
+    await client.query('ROLLBACK')
+    if (err.code === '23505') return res.status(409).json({ error: 'Ese almacen ya tiene un periodo activo' })
+    res.status(500).json({ error: err.message })
+  } finally {
+    client.release()
+  }
+})
+
+// POST /api/periodos/:id/reabrir  (solo admin)
+// Vuelve el periodo a ACTIVO. Solo si el periodo siguiente NO tuvo movimiento
+// (ninguna guia ni nota). Borra ese periodo siguiente, su APERTURA y el CIERRE
+// del que se reabre.
+router.post('/:id/reabrir', verificarToken, soloRoles('admin'),
+  log('REABRIR_PERIODO', req => `Periodo id ${req.params.id}`),
+  async (req, res) => {
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    const per = await client.query('SELECT * FROM periodos WHERE id = $1 FOR UPDATE', [req.params.id])
+    if (per.rows.length === 0) {
+      await client.query('ROLLBACK')
+      return res.status(404).json({ error: 'Periodo no encontrado' })
+    }
+    const p = per.rows[0]
+    if (p.estado !== 'CERRADO') {
+      await client.query('ROLLBACK')
+      return res.status(400).json({ error: 'Ese periodo no esta cerrado' })
+    }
+
+    const sig = await client.query(
+      `SELECT * FROM periodos WHERE periodo_anterior_id = $1 FOR UPDATE`, [p.id]
+    )
+    if (sig.rows.length > 0) {
+      const s = sig.rows[0]
+      const mov = await client.query(
+        `SELECT
+           (SELECT COUNT(*)::int FROM guias WHERE periodo_id = $1) AS guias,
+           (SELECT COUNT(*)::int FROM notas_salida WHERE periodo_id = $1) AS notas,
+           (SELECT COUNT(*)::int FROM etiquetas WHERE periodo_id = $1) AS etiquetas`,
+        [s.id]
+      )
+      const m = mov.rows[0]
+      if (m.guias > 0 || m.notas > 0 || m.etiquetas > 0) {
+        await client.query('ROLLBACK')
+        return res.status(409).json({ error: `El periodo siguiente "${s.nombre}" ya tiene movimiento (${m.guias} guias, ${m.notas} notas). No se puede reabrir.` })
+      }
+      if (s.estado !== 'ACTIVO') {
+        await client.query('ROLLBACK')
+        return res.status(409).json({ error: 'El periodo siguiente no esta activo; hay mas de un periodo posterior. Reabrí primero el ultimo.' })
+      }
+      // periodos_saldos del siguiente se borra por ON DELETE CASCADE.
+      await client.query('DELETE FROM periodos WHERE id = $1', [s.id])
+    }
+
+    await client.query(`DELETE FROM periodos_saldos WHERE periodo_id = $1 AND tipo = 'CIERRE'`, [p.id])
+    await client.query(
+      `UPDATE periodos SET estado = 'ACTIVO', fecha_fin = NULL, cerrado_por = NULL, cerrado_en = NULL, reabierto_en = NOW()
+       WHERE id = $1`,
+      [p.id]
+    )
+
+    await client.query('COMMIT')
+    res.json({ ok: true, reabierto: p.id })
+  } catch (err) {
+    await client.query('ROLLBACK')
+    if (err.code === '23505') return res.status(409).json({ error: 'Ese almacen ya tiene un periodo activo' })
+    res.status(500).json({ error: err.message })
+  } finally {
+    client.release()
+  }
+})
+
 module.exports = router

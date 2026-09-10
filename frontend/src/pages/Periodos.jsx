@@ -6,9 +6,9 @@ import { hoyLocal } from '../utils/fecha'
 import { fmtCantidad } from '../utils/fmt'
 import { exportarProductosPeriodo } from '../utils/periodoExcel'
 
-// Fase 14 (R7-a): listado de periodos por almacen + abrir el primer periodo de
-// un almacen que todavia no tiene ninguno. Cerrar / reabrir / export / purga
-// son Fase 15.
+// Fase 14 (R7-a) + Fase 15 (R7-b): listado de periodos por almacen. Abrir el
+// primer periodo, cerrar (con arrastre de saldo), reabrir (admin), ver
+// productos y exportar a Excel.
 export default function Periodos() {
   const { usuario } = useAuth()
   const { periodos, almacenes, recargarPeriodos } = usePeriodo()
@@ -19,8 +19,34 @@ export default function Periodos() {
   // Productos del periodo (panel + export Excel)
   const [verProductos, setVerProductos] = useState(null) // { periodo, cerrado, productos }
   const [cargandoProd, setCargandoProd] = useState(false)
+  const [accionando, setAccionando] = useState(null) // id del periodo en proceso
+  const [confirmarCierre, setConfirmarCierre] = useState(null) // periodo a cerrar
 
-  const puedeAbrir = ['admin', 'almacen', 'almacenero3'].includes(usuario?.rol)
+  const puedeAbrir  = ['admin', 'almacen', 'almacenero3'].includes(usuario?.rol)
+  const puedeCerrar = puedeAbrir
+  const esAdmin     = usuario?.rol === 'admin'
+
+  const conAccion = async (id, fn, okMsg) => {
+    setAccionando(id)
+    try {
+      await fn()
+      setMensaje({ tipo: 'ok', texto: okMsg })
+      await recargarPeriodos()
+    } catch (err) {
+      setMensaje({ tipo: 'error', texto: err.response?.data?.error || 'La accion fallo' })
+    } finally {
+      setAccionando(null)
+      setTimeout(() => setMensaje(null), 5000)
+    }
+  }
+
+  const cerrarPeriodo = (p) => conAccion(p.id,
+    () => api.post(`/api/periodos/${p.id}/cerrar`, {}),
+    `Periodo "${p.nombre}" cerrado. Se abrio el siguiente con el saldo arrastrado.`)
+
+  const reabrirPeriodo = (p) => conAccion(p.id,
+    () => api.post(`/api/periodos/${p.id}/reabrir`, {}),
+    `Periodo "${p.nombre}" reabierto.`)
 
   useEffect(() => { recargarPeriodos().finally(() => setCargando(false)) }, [recargarPeriodos])
 
@@ -143,7 +169,7 @@ export default function Periodos() {
               <th className="px-4 py-3 text-left">Estado</th>
               <th className="px-4 py-3 text-right">Guias</th>
               <th className="px-4 py-3 text-right">Notas</th>
-              <th className="px-4 py-3 text-right">Productos</th>
+              <th className="px-4 py-3 text-right">Acciones</th>
             </tr>
           </thead>
           <tbody>
@@ -162,19 +188,66 @@ export default function Periodos() {
                 </td>
                 <td className="px-4 py-3 text-right">{p.total_guias}</td>
                 <td className="px-4 py-3 text-right">{p.total_notas}</td>
-                <td className="px-4 py-3 text-right">
-                  <button
-                    onClick={() => abrirProductos(p)}
-                    className="text-sm border border-blue-200 text-blue-700 rounded-lg px-3 py-1.5 hover:bg-blue-50 transition"
-                  >
-                    Ver productos
-                  </button>
+                <td className="px-4 py-3">
+                  <div className="flex justify-end gap-2 flex-wrap">
+                    <button
+                      onClick={() => abrirProductos(p)}
+                      className="text-sm border border-blue-200 text-blue-700 rounded-lg px-3 py-1.5 hover:bg-blue-50 transition"
+                    >
+                      Ver productos
+                    </button>
+                    {p.estado === 'ACTIVO' && puedeCerrar && (
+                      <button
+                        onClick={() => setConfirmarCierre(p)}
+                        disabled={accionando === p.id}
+                        className="text-sm border border-gray-300 text-gray-700 rounded-lg px-3 py-1.5 hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        Cerrar periodo
+                      </button>
+                    )}
+                    {p.estado === 'CERRADO' && esAdmin && (
+                      <button
+                        onClick={() => reabrirPeriodo(p)}
+                        disabled={accionando === p.id}
+                        className="text-sm border border-amber-300 text-amber-700 rounded-lg px-3 py-1.5 hover:bg-amber-50 disabled:opacity-50"
+                      >
+                        {accionando === p.id ? '...' : 'Reabrir'}
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {confirmarCierre && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setConfirmarCierre(null)}>
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+            <h2 className="text-lg font-semibold text-gray-800 mb-1">Cerrar periodo</h2>
+            <p className="text-sm text-gray-500 mb-4">
+              Se cierra <b>{confirmarCierre.almacen_nombre} · {confirmarCierre.nombre}</b> con fecha de hoy.
+              Se congela la foto de stock y se abre automaticamente el periodo siguiente con el
+              <b> saldo arrastrado</b>. El periodo cerrado queda de solo lectura (un admin puede reabrirlo
+              si el siguiente todavia no tuvo movimiento).
+            </p>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setConfirmarCierre(null)} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => { const p = confirmarCierre; setConfirmarCierre(null); cerrarPeriodo(p) }}
+                disabled={accionando === confirmarCierre.id}
+                className="px-4 py-2 text-sm bg-blue-700 text-white rounded-lg hover:bg-blue-800 disabled:opacity-50"
+              >
+                Cerrar periodo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {verProductos && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setVerProductos(null)}>

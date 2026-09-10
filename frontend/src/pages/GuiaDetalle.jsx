@@ -149,6 +149,10 @@ export default function GuiaDetalle() {
 
   const cerrada = (guia?.estado || 'CARGADA') === 'CERRADA'
   const anulada = (guia?.estado || 'CARGADA') === 'ANULADA'
+  // Fase 15 (R7-b): si el periodo de la guia esta CERRADO, todo queda de solo
+  // lectura (el backend tambien lo bloquea con 409).
+  const periodoCerrado = guia?.periodo_estado === 'CERRADO'
+  const bloqueada = anulada || periodoCerrado
 
   const anularGuia = async () => {
     if (!motivoAnular.trim()) return
@@ -358,7 +362,7 @@ export default function GuiaDetalle() {
             </p>
           </div>
           <div className="flex gap-3">
-            {puedeEditar && !anulada && (
+            {puedeEditar && !bloqueada && (
               <button
                 onClick={abrirEdicion}
                 className="border border-gray-300 text-gray-700 text-sm px-4 py-2 rounded-lg font-medium hover:bg-gray-50 transition"
@@ -382,7 +386,7 @@ export default function GuiaDetalle() {
                 Imprimir todas las etiquetas
               </button>
             )}
-            {puedeEditar && !anulada && (
+            {puedeEditar && !bloqueada && (
               <button
                 onClick={() => setMostrarAnular(true)}
                 className="border border-red-300 text-red-700 text-sm px-4 py-2 rounded-lg font-medium hover:bg-red-50 transition"
@@ -402,6 +406,13 @@ export default function GuiaDetalle() {
           </div>
         )}
 
+        {periodoCerrado && !anulada && (
+          <div className="bg-gray-100 border border-gray-300 rounded-lg px-4 py-3 mb-4 text-sm text-gray-700">
+            <b>Periodo cerrado.</b> Esta guia pertenece al periodo <b>{guia.periodo_nombre}</b>, que ya esta cerrado:
+            queda de solo lectura (no se puede editar ni anular). Un admin puede reabrir el periodo desde Periodos.
+          </div>
+        )}
+
         <div className="grid grid-cols-3 gap-4 mb-6 text-sm">
           <div className="bg-white rounded-lg border border-gray-200 px-4 py-3">
             <div className="text-gray-400 text-xs font-medium mb-1">Proveedor</div>
@@ -411,7 +422,7 @@ export default function GuiaDetalle() {
             <div className="text-gray-400 text-xs font-medium mb-1">Orden de Compra</div>
             {guia.numero_oc ? (
               <div className="text-gray-800">{guia.numero_oc}</div>
-            ) : puedeEditar && !anulada ? (
+            ) : puedeEditar && !bloqueada ? (
               <button onClick={abrirEdicion} className="text-blue-700 hover:underline text-sm font-medium">
                 + Agregar Orden de Compra
               </button>
@@ -705,7 +716,7 @@ export default function GuiaDetalle() {
                   </td>
                   <td className="px-6 py-3">
                     {it.etiqueta_id ? (
-                      puedeEditar && !anulada ? (
+                      puedeEditar && !bloqueada ? (
                         <input
                           value={ubicEdits[it.etiqueta_id] ?? ''}
                           onChange={e => setUbicEdits(u => ({ ...u, [it.etiqueta_id]: e.target.value }))}
@@ -725,7 +736,7 @@ export default function GuiaDetalle() {
                     {it.etiqueta_estado
                       ? <span className={`px-2 py-1 rounded-full text-xs font-bold ${colorEtiquetaEstado(it.etiqueta_estado)}`}>{labelEtiquetaEstado(it.etiqueta_estado)}</span>
                       : <span className="text-gray-400 text-xs">{it.tipo === 'SERVICIO' ? 'Servicio' : 'Salida automatica'}</span>}
-                    {it.recogido === false && it.destino === 'COMPRAS_DIARIAS' && it.etiqueta_estado === 'EN_ALMACEN' && puedeEditar && !anulada && (
+                    {it.recogido === false && it.destino === 'COMPRAS_DIARIAS' && it.etiqueta_estado === 'EN_ALMACEN' && puedeEditar && !bloqueada && (
                       <div className="mt-1.5">
                         <span className="block text-[11px] text-amber-600 font-medium mb-1">Falta quien retira</span>
                         <button

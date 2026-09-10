@@ -86,8 +86,10 @@ export default function NotaSalidaDetalle() {
   const [edObs, setEdObs]         = useState('')
   const [guardandoEncabezado, setGuardandoEncabezado] = useState(false)
 
-  const puedeGestionar = ['admin', 'almacen', 'almacenero3'].includes(usuario?.rol)
-  const puedeAprobar    = ['admin', 'almacen', 'almacenero3'].includes(usuario?.rol)
+  // Fase 15 (R7-b): una nota de un periodo CERRADO queda de solo lectura.
+  const periodoCerrado = nota?.periodo_estado === 'CERRADO'
+  const puedeGestionar = ['admin', 'almacen', 'almacenero3'].includes(usuario?.rol) && !periodoCerrado
+  const puedeAprobar    = ['admin', 'almacen', 'almacenero3'].includes(usuario?.rol) && !periodoCerrado
 
   const cargar = () => {
     api.get(`/api/notas-salida/${id}`)
@@ -339,6 +341,13 @@ export default function NotaSalidaDetalle() {
               : 'bg-red-50 border border-red-200 text-red-700'
           }`}>
             {mensaje.texto}
+          </div>
+        )}
+
+        {periodoCerrado && (
+          <div className="bg-gray-100 border border-gray-300 rounded-lg px-4 py-3 mb-4 text-sm text-gray-700">
+            <b>Periodo cerrado.</b> Esta nota pertenece al periodo <b>{nota.periodo_nombre}</b>, que ya esta cerrado:
+            queda de solo lectura (no se puede editar ni registrar devoluciones). Un admin puede reabrir el periodo.
           </div>
         )}
 

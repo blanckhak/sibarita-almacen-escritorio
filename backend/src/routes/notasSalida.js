@@ -6,8 +6,10 @@ const { ajustarInventario } = require('../utils/inventario')
 const { marcarSalida } = require('../utils/salida')
 const { validarLargos } = require('../utils/texto')
 const { mensajeConcurrencia } = require('../utils/dbErrores')
+const { periodoCerrado } = require('../utils/periodo')
 const log = require('../middlewares/logMiddleware')
 
+const ERR_PERIODO_CERRADO = 'El periodo de esta nota esta CERRADO; pedile a un admin que lo reabra para poder modificarla.'
 const MOTIVOS = ['USO_INTERNO', 'PRESTAMO', 'REPARACION', 'DESECHO', 'OTRO']
 const PRESENTACIONES = ['CAJA', 'ROLLO', 'BOLSA', 'SACO']
 
@@ -53,10 +55,12 @@ router.get('/', verificarToken, async (req, res) => {
 router.get('/:id', verificarToken, async (req, res) => {
   try {
     const nota = await pool.query(`
-      SELECT n.*, g.numero_guia, u.nombre as usuario_nombre
+      SELECT n.*, g.numero_guia, u.nombre as usuario_nombre,
+             pe.estado as periodo_estado, pe.nombre as periodo_nombre
       FROM notas_salida n
       LEFT JOIN guias g ON n.guia_id = g.id
       LEFT JOIN usuarios u ON n.usuario_id = u.id
+      LEFT JOIN periodos pe ON n.periodo_id = pe.id
       WHERE n.id = $1
     `, [req.params.id])
     if (nota.rows.length === 0) {
@@ -245,6 +249,10 @@ router.post('/:id/aprobar', verificarToken, soloRoles('admin', 'almacen', 'almac
       await client.query('ROLLBACK')
       return res.status(404).json({ error: 'Nota de salida no encontrada' })
     }
+    if (await periodoCerrado(client, nota.rows[0].periodo_id)) {
+      await client.query('ROLLBACK')
+      return res.status(409).json({ error: ERR_PERIODO_CERRADO })
+    }
     if (nota.rows[0].estado !== 'EN_APROBACION') {
       await client.query('ROLLBACK')
       return res.status(400).json({ error: 'Esta nota no esta pendiente de aprobacion' })
@@ -297,6 +305,9 @@ router.post('/:id/rechazar', verificarToken, soloRoles('admin', 'almacen', 'alma
     if (nota.rows.length === 0) {
       return res.status(404).json({ error: 'Nota de salida no encontrada' })
     }
+    if (await periodoCerrado(null, nota.rows[0].periodo_id)) {
+      return res.status(409).json({ error: ERR_PERIODO_CERRADO })
+    }
     if (nota.rows[0].estado !== 'EN_APROBACION') {
       return res.status(400).json({ error: 'Esta nota no esta pendiente de aprobacion' })
     }
@@ -337,9 +348,12 @@ router.put('/:id', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
   if (errLargo) return res.status(400).json({ error: errLargo })
 
   try {
-    const nota = await pool.query('SELECT estado FROM notas_salida WHERE id = $1', [req.params.id])
+    const nota = await pool.query('SELECT estado, periodo_id FROM notas_salida WHERE id = $1', [req.params.id])
     if (nota.rows.length === 0) {
       return res.status(404).json({ error: 'Nota de salida no encontrada' })
+    }
+    if (await periodoCerrado(null, nota.rows[0].periodo_id)) {
+      return res.status(409).json({ error: ERR_PERIODO_CERRADO })
     }
     if (nota.rows[0].estado === 'EN_APROBACION') {
       return res.status(400).json({ error: 'Esta nota esta pendiente de aprobacion; primero apruebala o rechazala' })
@@ -430,6 +444,10 @@ router.post('/:id/devolucion', verificarToken, soloRoles('admin', 'almacen', 'al
     if (nota.rows.length === 0) {
       await client.query('ROLLBACK')
       return res.status(404).json({ error: 'Nota de salida no encontrada' })
+    }
+    if (await periodoCerrado(client, nota.rows[0].periodo_id)) {
+      await client.query('ROLLBACK')
+      return res.status(409).json({ error: ERR_PERIODO_CERRADO })
     }
     if (nota.rows[0].estado === 'CERRADO') {
       await client.query('ROLLBACK')
@@ -603,6 +621,12 @@ router.put('/:id/lineas/:etiquetaId/devolucion-usada', verificarToken, soloRoles
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
+
+    const notaP = await client.query('SELECT periodo_id FROM notas_salida WHERE id = $1', [req.params.id])
+    if (await periodoCerrado(client, notaP.rows[0]?.periodo_id)) {
+      await client.query('ROLLBACK')
+      return res.status(409).json({ error: ERR_PERIODO_CERRADO })
+    }
 
     const linea = await client.query(`
       SELECT d.id as detalle_id, d.cantidad::float8 as cantidad_salida,

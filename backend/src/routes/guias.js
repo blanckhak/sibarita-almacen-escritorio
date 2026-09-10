@@ -6,7 +6,10 @@ const { ajustarInventario } = require('../utils/inventario')
 const { crearNotaSalidaAutomatica, crearNotaSalidaServicios } = require('../utils/salida')
 const { validarLargos } = require('../utils/texto')
 const { mensajeConcurrencia } = require('../utils/dbErrores')
+const { periodoCerrado } = require('../utils/periodo')
 const log = require('../middlewares/logMiddleware')
+
+const ERR_PERIODO_CERRADO = 'El periodo de esta guia esta CERRADO; pedile a un admin que lo reabra para poder modificarla.'
 
 // Fase 12 (R5): OFICINA y LABORATORIO se unificaron en COMPRAS_DIARIAS.
 const DESTINOS = ['ALMACEN', 'COMPRAS_DIARIAS', 'OTRO']
@@ -108,11 +111,13 @@ router.get('/:id', verificarToken, async (req, res) => {
   try {
     const guia = await pool.query(`
       SELECT g.*, a.nombre as almacen_nombre, u.nombre as usuario_nombre,
-             ua.nombre as anulada_por_nombre
+             ua.nombre as anulada_por_nombre,
+             pe.estado as periodo_estado, pe.nombre as periodo_nombre
       FROM guias g
       JOIN almacenes a ON g.almacen_id = a.id
       LEFT JOIN usuarios u ON g.usuario_id = u.id
       LEFT JOIN usuarios ua ON g.anulada_por = ua.id
+      LEFT JOIN periodos pe ON g.periodo_id = pe.id
       WHERE g.id = $1
     `, [req.params.id])
     if (guia.rows.length === 0) {
@@ -607,6 +612,10 @@ router.post('/:id/items/:itemId/retirar', verificarToken, soloRoles('admin', 'al
       return res.status(404).json({ error: 'Ese item no pertenece a esta guia' })
     }
     const it = item.rows[0]
+    if (await periodoCerrado(client, it.periodo_id)) {
+      await client.query('ROLLBACK')
+      return res.status(409).json({ error: ERR_PERIODO_CERRADO })
+    }
     if (!DESTINOS_SALIDA_AUTO.includes(it.destino)) {
       await client.query('ROLLBACK')
       return res.status(400).json({ error: 'Ese item no es de Compras Diarias' })
@@ -711,6 +720,10 @@ router.put('/:id', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
     if (guiaActual.estado === 'ANULADA') {
       await client.query('ROLLBACK')
       return res.status(400).json({ error: 'La guia esta ANULADA y no se puede editar' })
+    }
+    if (await periodoCerrado(client, guiaActual.periodo_id)) {
+      await client.query('ROLLBACK')
+      return res.status(409).json({ error: ERR_PERIODO_CERRADO })
     }
 
     // Guia CERRADA: solo cantidad de lineas + N de O.C. (y reabrir con estado).
@@ -857,6 +870,10 @@ router.post('/:id/anular', verificarToken, soloRoles('admin', 'almacen', 'almace
     if (g.rows[0].estado === 'ANULADA') {
       await client.query('ROLLBACK')
       return res.status(400).json({ error: 'La guia ya esta anulada' })
+    }
+    if (await periodoCerrado(client, g.rows[0].periodo_id)) {
+      await client.query('ROLLBACK')
+      return res.status(409).json({ error: ERR_PERIODO_CERRADO })
     }
     const numeroGuia = g.rows[0].numero_guia
 

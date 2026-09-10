@@ -2357,6 +2357,57 @@ productos del periodo + Excel):
   apertura/ingresos/salidas/stock coherentes (ej. CABLE PRUEBA DECIMAL:
   ing 3.5, sal 3.5, stock_devolucion 3 de la devolucion parcial).
 
+--------------------------------------------------
+26. FASE 15 (R7-b): cierre de periodo + arrastre + reabrir + purga (10/09/2026)
+--------------------------------------------------
+Rama fase-15-cierre-periodo (stack sobre fase-14-periodos).
+
+CERRAR / ARRASTRE (HECHO):
+- POST /api/periodos/:id/cerrar { fecha_fin?, nombre_siguiente? }: valida
+  ACTIVO, congela la foto de CIERRE (= stock actual del almacen, por
+  producto, buckets NUEVO/DEVOLUCION), pasa el periodo a CERRADO con
+  fecha_fin (default hoy, validada en SQL) + cerrado_por/en, y CREA el
+  periodo siguiente ACTIVO (periodo_anterior_id, fecha_inicio = fecha_fin +
+  1, nombre "Periodo N" o el que se pase). APERTURA del nuevo = copia del
+  CIERRE del anterior -> ARRASTRE DE SALDO.
+- Probado: cerrar MALSA "Periodo inicial" -> siguiente "Periodo 2" inicio
+  +1 dia; CIERRE(1) == APERTURA(2) producto por producto (ARANDELA B 3/0,
+  BLANQUEADOR 4/0, CABLE 0/3).
+
+BLOQUEO DE ESCRITURA (HECHO):
+- Nuevo backend/src/utils/periodo.js -> periodoCerrado(client, periodo_id).
+- guias.js: PUT /:id, /:id/anular, /:id/items/:itemId/retirar -> 409 si el
+  periodo de la guia esta CERRADO. notasSalida.js: /:id/aprobar,
+  /:id/rechazar, PUT /:id, /:id/devolucion, /:id/lineas/.../devolucion-usada
+  -> 409 igual. El POST de guia/nota sigue entrando SIEMPRE al periodo
+  ACTIVO (nunca al cerrado).
+- guias.js GET /:id y notasSalida.js GET /:id devuelven periodo_estado /
+  periodo_nombre.
+- Probado: editar/anular guia de periodo cerrado -> 409; guia nueva ->
+  entra al periodo nuevo activo.
+
+REABRIR (solo admin, HECHO):
+- POST /api/periodos/:id/reabrir: valida CERRADO; si el periodo siguiente
+  YA tuvo movimiento (guias/notas/etiquetas) -> 409; si no, borra el
+  periodo siguiente (+ su APERTURA por CASCADE) y el CIERRE de este, y
+  vuelve a ACTIVO (reabierto_en).
+- Probado: reabrir con el siguiente vacio -> ok; con movimiento -> 409.
+
+FRONTEND (HECHO):
+- Periodos.jsx: botones "Cerrar periodo" (modal de confirmacion, explica el
+  arrastre) y "Reabrir" (solo admin, en periodos CERRADO). recargarPeriodos
+  tras cada accion.
+- GuiaDetalle.jsx / NotaSalidaDetalle.jsx: si periodo_estado === 'CERRADO'
+  se ocultan Editar / Anular / Devolucion / Aprobar-Rechazar y sale un
+  cartel gris "Periodo cerrado. ... de solo lectura ...".
+
+Datos de prueba: JOPISA quedo con "Periodo inicial" CERRADO + "Periodo 2"
+ACTIVO (con 1 guia anulada J-F15-... de la prueba); MALSA volvio a un solo
+"Periodo inicial" ACTIVO tras reabrir.
+
+PENDIENTE 15.7/15.8: cierre general (todos los almacenes) + purga de
+temporales con dry_run. Despues: bumps de version + merges + push.
+
 PENDIENTE 14.7: bump instalador 1.8.0 + merge (al final).
 
 PENDIENTE NUEVO (10/09, de para giarse/):
