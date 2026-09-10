@@ -2106,28 +2106,39 @@ comun; R7 va ultimo porque consume todo lo anterior.
     observacion de cabecera y de linea guardadas; PUT codigo_impresion
     "MANUAL-001" -> guardado, etiqueta_codigo real 9003 intacto.
   * frontend build OK, copiado a backend/frontend-dist, app reiniciada.
-- Paso 11.10b HECHO (10/09): la tabla de la Nota de Ingreso impresa pasa
-  al layout de "para giarse/guia1.jpg" (pedido del usuario).
-  * Se reemplaza la tabla DETALLE|CANTIDAD|P.UNIT|TOTAL por una planilla
-    ancha, una fila por linea, con columnas:
-    ITEM | UBICAC | Fecha | N/I | O/C Nº Externa | DOC | Nº | Proveedor |
-    Detalle | Maquina - MOTIVO | UNID MED | Cantidad.
-  * ITEM = numero que reinicia dentro de cada id_agrupador + la letra/ID
-    del grupo ("1 A1", "2 A1", "1 B2"); sin ID -> correlativo simple.
-  * DOC = abreviatura del tipo_documento (GUIA->G/R, FACTURA->FAC,
-    BOLETA->BOL, OTRO->OTRO). Nº = guia_remision o factura. Fecha =
-    DD.MM.YY. Los datos de cabecera (Fecha/N-I/O.C./DOC/Nº/Proveedor) se
-    repiten en cada fila, como en la imagen.
-  * Maquina-MOTIVO = destino_detalle o destino. UNID MED = abreviatura de
-    la unidad. Cantidad con fmtCantidad (decimales). Fila TOTAL suma las
+- Paso 11.10b (10/09): contenido de la Nota de Ingreso impresa segun
+  "para giarse/". Dos iteraciones:
+  * Primero se hizo una tabla ancha de 12 columnas (guia1.jpg). Se
+    REVIRTIO al aparecer imgreso.png (el talonario fisico real solo tiene
+    4 columnas: DETALLE | CANTIDAD | P.UNIT | TOTAL) y confirmarlo el
+    usuario: "4 columnas del talonario + celda DETALLE enriquecida".
+  * Version final: se mantienen las 4 columnas y el marco del talonario
+    (encabezado, caja FECHA, N. en rojo, bloque PROVEEDOR/O.C./GUIA DE
+    REMISION/FACTURA, OBSERVACIONES, conformidad, firmas). DENTRO de la
+    celda DETALLE, por linea: ITEM (n que reinicia por id_agrupador + la
+    letra/ID: "1 A1", "2 A1", "1 B2"; sin ID -> correlativo) + codigo a
+    imprimir (codigo_impresion o el del sistema) + descripcion (wrap
+    natural, 2+ lineas) + "Ubic.: xxx" + "Motivo/Maq.: xxx"
+    (destino_detalle o destino != ALMACEN) + observacion de linea en
+    italica. La UNID MED va junto a la CANTIDAD. Fila TOTAL suma las
     cantidades.
-  * Se quito el bloque PROVEEDOR/O.C./GUIA DE REMISION/FACTURA de arriba
-    (ahora esos datos van en cada fila). Se mantiene el marco del
-    talonario: encabezado MANUFACTURA DE ALIMENTOS S.A., caja FECHA, N.
-    en rojo, OBSERVACIONES, texto de conformidad y firmas.
-  * Nota: el ancho de 12 columnas todavia depende de la calibracion de
-    impresion matricial (Fase 1, BLOQUEADA por la medicion del talonario).
-  * frontend build OK, copiado, app levantada.
+  * El ancho fino / 2 lineas exactas depende de la calibracion matricial
+    (Fase 1, BLOQUEADA por la medicion del talonario).
+  * Referencias en para giarse/: imgreso.png (talonario ingreso, 4 col),
+    guia1.jpg (contenido/columnas de referencia, formato Excel),
+    gia1.jpeg (ITM = n + letra de grupo), una ejmplo.pdf (nota de salida
+    llena a mano), dodne se colocara el contenido.png (anotacion del
+    usuario marcando la zona DETALLE).
+
+PENDIENTE NUEVO (10/09, de para giarse/):
+- Formato "NOTA DE INGRESO DE ACTIVOS - DESUSO" (para giarse/desuso.png,
+  N. 001383): documento fisico APARTE para material usado / que vuelve a
+  stock desde un area. Columnas: DESCRIPCION | CANTIDAD | UNIDAD |
+  AREA-MAQUINA. Cabecera: SECCION / PERSONA RESPONSABLE / NOTA DE SALIDA
+  DE ACTIVO (ref). Firmas: SOLICITADO POR / REVISADO POR x3 / APROBADO POR.
+  El usuario confirmo: es un formato NUEVO, se imprime cuando entra
+  material usado (encaja con la devolucion PARCIAL/USADO de R6, o cuando
+  algo vuelve de un area). Va en una fase aparte (no en Fase 11).
 
 QUE QUEDA PENDIENTE (revision del proyecto, 31/08):
 - Fase 1 - Calibracion de impresion matricial (Bloque 2 "6 lineas" +
