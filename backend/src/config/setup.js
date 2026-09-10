@@ -460,6 +460,24 @@ async function setup() {
     ALTER TABLE guia_items ADD COLUMN IF NOT EXISTS id_agrupador     VARCHAR(30);
     ALTER TABLE guia_items ADD COLUMN IF NOT EXISTS observaciones    VARCHAR(300);
     ALTER TABLE guia_items ADD COLUMN IF NOT EXISTS codigo_impresion VARCHAR(30);
+
+    -- ==========================================================
+    -- FASE 12 (R5): rol Almacenero 3 + destinos Oficina/Laboratorio -> Compras Diarias
+    -- ==========================================================
+    -- Nuevo perfil 'almacenero3' (mismos permisos que 'almacen', ver soloRoles
+    -- en las rutas). El usuario de demo se siembra mas abajo.
+    INSERT INTO roles (nombre) VALUES ('almacenero3') ON CONFLICT (nombre) DO NOTHING;
+
+    -- Los destinos OFICINA y LABORATORIO se unifican en COMPRAS_DIARIAS. Se
+    -- migran los datos y se recrea el CHECK (idempotente: la 2a corrida no
+    -- encuentra filas y el CHECK ya admite el valor nuevo).
+    UPDATE guia_items SET destino = 'COMPRAS_DIARIAS' WHERE destino IN ('OFICINA', 'LABORATORIO');
+    ALTER TABLE guia_items DROP CONSTRAINT IF EXISTS guia_items_destino_check;
+    ALTER TABLE guia_items ADD  CONSTRAINT guia_items_destino_check
+      CHECK (destino IS NULL OR destino IN ('ALMACEN', 'COMPRAS_DIARIAS', 'OTRO'));
+    -- Cosmetico: las notas de salida automaticas viejas guardaban la seccion
+    -- como texto 'Oficina' / 'Laboratorio'.
+    UPDATE notas_salida SET seccion = 'Compras Diarias' WHERE seccion IN ('Oficina', 'Laboratorio');
   `)
 
   const rolesExist = await pool.query('SELECT COUNT(*) FROM roles')
@@ -578,6 +596,20 @@ async function setup() {
        VALUES ($1,$2,$3,2,1)
        ON CONFLICT (email) DO NOTHING`,
       [u.nombre, u.email, hash]
+    )
+  }
+
+  // Almacenero 3 (Fase 12, R5): nuevo perfil 'almacenero3'. rol_id no es fijo
+  // (SERIAL), asi que se resuelve por nombre. Corre siempre, igual que el
+  // bloque de arriba, para instalaciones existentes y el login de prueba.
+  {
+    const hash = await bcrypt.hash('almacenero3', 10)
+    await pool.query(
+      `INSERT INTO usuarios (nombre,email,password,rol_id,almacen_id)
+       VALUES ('Almacenero 3','almacenero3@sibarita.com',$1,
+               (SELECT id FROM roles WHERE nombre = 'almacenero3'),1)
+       ON CONFLICT (email) DO NOTHING`,
+      [hash]
     )
   }
 

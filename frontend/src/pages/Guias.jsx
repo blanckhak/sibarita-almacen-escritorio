@@ -10,7 +10,7 @@ import { fmtCantidad, sumarCantidades } from '../utils/fmt'
 const LINEA_VACIA = () => ({ producto_id: '', producto_nombre: '', nuevo: false, tipo: 'PRODUCTO', cantidad: '', destino: 'ALMACEN', destino_detalle: '', unidad_medida_id: '', recogido: true, metrica: 'ENTERO', partidas: [], persona_retira: '', retira_obs: '', id_agrupador: '', observaciones: '' })
 // Destinos que generan su propia Nota de Salida automatica al guardar la guia
 // (si ya lo recogieron) o al marcarlos retirados despues (Bloque 6).
-const DESTINOS_SALIDA_AUTO = ['OFICINA', 'LABORATORIO']
+const DESTINOS_SALIDA_AUTO = ['COMPRAS_DIARIAS']
 const PARTIDA_VACIA = () => ({ cantidad: '', referencia: '' })
 const sumaPartidas = (partidas) => sumarCantidades((partidas || []).map(p => p.cantidad))
 
@@ -29,7 +29,7 @@ export default function Guias() {
   const [proveedorOtro, setProveedorOtro] = useState(false)
   const [mostrarCerradas, setMostrarCerradas] = useState(false)
 
-  const puedeRegistrar = ['admin', 'almacen'].includes(usuario?.rol)
+  const puedeRegistrar = ['admin', 'almacen', 'almacenero3'].includes(usuario?.rol)
   const proveedoresConocidos = useMemo(() => extraerProveedoresConocidos(guias), [guias])
   // Por defecto solo se ven las guias CARGADA (las que todavia se estan
   // trabajando); las CERRADA y ANULADA quedan disponibles con el toggle de
@@ -226,7 +226,7 @@ export default function Guias() {
       }
       const { data } = await api.post('/api/guias', payload)
       const notasTexto = data.notas_salida_generadas?.length > 0
-        ? ` Se genero${data.notas_salida_generadas.length > 1 ? 'n' : ''} la nota de salida ${data.notas_salida_generadas.map(n => n.numero_nota).join(', ')} (Oficina/Laboratorio).`
+        ? ` Se genero${data.notas_salida_generadas.length > 1 ? 'n' : ''} la nota de salida ${data.notas_salida_generadas.map(n => n.numero_nota).join(', ')} (Compras Diarias).`
         : ''
       setMensaje({
         tipo: 'ok',
@@ -484,8 +484,7 @@ export default function Guias() {
                             className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                           >
                             <option value="ALMACEN">✗ Almacen (genera codigo)</option>
-                            <option value="OFICINA">✓ Oficina</option>
-                            <option value="LABORATORIO">✓ Laboratorio</option>
+                            <option value="COMPRAS_DIARIAS">✓ Compras Diarias</option>
                             <option value="OTRO">✓ Otro (especificar)</option>
                           </select>
                           {it.destino === 'OTRO' && (

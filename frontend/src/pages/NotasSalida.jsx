@@ -40,7 +40,7 @@ export default function NotasSalida() {
   const [mostrarConfig, setMostrarConfig] = useState(false)
   const [guardandoConfig, setGuardandoConfig] = useState(false)
 
-  const puedeRegistrar = ['admin', 'almacen'].includes(usuario?.rol)
+  const puedeRegistrar = ['admin', 'almacen', 'almacenero3'].includes(usuario?.rol)
   const esAdmin = usuario?.rol === 'admin'
 
   const cargarNotas = () => {

@@ -139,7 +139,7 @@ router.post('/', verificarToken, soloRoles('admin', 'mantenimiento'),
   }
 })
 
-router.post('/:id/atender', verificarToken, soloRoles('admin', 'almacen'),
+router.post('/:id/atender', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
   log('ATENDER_SOLICITUD_MATERIALES', req => `Solicitud id ${req.params.id}`),
   async (req, res) => {
   const client = await pool.connect()
@@ -168,7 +168,7 @@ router.post('/:id/atender', verificarToken, soloRoles('admin', 'almacen'),
   }
 })
 
-router.post('/:id/rechazar', verificarToken, soloRoles('admin', 'almacen'),
+router.post('/:id/rechazar', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
   log('RECHAZAR_SOLICITUD_MATERIALES', req => `Solicitud id ${req.params.id}, motivo: ${req.body.motivo || 'sin indicar'}`),
   async (req, res) => {
   const { motivo } = req.body

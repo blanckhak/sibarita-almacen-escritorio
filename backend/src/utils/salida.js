@@ -2,7 +2,7 @@ const { ajustarInventario } = require('./inventario')
 
 // Marca una etiqueta como salida del almacen: cambia estado, registra historial
 // y descuenta inventario. Usado por Notas de Salida normales y por la salida
-// automatica de guias hacia Oficina/Laboratorio (Bloque 6).
+// automatica de guias hacia Compras Diarias (Bloque 6).
 async function marcarSalida(client, etiqueta, numeroNota, usuarioId) {
   await client.query(`UPDATE etiquetas SET estado = 'SALIO' WHERE id = $1`, [etiqueta.id])
 
@@ -24,7 +24,7 @@ async function marcarSalida(client, etiqueta, numeroNota, usuarioId) {
 
 // Crea una Nota de Salida ya CERRADA (sin devolucion) para UNA O VARIAS
 // etiquetas juntas, y las marca como salida. Usada cuando una guia entrega
-// directo a Oficina o Laboratorio (Bloque 6): motivo fijo USO_INTERNO,
+// directo a Compras Diarias (Bloque 6): motivo fijo USO_INTERNO,
 // seccion = destino. Varias lineas de la misma guia con el mismo destino y
 // la misma persona que retira quedan agrupadas en UNA sola nota (no una por
 // producto).

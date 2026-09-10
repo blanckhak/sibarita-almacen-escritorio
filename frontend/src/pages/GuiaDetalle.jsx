@@ -13,9 +13,8 @@ import PreviewImpresion from '../components/PreviewImpresion'
 
 const colorDestino = {
   ALMACEN:     'bg-blue-100 text-blue-700',
-  OFICINA:     'bg-green-100 text-green-700',
-  LABORATORIO: 'bg-purple-100 text-purple-700',
-  OTRO:        'bg-amber-100 text-amber-700',
+  COMPRAS_DIARIAS: 'bg-green-100 text-green-700',
+  OTRO:            'bg-amber-100 text-amber-700',
 }
 
 export default function GuiaDetalle() {
@@ -49,8 +48,8 @@ export default function GuiaDetalle() {
   const [revItems, setRevItems]   = useState([])
   const [guardandoRev, setGuardandoRev] = useState(false)
 
-  const puedeImprimir = ['admin', 'almacen'].includes(usuario?.rol)
-  const puedeEditar = ['admin', 'almacen'].includes(usuario?.rol)
+  const puedeImprimir = ['admin', 'almacen', 'almacenero3'].includes(usuario?.rol)
+  const puedeEditar = ['admin', 'almacen', 'almacenero3'].includes(usuario?.rol)
 
   const cargar = () => {
     api.get(`/api/guias/${id}`)
@@ -722,7 +721,7 @@ export default function GuiaDetalle() {
                     {it.etiqueta_estado
                       ? <span className={`px-2 py-1 rounded-full text-xs font-bold ${colorEtiquetaEstado(it.etiqueta_estado)}`}>{labelEtiquetaEstado(it.etiqueta_estado)}</span>
                       : <span className="text-gray-400 text-xs">{it.tipo === 'SERVICIO' ? 'Servicio' : 'Salida automatica'}</span>}
-                    {it.recogido === false && ['OFICINA', 'LABORATORIO'].includes(it.destino) && it.etiqueta_estado === 'EN_ALMACEN' && puedeEditar && !anulada && (
+                    {it.recogido === false && it.destino === 'COMPRAS_DIARIAS' && it.etiqueta_estado === 'EN_ALMACEN' && puedeEditar && !anulada && (
                       <div className="mt-1.5">
                         <span className="block text-[11px] text-amber-600 font-medium mb-1">Falta quien retira</span>
                         <button
@@ -793,7 +792,7 @@ export default function GuiaDetalle() {
           <div className="bg-white rounded-xl shadow-lg w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
             <h2 className="text-lg font-semibold text-gray-800 mb-1">Asignar responsable y retirar</h2>
             <p className="text-sm text-gray-500 mb-4">
-              Genera la Nota de Salida de <b>{itemRetirando.producto_nombre}</b> ({itemRetirando.destino === 'OFICINA' ? 'Oficina' : 'Laboratorio'}).
+              Genera la Nota de Salida de <b>{itemRetirando.producto_nombre}</b> (Compras Diarias).
             </p>
             <label className="block text-sm font-medium text-gray-600 mb-1">Persona responsable (quien retira)</label>
             <input

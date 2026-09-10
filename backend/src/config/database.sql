@@ -194,8 +194,9 @@ CREATE TABLE guia_items (
   -- Texto libre del servicio; solo se usa cuando tipo = 'SERVICIO'.
   descripcion VARCHAR(200),
   -- destino es NULL en lineas SERVICIO (no van a ningun almacen fisico).
-  destino VARCHAR(20) CHECK (destino IS NULL OR destino IN ('ALMACEN', 'OFICINA', 'LABORATORIO', 'OTRO')),
-  -- Solo aplica cuando destino es OFICINA/LABORATORIO/OTRO: si ya lo recogieron
+  -- Fase 12 (R5): OFICINA y LABORATORIO se unificaron en COMPRAS_DIARIAS.
+  destino VARCHAR(20) CHECK (destino IS NULL OR destino IN ('ALMACEN', 'COMPRAS_DIARIAS', 'OTRO')),
+  -- Solo aplica cuando destino es COMPRAS_DIARIAS/OTRO: si ya lo recogieron
   -- (true) sale automatico sin etiqueta; si no (false), se queda en almacen
   -- etiquetado hasta que lo recojan, igual que un item con destino ALMACEN.
   recogido BOOLEAN,

@@ -85,8 +85,8 @@ export default function NotaSalidaDetalle() {
   const [edObs, setEdObs]         = useState('')
   const [guardandoEncabezado, setGuardandoEncabezado] = useState(false)
 
-  const puedeGestionar = ['admin', 'almacen'].includes(usuario?.rol)
-  const puedeAprobar    = ['admin', 'almacen'].includes(usuario?.rol)
+  const puedeGestionar = ['admin', 'almacen', 'almacenero3'].includes(usuario?.rol)
+  const puedeAprobar    = ['admin', 'almacen', 'almacenero3'].includes(usuario?.rol)
 
   const cargar = () => {
     api.get(`/api/notas-salida/${id}`)
@@ -477,7 +477,7 @@ export default function NotaSalidaDetalle() {
           <div className="bg-white rounded-xl shadow-lg w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
             <h2 className="text-lg font-semibold text-gray-800 mb-1">Editar nota de salida</h2>
             <p className="text-sm text-gray-500 mb-4">
-              Nota N.° {nota.numero_nota}. Corrige quien retira, la seccion (Oficina/Laboratorio/Servicios) o la observacion. No cambia los productos ni el inventario.
+              Nota N.° {nota.numero_nota}. Corrige quien retira, la seccion (Compras Diarias / Servicios) o la observacion. No cambia los productos ni el inventario.
             </p>
             <label className="block text-sm font-medium text-gray-600 mb-1">Persona responsable (quien retira)</label>
             <input
@@ -493,7 +493,7 @@ export default function NotaSalidaDetalle() {
               value={edSeccion}
               onChange={e => setEdSeccion(e.target.value.toUpperCase())}
               maxLength={100}
-              placeholder="Oficina / Laboratorio / Servicios..."
+              placeholder="Compras Diarias / Servicios..."
               className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 mb-3"
             />
             <label className="block text-sm font-medium text-gray-600 mb-1">Observacion (opcional)</label>

@@ -2148,6 +2148,52 @@ comun; R7 va ultimo porque consume todo lo anterior.
     000001 con devolucion parcial, guia TEST-R4-... (id 2, IDs A1/A1/B2,
     codigo_impresion MANUAL-001).
 
+--------------------------------------------------
+23. FASE 12 (R5): rol Almacenero 3 + destinos -> Compras Diarias (10/09/2026)
+--------------------------------------------------
+Rama fase-12-roles-destinos (desde master 1.6.0).
+
+ROL 'almacenero3' (mismos permisos que 'almacen'):
+- setup.js: INSERT INTO roles ('almacenero3') ON CONFLICT DO NOTHING; +
+  seed usuario Almacenero 3 (almacenero3@sibarita.com / almacenero3,
+  almacen MALSA), rol_id resuelto por nombre (SELECT, no literal).
+- Backend: soloRoles('admin','almacen') -> ('admin','almacen','almacenero3')
+  en TODAS las rutas (18 sitios: etiquetas, guias, movimientos,
+  notasSalida, solicitudesMateriales) + logs.js sumado a mano.
+- Frontend: 'almacenero3' agregado donde estaba 'almacen' -> checks
+  ['admin','almacen'].includes de 7 paginas, App.jsx RutaProtegida (13
+  rutas), Navbar.jsx (enlaces + colorRol azul-500). Login.jsx: boton de
+  acceso rapido "Almacenero 3".
+- NO se hizo permisos.js centralizado (con copia completa el find/replace
+  alcanza; queda como mejora futura).
+
+DESTINOS Oficina + Laboratorio -> COMPRAS_DIARIAS:
+- setup.js (bloque Fase 12): UPDATE guia_items SET destino='COMPRAS_DIARIAS'
+  WHERE destino IN ('OFICINA','LABORATORIO'); DROP/ADD CHECK a
+  ('ALMACEN','COMPRAS_DIARIAS','OTRO'); UPDATE notas_salida.seccion
+  'Oficina'/'Laboratorio' -> 'Compras Diarias'. database.sql actualizado.
+- guias.js: DESTINOS, DESTINOS_SALIDA_AUTO=['COMPRAS_DIARIAS'],
+  DESTINO_LABEL={COMPRAS_DIARIAS:'Compras Diarias'}. Mensaje de error y
+  comentarios.
+- Frontend: Guias.jsx (const + una sola <option> "Compras Diarias" +
+  mensaje), GuiaDetalle.jsx (colorDestino, check de "asignar responsable",
+  texto del modal), ConsultaProductos.jsx (colorDestino),
+  NotaSalidaDetalle.jsx (placeholders/hints).
+- OJO choque de nombres: el modulo compras_diarias (Fase 10, log de
+  compras con oficina de texto libre) NO se toca; esto es el DESTINO de
+  retiro de una guia.
+
+Probado contra el server: login almacenero3 OK (rol almacenero3); crea
+guia OK (201); guia con destino COMPRAS_DIARIAS + persona_retira -> Nota
+de Salida automatica 000002 seccion "Compras Diarias" USO_INTERNO
+CERRADO; destino 'OFICINA' -> 400 "Destino invalido". setup corrido 2x
+sin error; roles: admin/almacen/compras/mantenimiento/almacenero3.
+
+Datos de prueba nuevos en sibarita_db (borrables): guia TEST-F12-... (id
+3, creada por almacenero3, LAPICES PRUEBA CD x2 -> Nota Salida 000002).
+
+PENDIENTE: 12.7 = bump instalador 1.6.0 -> 1.7.0 + merge fase-12 a master.
+
 PENDIENTE NUEVO (10/09, de para giarse/):
 - Formato "NOTA DE INGRESO DE ACTIVOS - DESUSO" (para giarse/desuso.png,
   N. 001383): documento fisico APARTE para material usado / que vuelve a

@@ -79,7 +79,7 @@ export default function Inventario() {
     }
   }
 
-  const puedeAgregar = ['admin', 'almacen'].includes(usuario?.rol)
+  const puedeAgregar = ['admin', 'almacen', 'almacenero3'].includes(usuario?.rol)
 
   const resumenPorAlmacen = useMemo(() => {
     if (!productoSeleccionado) return []

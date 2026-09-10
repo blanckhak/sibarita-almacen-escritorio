@@ -96,7 +96,7 @@ router.get('/:id', verificarToken, async (req, res) => {
   }
 })
 
-router.post('/', verificarToken, soloRoles('admin', 'almacen'),
+router.post('/', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
   log('CREAR_NOTA_SALIDA', req => `Responsable ${req.body.persona_responsable}, motivo ${req.body.motivo}, ${Array.isArray(req.body.lineas) ? req.body.lineas.length : 0} codigo(s)`),
   async (req, res) => {
   const { seccion, persona_responsable, motivo, requiere_devolucion, observaciones, lineas } = req.body
@@ -218,7 +218,7 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
 })
 
 // CU-05: el supervisor/admin aprueba una nota que quedo retenida por superar el umbral configurado
-router.post('/:id/aprobar', verificarToken, soloRoles('admin', 'almacen'),
+router.post('/:id/aprobar', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
   log('APROBAR_NOTA_SALIDA', req => `Nota de salida id ${req.params.id}`),
   async (req, res) => {
   const client = await pool.connect()
@@ -273,7 +273,7 @@ router.post('/:id/aprobar', verificarToken, soloRoles('admin', 'almacen'),
 })
 
 // CU-05 (rechazo): el producto nunca salio, la nota queda cerrada con el motivo del rechazo
-router.post('/:id/rechazar', verificarToken, soloRoles('admin', 'almacen'),
+router.post('/:id/rechazar', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
   log('RECHAZAR_NOTA_SALIDA', req => `Nota de salida id ${req.params.id}, motivo: ${req.body.motivo || 'sin indicar'}`),
   async (req, res) => {
   const { motivo } = req.body
@@ -301,11 +301,11 @@ router.post('/:id/rechazar', verificarToken, soloRoles('admin', 'almacen'),
 
 // Edicion del encabezado de una Nota de Salida: persona responsable, seccion y
 // observaciones. Pensado sobre todo para las notas automaticas que genera una
-// guia al entregar a Oficina/Laboratorio (motivo USO_INTERNO), donde el nombre
+// guia al entregar a Compras Diarias (motivo USO_INTERNO), donde el nombre
 // de quien retira puede haberse tipeado mal o quedar pendiente de completar,
 // pero sirve para cualquier nota. NO toca motivo, estado, lineas ni inventario.
 // Una nota EN_APROBACION no se edita aca (primero se aprueba o se rechaza).
-router.put('/:id', verificarToken, soloRoles('admin', 'almacen'),
+router.put('/:id', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
   log('EDITAR_NOTA_SALIDA', req => `Nota de salida id ${req.params.id}, responsable ${req.body.persona_responsable}`),
   async (req, res) => {
   const persona_responsable = (req.body.persona_responsable || '').trim()
@@ -347,7 +347,7 @@ router.put('/:id', verificarToken, soloRoles('admin', 'almacen'),
 // Bloque 4: cada linea puede volver como 'NUEVO' (el mismo codigo vuelve a
 // EN_ALMACEN, stock NUEVO) o 'USADO' (el codigo viejo pasa a REEMPLAZADA y se
 // genera un codigo nuevo con condicion USADO que reingresa como stock DEVOLUCION).
-router.post('/:id/devolucion', verificarToken, soloRoles('admin', 'almacen'),
+router.post('/:id/devolucion', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
   log('REGISTRAR_DEVOLUCION', req => `Nota de salida id ${req.params.id}, ${Array.isArray(req.body.etiqueta_ids) ? req.body.etiqueta_ids.length : 0} codigo(s), condicion ${req.body.condicion === 'USADO' ? 'USADO' : 'NUEVO'}`),
   async (req, res) => {
   const { etiqueta_ids } = req.body
@@ -582,7 +582,7 @@ router.post('/:id/devolucion', verificarToken, soloRoles('admin', 'almacen'),
 // observacion), sin rehacer el retiro del codigo viejo ni la generacion del
 // nuevo. Si la cantidad cambia, se ajusta el inventario y la cantidad del
 // codigo nuevo por la diferencia, para que sigan cuadrando con la nota.
-router.put('/:id/lineas/:etiquetaId/devolucion-usada', verificarToken, soloRoles('admin', 'almacen'),
+router.put('/:id/lineas/:etiquetaId/devolucion-usada', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
   log('EDITAR_DEVOLUCION_USADA', req => `Nota de salida id ${req.params.id}, etiqueta id ${req.params.etiquetaId}`),
   async (req, res) => {
   const client = await pool.connect()
@@ -699,7 +699,7 @@ router.put('/:id/lineas/:etiquetaId/devolucion-usada', verificarToken, soloRoles
 // Registra que se reviso un codigo y todavia NO lo han devuelto: no cambia
 // ningun estado (la etiqueta sigue SALIO, la nota sigue PENDIENTE), solo
 // queda anotado en la auditoria para seguimiento.
-router.post('/:id/lineas/:etiquetaId/no-devuelto', verificarToken, soloRoles('admin', 'almacen'),
+router.post('/:id/lineas/:etiquetaId/no-devuelto', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
   log('MARCAR_NO_DEVUELTO', req => `Nota de salida id ${req.params.id}, etiqueta id ${req.params.etiquetaId}`),
   async (req, res) => {
   try {

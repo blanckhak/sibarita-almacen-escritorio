@@ -8,11 +8,12 @@ const { validarLargos } = require('../utils/texto')
 const { mensajeConcurrencia } = require('../utils/dbErrores')
 const log = require('../middlewares/logMiddleware')
 
-const DESTINOS = ['ALMACEN', 'OFICINA', 'LABORATORIO', 'OTRO']
+// Fase 12 (R5): OFICINA y LABORATORIO se unificaron en COMPRAS_DIARIAS.
+const DESTINOS = ['ALMACEN', 'COMPRAS_DIARIAS', 'OTRO']
 // Destinos que generan su propia Nota de Salida automatica (Bloque 6): el
 // material se entrega directo, no se maneja como stock normal de almacen.
-const DESTINOS_SALIDA_AUTO = ['OFICINA', 'LABORATORIO']
-const DESTINO_LABEL = { OFICINA: 'Oficina', LABORATORIO: 'Laboratorio' }
+const DESTINOS_SALIDA_AUTO = ['COMPRAS_DIARIAS']
+const DESTINO_LABEL = { COMPRAS_DIARIAS: 'Compras Diarias' }
 
 // Fase 11 (R6): guia_items.cantidad y guia_item_partidas.cantidad son
 // NUMERIC(12,3) -> se admiten fracciones por Kilo / Metro (1.2, 0.3, 3.5).
@@ -147,7 +148,7 @@ router.get('/:id', verificarToken, async (req, res) => {
   }
 })
 
-router.post('/', verificarToken, soloRoles('admin', 'almacen'),
+router.post('/', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
   log('CREAR_GUIA', req => `Guia ${req.body.numero_guia}, almacen ${req.body.almacen_id}, ${Array.isArray(req.body.items) ? req.body.items.length : 0} linea(s)`),
   async (req, res) => {
   const { numero_guia, almacen_id, fecha, items, proveedor, numero_oc, direccion, guia_remision, factura, observaciones } = req.body
@@ -202,7 +203,7 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
     if (it.destino === 'OTRO' && !(it.destino_detalle && it.destino_detalle.trim())) {
       return res.status(400).json({ error: 'Debes especificar el destino cuando eliges "Otro"' })
     }
-    // Oficina/Laboratorio ya recogido (Bloque 6): si viene "quien retira" se
+    // Compras Diarias ya recogido (Bloque 6): si viene "quien retira" se
     // genera su Nota de Salida al toque. Si NO viene (o queda "pendiente de
     // recoger", recogido:false) la linea queda en inventario con codigo y la
     // Nota se genera despues, al marcarla retirada desde el detalle de la guia
@@ -295,7 +296,7 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
 
     const etiquetasGeneradas = []
     const notasSalidaGeneradas = []
-    // Agrupa las lineas de salida automatica (Oficina/Laboratorio ya
+    // Agrupa las lineas de salida automatica (Compras Diarias ya
     // recogido) por destino+persona+observacion, para generar una sola Nota
     // de Salida por grupo en vez de una por producto.
     const salidaAutoGrupos = new Map()
@@ -391,7 +392,7 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
         return res.status(400).json({ error: 'La cantidad debe ser mayor a 0 (hasta 3 decimales) en todas las lineas' })
       }
 
-      // Oficina/Laboratorio marcado "ya recogido" pero SIN indicar quien retira:
+      // Compras Diarias marcado "ya recogido" pero SIN indicar quien retira:
       // no se puede emitir la Nota de Salida todavia (necesita responsable), asi
       // que la linea se trata como pendiente de recoger y el responsable se
       // asigna despues desde el detalle de la guia.
@@ -402,7 +403,7 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
       // (POST /:id/items/:itemId/retirar).
       const pendienteDeRecoger = it.destino !== 'ALMACEN' && (it.recogido === false || sinResponsable)
       const recogidoValor = it.destino === 'ALMACEN' ? null : (it.recogido !== false && !sinResponsable)
-      // Oficina/Laboratorio ya recogido (Bloque 6): genera su propia Nota de
+      // Compras Diarias ya recogido (Bloque 6): genera su propia Nota de
       // Salida automatica (USO_INTERNO, cerrada, sin devolucion) en el mismo
       // momento. OTRO no cambia: sigue saliendo sin dejar ningun rastro.
       const salidaAutoInmediata = DESTINOS_SALIDA_AUTO.includes(it.destino) && !pendienteDeRecoger
@@ -512,11 +513,11 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
   }
 })
 
-// Marca como retirado un item de Oficina/Laboratorio que habia quedado
+// Marca como retirado un item de Compras Diarias que habia quedado
 // "pendiente de recoger" (Bloque 6): genera su Nota de Salida automatica
 // (USO_INTERNO, cerrada, sin devolucion) recien en este momento, cuando ya se
 // sabe quien lo retira.
-router.post('/:id/items/:itemId/retirar', verificarToken, soloRoles('admin', 'almacen'),
+router.post('/:id/items/:itemId/retirar', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
   log('RETIRAR_ITEM_GUIA', req => `Guia id ${req.params.id}, item id ${req.params.itemId}`),
   async (req, res) => {
   const personaRetira = (req.body.persona_retira || '').trim()
@@ -546,7 +547,7 @@ router.post('/:id/items/:itemId/retirar', verificarToken, soloRoles('admin', 'al
     const it = item.rows[0]
     if (!DESTINOS_SALIDA_AUTO.includes(it.destino)) {
       await client.query('ROLLBACK')
-      return res.status(400).json({ error: 'Ese item no es de Oficina ni Laboratorio' })
+      return res.status(400).json({ error: 'Ese item no es de Compras Diarias' })
     }
     if (it.recogido !== false) {
       await client.query('ROLLBACK')
@@ -593,7 +594,7 @@ router.post('/:id/items/:itemId/retirar', verificarToken, soloRoles('admin', 'al
 //   producto o el destino.
 // - Guia CERRADA: solo se admite `numero_oc`, `estado` (para reabrirla) e
 //   `items`. El resto de la cabecera queda bloqueado hasta pasarla a CARGADA.
-router.put('/:id', verificarToken, soloRoles('admin', 'almacen'),
+router.put('/:id', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
   log('EDITAR_GUIA', req => `Guia ${req.params.id}: ${JSON.stringify(req.body)}`),
   async (req, res) => {
   const { proveedor, numero_oc, direccion, estado, guia_remision, factura, tipo_documento, items, observaciones } = req.body
@@ -771,7 +772,7 @@ router.put('/:id', verificarToken, soloRoles('admin', 'almacen'),
 // estado ANULADA) y deja la guia en estado ANULADA con el motivo. Solo se
 // permite si NINGUN codigo salio del almacen ni esta comprometido en una nota
 // de salida. No borra nada: la guia sigue visible en el historial.
-router.post('/:id/anular', verificarToken, soloRoles('admin', 'almacen'),
+router.post('/:id/anular', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
   log('ANULAR_GUIA', req => `Guia id ${req.params.id}, motivo: ${(req.body.motivo || '').trim() || 'sin indicar'}`),
   async (req, res) => {
   const motivo = (req.body.motivo || '').trim()

@@ -88,6 +88,7 @@ export default function Login({ onLogin }) {
               { rol: 'Almacen',       email: 'almacen@sibarita.com',       pass: 'almac123',    color: 'bg-blue-100 text-blue-700' },
               { rol: 'Almacenero 1',  email: 'almacenero1@sibarita.com',   pass: 'almacenero1', color: 'bg-sky-100 text-sky-700' },
               { rol: 'Almacenero 2',  email: 'almacenero2@sibarita.com',   pass: 'almacenero2', color: 'bg-teal-100 text-teal-700' },
+              { rol: 'Almacenero 3',  email: 'almacenero3@sibarita.com',   pass: 'almacenero3', color: 'bg-cyan-100 text-cyan-700' },
               { rol: 'Mantenimiento', email: 'mantenimiento@sibarita.com', pass: 'mant123',     color: 'bg-green-100 text-green-700' },
               { rol: 'Compras',       email: 'compras@sibarita.com',       pass: 'compras123',  color: 'bg-yellow-100 text-yellow-700' },
             ].map(u => (

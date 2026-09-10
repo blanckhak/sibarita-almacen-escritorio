@@ -22,7 +22,7 @@ export default function SolicitudMaterialesDetalle() {
   const [procesando, setProcesando] = useState(false)
   const [preview, setPreview] = useState(false)
 
-  const puedeGestionar = ['admin', 'almacen'].includes(usuario?.rol)
+  const puedeGestionar = ['admin', 'almacen', 'almacenero3'].includes(usuario?.rol)
 
   const cargar = () => {
     api.get(`/api/solicitudes-materiales/${id}`)
