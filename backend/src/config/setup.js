@@ -96,7 +96,7 @@ async function setup() {
       almacen_id INTEGER REFERENCES almacenes(id),
       producto_id INTEGER REFERENCES productos(id),
       tipo VARCHAR(20) CHECK (tipo IN ('NUEVO', 'DEVOLUCION')),
-      cantidad INTEGER NOT NULL DEFAULT 0,
+      cantidad NUMERIC(12,3) NOT NULL DEFAULT 0,
       descripcion TEXT,
       creado_en TIMESTAMP DEFAULT NOW()
     );
@@ -107,7 +107,7 @@ async function setup() {
       almacen_destino_id INTEGER REFERENCES almacenes(id),
       producto_id INTEGER REFERENCES productos(id),
       tipo VARCHAR(50),
-      cantidad INTEGER,
+      cantidad NUMERIC(12,3),
       descripcion TEXT,
       usuario_id INTEGER REFERENCES usuarios(id),
       fecha TIMESTAMP DEFAULT NOW()
@@ -176,7 +176,7 @@ async function setup() {
       id SERIAL PRIMARY KEY,
       guia_id INTEGER REFERENCES guias(id),
       producto_id INTEGER REFERENCES productos(id),
-      cantidad INTEGER NOT NULL,
+      cantidad NUMERIC(12,3) NOT NULL,
       tipo VARCHAR(20) NOT NULL DEFAULT 'PRODUCTO' CHECK (tipo IN ('PRODUCTO', 'SERVICIO')),
       descripcion VARCHAR(200),
       destino VARCHAR(20) CHECK (destino IS NULL OR destino IN ('ALMACEN', 'OFICINA', 'LABORATORIO', 'OTRO'))
@@ -188,7 +188,7 @@ async function setup() {
     CREATE TABLE IF NOT EXISTS guia_item_partidas (
       id SERIAL PRIMARY KEY,
       guia_item_id INTEGER REFERENCES guia_items(id),
-      cantidad INTEGER NOT NULL,
+      cantidad NUMERIC(12,3) NOT NULL,
       referencia VARCHAR(200)
     );
 
@@ -256,7 +256,7 @@ async function setup() {
     -- Cantidad propia del codigo. Solo la usan los codigos USADO generados por
     -- una devolucion parcial (volvio menos de lo que salio). NULL = la cantidad
     -- es la del guia_item (el caso normal de un ingreso).
-    ALTER TABLE etiquetas ADD COLUMN IF NOT EXISTS cantidad INTEGER;
+    ALTER TABLE etiquetas ADD COLUMN IF NOT EXISTS cantidad NUMERIC(12,3);
     -- Ubicacion fisica del codigo dentro del almacen (estante, rack, pasillo...).
     -- Texto libre, se completa DESPUES del ingreso a medida que se acomoda.
     ALTER TABLE etiquetas ADD COLUMN IF NOT EXISTS ubicacion VARCHAR(100);
@@ -283,7 +283,7 @@ async function setup() {
       id SERIAL PRIMARY KEY,
       nota_salida_id INTEGER REFERENCES notas_salida(id),
       etiqueta_id INTEGER REFERENCES etiquetas(id),
-      cantidad INTEGER NOT NULL,
+      cantidad NUMERIC(12,3) NOT NULL,
       p_unitario NUMERIC(12,2),
       total NUMERIC(12,2),
       observaciones TEXT
@@ -304,7 +304,7 @@ async function setup() {
     -- "Devuelto usado"). devuelto_cantidad puede ser menor a la que salio;
     -- devuelto_peso es opcional (kg u otra unidad). NULL mientras no se devuelve
     -- o cuando volvio NUEVA (el mismo codigo entero).
-    ALTER TABLE notas_salida_detalle ADD COLUMN IF NOT EXISTS devuelto_cantidad INTEGER;
+    ALTER TABLE notas_salida_detalle ADD COLUMN IF NOT EXISTS devuelto_cantidad NUMERIC(12,3);
     ALTER TABLE notas_salida_detalle ADD COLUMN IF NOT EXISTS devuelto_peso NUMERIC(12,2);
     ALTER TABLE notas_salida_detalle ADD COLUMN IF NOT EXISTS devuelto_obs TEXT;
     -- Unidad en la que se registra la devolucion usada (Caja, Rollo, Kilogramo,
@@ -397,6 +397,69 @@ async function setup() {
       leida BOOLEAN DEFAULT false,
       fecha TIMESTAMP DEFAULT NOW()
     );
+
+    -- ==========================================================
+    -- FASE 11 (R6): cantidades por Kilo / Metro con decimales
+    -- ==========================================================
+    -- Las cantidades eran INTEGER y los validadores rechazaban decimales a
+    -- proposito. Ahora se admiten fracciones (ej. 1.2, 0.3, 3.5 m). Widening
+    -- seguro: los enteros existentes quedan igual (3 -> 3.000; el front los
+    -- muestra con fmtCantidad, sin ceros de mas). Idempotente: cada columna
+    -- solo se convierte si todavia es integer.
+    DO $mig$
+    DECLARE
+      col RECORD;
+    BEGIN
+      FOR col IN
+        SELECT * FROM (VALUES
+          ('guia_items',          'cantidad'),
+          ('guia_item_partidas',  'cantidad'),
+          ('etiquetas',           'cantidad'),
+          ('notas_salida_detalle','cantidad'),
+          ('notas_salida_detalle','devuelto_cantidad'),
+          ('inventario',          'cantidad'),
+          ('movimientos',         'cantidad')
+        ) AS t(tabla, columna)
+      LOOP
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = col.tabla AND column_name = col.columna
+            AND data_type = 'integer'
+        ) THEN
+          EXECUTE format(
+            'ALTER TABLE %I ALTER COLUMN %I TYPE NUMERIC(12,3) USING %I::numeric',
+            col.tabla, col.columna, col.columna);
+          RAISE NOTICE 'Fase 11: %.% -> NUMERIC(12,3)', col.tabla, col.columna;
+        END IF;
+      END LOOP;
+    END $mig$;
+
+    -- Unidades que aceptan decimales (Kilo, Metro, Metro cuadrado, Litro). El
+    -- resto (Unidad, Caja, Rollo, Plancha) siguen forzando entero en el front.
+    ALTER TABLE unidades_medida ADD COLUMN IF NOT EXISTS permite_decimal BOOLEAN NOT NULL DEFAULT false;
+    UPDATE unidades_medida SET permite_decimal = true
+      WHERE abreviatura IN ('KG', 'M', 'M2', 'L') AND permite_decimal = false;
+
+    -- Devolucion parcial: cobrar solo lo consumido (ej. salieron 3.5 m, vuelven
+    -- 2.5 m usados -> se consumio 1 m). cantidad_consumida = salio - volvio;
+    -- total_consumido = ese consumo x el p_unitario de la linea (NULL si la
+    -- nota no maneja precios). Se llenan al registrar/editar la devolucion.
+    ALTER TABLE notas_salida_detalle ADD COLUMN IF NOT EXISTS cantidad_consumida NUMERIC(12,3);
+    ALTER TABLE notas_salida_detalle ADD COLUMN IF NOT EXISTS total_consumido    NUMERIC(12,2);
+
+    -- ==========================================================
+    -- FASE 11 (R4): agrupador, observaciones y codigo de impresion
+    -- ==========================================================
+    -- guias.observaciones: la impresion de la Nota de Ingreso ya la referenciaba
+    -- pero la columna no existia (nunca salia nada). guia_items.id_agrupador:
+    -- codigo libre, se puede repetir en varias lineas para agruparlas en la
+    -- impresion. observaciones por linea. codigo_impresion: etiqueta a imprimir
+    -- en lugar del numero de secuencia, editable a mano antes de imprimir; NO
+    -- toca etiquetas.codigo ni el codigo de barras.
+    ALTER TABLE guias      ADD COLUMN IF NOT EXISTS observaciones TEXT;
+    ALTER TABLE guia_items ADD COLUMN IF NOT EXISTS id_agrupador     VARCHAR(30);
+    ALTER TABLE guia_items ADD COLUMN IF NOT EXISTS observaciones    VARCHAR(300);
+    ALTER TABLE guia_items ADD COLUMN IF NOT EXISTS codigo_impresion VARCHAR(30);
   `)
 
   const rolesExist = await pool.query('SELECT COUNT(*) FROM roles')

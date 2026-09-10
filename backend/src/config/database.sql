@@ -51,15 +51,20 @@ CREATE TABLE unidades_medida (
   abreviatura VARCHAR(10)
 );
 
-INSERT INTO unidades_medida (nombre, abreviatura) VALUES
-  ('Unidad',        'U'),
-  ('Kilogramo',     'KG'),
-  ('Metro',         'M'),
-  ('Metro cuadrado','M2'),
-  ('Litro',         'L'),
-  ('Caja',          'CJA'),
-  ('Rollo',         'ROLLO'),
-  ('Plancha',       'PLANCHA');
+-- Fase 11 (R6): permite_decimal marca las unidades que aceptan cantidades
+-- fraccionadas (Kilo, Metro, Metro cuadrado, Litro). El resto fuerza entero
+-- en el formulario.
+ALTER TABLE unidades_medida ADD COLUMN permite_decimal BOOLEAN NOT NULL DEFAULT false;
+
+INSERT INTO unidades_medida (nombre, abreviatura, permite_decimal) VALUES
+  ('Unidad',        'U',       false),
+  ('Kilogramo',     'KG',      true),
+  ('Metro',         'M',       true),
+  ('Metro cuadrado','M2',      true),
+  ('Litro',         'L',       true),
+  ('Caja',          'CJA',     false),
+  ('Rollo',         'ROLLO',   false),
+  ('Plancha',       'PLANCHA', false);
 
 -- Tabla de productos (catalogo maestro, Fase 2 seccion 5.4)
 CREATE TABLE productos (
@@ -104,7 +109,8 @@ CREATE TABLE inventario (
   almacen_id INTEGER REFERENCES almacenes(id),
   producto_id INTEGER REFERENCES productos(id),
   tipo VARCHAR(20) CHECK (tipo IN ('NUEVO', 'DEVOLUCION')),
-  cantidad INTEGER NOT NULL DEFAULT 0,
+  -- Fase 11 (R6): NUMERIC(12,3) para stock fraccionado por Kilo / Metro.
+  cantidad NUMERIC(12,3) NOT NULL DEFAULT 0,
   descripcion TEXT,
   creado_en TIMESTAMP DEFAULT NOW()
 );
@@ -124,7 +130,7 @@ CREATE TABLE movimientos (
   almacen_destino_id INTEGER REFERENCES almacenes(id),
   producto_id INTEGER REFERENCES productos(id),
   tipo VARCHAR(50),
-  cantidad INTEGER,
+  cantidad NUMERIC(12,3),
   descripcion TEXT,
   usuario_id INTEGER REFERENCES usuarios(id),
   fecha TIMESTAMP DEFAULT NOW()
@@ -160,7 +166,10 @@ CREATE TABLE guias (
   -- remision o factura que trae el proveedor, y el formato fisico "Nota de
   -- Ingresos de Activos" los pide como campos separados.
   guia_remision VARCHAR(50),
-  factura VARCHAR(50)
+  factura VARCHAR(50),
+  -- Fase 11 (R4): observacion general de la guia (se imprime en la Nota de
+  -- Ingreso; antes se referenciaba sin que la columna existiera).
+  observaciones TEXT
 );
 
 -- Unico solo entre guias vigentes: una guia ANULADA libera su numero para
@@ -176,7 +185,8 @@ CREATE TABLE guia_items (
   producto_id INTEGER REFERENCES productos(id),
   -- Para lineas de producto EN_PARTIDA (Fase 7), esta cantidad es la suma
   -- de las filas de guia_item_partidas; para ENTERO se ingresa directo.
-  cantidad INTEGER NOT NULL,
+  -- Fase 11 (R6): NUMERIC(12,3) para cantidades por Kilo / Metro.
+  cantidad NUMERIC(12,3) NOT NULL,
   -- Tipo de linea (Bloque 6, Fase 8): PRODUCTO = ingreso normal (puede generar
   -- etiqueta y mover inventario). SERVICIO = solo se registra e imprime
   -- (mantenimiento, limpieza, etc.), nunca genera etiqueta ni toca inventario.
@@ -191,7 +201,15 @@ CREATE TABLE guia_items (
   recogido BOOLEAN,
   -- Obligatorio cuando destino = 'OTRO' (Bloque 5, mismo patron que
   -- categoria/categoria_detalle de Solicitud de Materiales).
-  destino_detalle VARCHAR(200)
+  destino_detalle VARCHAR(200),
+  -- Fase 11 (R4): id_agrupador = codigo libre, se puede repetir en varias
+  -- lineas para agruparlas en la impresion. observaciones por linea.
+  -- codigo_impresion = etiqueta a imprimir en lugar del numero de secuencia
+  -- (editable a mano antes de imprimir); NO toca etiquetas.codigo ni el
+  -- codigo de barras.
+  id_agrupador VARCHAR(30),
+  observaciones VARCHAR(300),
+  codigo_impresion VARCHAR(30)
 );
 
 -- Desglose de una linea de guia cuyo producto se maneja EN_PARTIDA
@@ -200,7 +218,7 @@ CREATE TABLE guia_items (
 CREATE TABLE guia_item_partidas (
   id SERIAL PRIMARY KEY,
   guia_item_id INTEGER REFERENCES guia_items(id),
-  cantidad INTEGER NOT NULL,
+  cantidad NUMERIC(12,3) NOT NULL,
   referencia VARCHAR(200)
 );
 
@@ -219,7 +237,8 @@ CREATE TABLE etiquetas (
   condicion VARCHAR(10) NOT NULL DEFAULT 'NUEVO' CHECK (condicion IN ('NUEVO', 'USADO')),
   -- Cantidad propia del codigo: solo la usan los codigos USADO de una
   -- devolucion parcial. NULL = la cantidad es la del guia_item.
-  cantidad INTEGER,
+  -- Fase 11 (R6): NUMERIC(12,3).
+  cantidad NUMERIC(12,3),
   -- Ubicacion fisica dentro del almacen (estante/rack/pasillo). Texto libre,
   -- se completa despues del ingreso.
   ubicacion VARCHAR(100),
@@ -258,7 +277,7 @@ CREATE TABLE notas_salida_detalle (
   id SERIAL PRIMARY KEY,
   nota_salida_id INTEGER REFERENCES notas_salida(id),
   etiqueta_id INTEGER REFERENCES etiquetas(id),
-  cantidad INTEGER NOT NULL,
+  cantidad NUMERIC(12,3) NOT NULL,
   p_unitario NUMERIC(12,2),
   total NUMERIC(12,2),
   observaciones TEXT,
@@ -270,7 +289,7 @@ CREATE TABLE notas_salida_detalle (
   etiqueta_devuelta_id INTEGER REFERENCES etiquetas(id),
   -- Devolucion USADA: datos reales de lo que volvio (puede ser menos que lo que
   -- salio). devuelto_peso es opcional. NULL si volvio NUEVA o sigue afuera.
-  devuelto_cantidad INTEGER,
+  devuelto_cantidad NUMERIC(12,3),
   devuelto_peso NUMERIC(12,2),
   devuelto_obs TEXT,
   -- Unidad de la devolucion usada (Caja, Rollo, Kilogramo, etc del catalogo
@@ -278,7 +297,12 @@ CREATE TABLE notas_salida_detalle (
   devuelto_unidad_medida_id INTEGER REFERENCES unidades_medida(id),
   -- Presentacion en la que vuelve fisicamente, aparte de la unidad de medida.
   -- Lista fija (no es un catalogo admin): CAJA / ROLLO / BOLSA / SACO.
-  devuelto_presentacion VARCHAR(20) CHECK (devuelto_presentacion IN ('CAJA', 'ROLLO', 'BOLSA', 'SACO'))
+  devuelto_presentacion VARCHAR(20) CHECK (devuelto_presentacion IN ('CAJA', 'ROLLO', 'BOLSA', 'SACO')),
+  -- Fase 11 (R6): devolucion parcial cobra solo lo consumido.
+  -- cantidad_consumida = lo que salio menos lo que volvio; total_consumido =
+  -- ese consumo x p_unitario (NULL si la nota no maneja precios).
+  cantidad_consumida NUMERIC(12,3),
+  total_consumido NUMERIC(12,2)
 );
 
 ALTER TABLE notas_salida ADD COLUMN requiere_devolucion BOOLEAN NOT NULL DEFAULT true;

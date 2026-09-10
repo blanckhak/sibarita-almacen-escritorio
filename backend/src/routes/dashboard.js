@@ -11,7 +11,7 @@ router.get('/fase2', verificarToken, async (req, res) => {
       pool.query('SELECT COUNT(*)::int as total FROM etiquetas'),
       pool.query(`SELECT COUNT(*)::int as total FROM notas_salida WHERE estado IN ('PENDIENTE', 'EN_APROBACION')`),
       pool.query(`
-        SELECT p.nombre as producto_nombre, SUM(gi.cantidad)::int as total_movido
+        SELECT p.nombre as producto_nombre, SUM(gi.cantidad)::float8 as total_movido
         FROM guia_items gi
         JOIN productos p ON gi.producto_id = p.id
         WHERE gi.tipo = 'PRODUCTO'

@@ -39,14 +39,14 @@ router.get('/', verificarToken, async (req, res) => {
       SELECT e.id, e.codigo, e.estado, e.condicion, e.almacen_id, e.producto_id,
              e.ubicacion,
              p.nombre as producto_nombre, a.nombre as almacen_nombre,
-             COALESCE(e.cantidad, gi.cantidad) as cantidad, g.numero_guia,
+             COALESCE(e.cantidad, gi.cantidad)::float8 as cantidad, g.numero_guia,
              um.nombre as unidad_medida_nombre, um.abreviatura as unidad_medida_abreviatura,
              -- Stock del producto en ese almacen (Fase 9, Bloque 7): total
              -- agregado (tabla inventario, NUEVO + DEVOLUCION) y conteo de
              -- codigos individuales que siguen EN_ALMACEN. Se calcula una vez
              -- por par (almacen, producto) via LEFT JOIN a subconsultas
              -- agrupadas, no una subconsulta por fila.
-             COALESCE(inv.total, 0)::int as stock_agregado,
+             COALESCE(inv.total, 0)::float8 as stock_agregado,
              COALESCE(disp.n, 0)::int as codigos_disponibles
       FROM etiquetas e
       JOIN productos p ON e.producto_id = p.id
@@ -98,7 +98,8 @@ router.get('/:id', verificarToken, async (req, res) => {
     const result = await pool.query(`
       SELECT e.*, p.nombre as producto_nombre,
              um.nombre as unidad_medida_nombre, um.abreviatura as unidad_medida_abreviatura,
-             a.nombre as almacen_nombre, gi.cantidad as gi_cantidad, g.numero_guia
+             a.nombre as almacen_nombre, gi.cantidad::float8 as gi_cantidad, g.numero_guia,
+             e.cantidad::float8 as cantidad
       FROM etiquetas e
       JOIN productos p ON e.producto_id = p.id
       LEFT JOIN unidades_medida um ON p.unidad_medida_id = um.id
@@ -202,7 +203,7 @@ router.post('/:id/transferir', verificarToken, soloRoles('admin', 'almacen'),
     await client.query('BEGIN')
 
     const etiquetaResult = await client.query(`
-      SELECT e.*, gi.cantidad as gi_cantidad
+      SELECT e.*, gi.cantidad::float8 as gi_cantidad, e.cantidad::float8 as cantidad
       FROM etiquetas e
       JOIN guia_items gi ON e.guia_item_id = gi.id
       WHERE e.id = $1

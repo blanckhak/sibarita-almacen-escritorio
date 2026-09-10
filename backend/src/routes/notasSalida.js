@@ -60,7 +60,12 @@ router.get('/:id', verificarToken, async (req, res) => {
     }
 
     const detalle = await pool.query(`
-      SELECT d.*, e.codigo as etiqueta_codigo, e.estado as etiqueta_estado,
+      SELECT d.*,
+             d.cantidad::float8 as cantidad,
+             d.devuelto_cantidad::float8 as devuelto_cantidad,
+             d.cantidad_consumida::float8 as cantidad_consumida,
+             d.total_consumido::float8 as total_consumido,
+             e.codigo as etiqueta_codigo, e.estado as etiqueta_estado,
              e.condicion as etiqueta_condicion, e.almacen_id,
              p.nombre as producto_nombre, a.nombre as almacen_nombre,
              um.abreviatura as unidad_medida_abreviatura,
@@ -69,7 +74,7 @@ router.get('/:id', verificarToken, async (req, res) => {
              en.codigo as etiqueta_devuelta_codigo,
              -- Stock actual del producto en ese almacen (Fase 9, Bloque 7):
              -- lo que queda hoy, no una foto al momento de la salida.
-             (SELECT COALESCE(SUM(i.cantidad), 0)::int FROM inventario i
+             (SELECT COALESCE(SUM(i.cantidad), 0)::float8 FROM inventario i
                 WHERE i.almacen_id = e.almacen_id AND i.producto_id = e.producto_id) as stock_agregado_actual,
              (SELECT COUNT(*)::int FROM etiquetas e2
                 WHERE e2.almacen_id = e.almacen_id AND e2.producto_id = e.producto_id
@@ -121,7 +126,7 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
 
     const etiquetas = await client.query(`
       SELECT e.id, e.estado, e.almacen_id, e.producto_id, e.codigo, e.condicion,
-             COALESCE(e.cantidad, gi.cantidad) as cantidad, gi.guia_id
+             COALESCE(e.cantidad, gi.cantidad)::float8 as cantidad, gi.guia_id
       FROM etiquetas e
       JOIN guia_items gi ON e.guia_item_id = gi.id
       WHERE e.id = ANY($1::int[])
@@ -363,9 +368,10 @@ router.post('/:id/devolucion', verificarToken, soloRoles('admin', 'almacen'),
   if (condicion === 'USADO') {
     const rawCant = req.body.devuelto_cantidad
     if (rawCant !== undefined && rawCant !== null && rawCant !== '') {
-      const n = Number(rawCant)
-      if (!Number.isInteger(n) || n <= 0) {
-        return res.status(400).json({ error: 'La cantidad que vuelve debe ser un entero mayor a 0' })
+      // Fase 11 (R6): la cantidad que vuelve admite decimales (Kilo, Metro).
+      const n = Math.round(Number(rawCant) * 1000) / 1000
+      if (!Number.isFinite(n) || n <= 0) {
+        return res.status(400).json({ error: 'La cantidad que vuelve debe ser un numero mayor a 0' })
       }
       devueltoCantidad = n
     }
@@ -424,7 +430,8 @@ router.post('/:id/devolucion', verificarToken, soloRoles('admin', 'almacen'),
     }
 
     const detalle = await client.query(`
-      SELECT d.id as detalle_id, d.etiqueta_id, d.cantidad,
+      SELECT d.id as detalle_id, d.etiqueta_id, d.cantidad::float8 as cantidad,
+             d.p_unitario::float8 as p_unitario,
              e.estado, e.almacen_id, e.producto_id, e.codigo, e.guia_item_id, e.condicion
       FROM notas_salida_detalle d
       JOIN etiquetas e ON d.etiqueta_id = e.id
@@ -459,6 +466,13 @@ router.post('/:id/devolucion', verificarToken, soloRoles('admin', 'almacen'),
           await client.query('ROLLBACK')
           return res.status(400).json({ error: `No puede volver mas de lo que salio (salieron ${linea.cantidad})` })
         }
+        // Fase 11 (R6): lo consumido = lo que salio menos lo que volvio. Se
+        // cobra solo eso, al p_unitario de la linea (NULL si la nota no maneja
+        // precios). Redondeos: 3 decimales la cantidad, 2 el monto.
+        const cantConsumida = Math.round((linea.cantidad - cantDevuelta) * 1000) / 1000
+        const totalConsumido = linea.p_unitario != null
+          ? Math.round(linea.p_unitario * cantConsumida * 100) / 100
+          : null
 
         // El codigo viejo queda retirado; el item fisico ahora vive bajo un
         // codigo nuevo marcado USADO, con su propia cantidad, que reingresa
@@ -504,9 +518,11 @@ router.post('/:id/devolucion', verificarToken, soloRoles('admin', 'almacen'),
         await client.query(
           `UPDATE notas_salida_detalle
            SET devuelto_condicion = 'USADO', devuelto_en = NOW(), etiqueta_devuelta_id = $1,
-               devuelto_cantidad = $2, devuelto_unidad_medida_id = $3, devuelto_presentacion = $4, devuelto_obs = $5
-           WHERE id = $6`,
-          [nuevaEtiquetaId, cantDevuelta, devueltoUnidadMedidaId, devueltoPresentacion, devueltoObs, linea.detalle_id]
+               devuelto_cantidad = $2, devuelto_unidad_medida_id = $3, devuelto_presentacion = $4, devuelto_obs = $5,
+               cantidad_consumida = $6, total_consumido = $7
+           WHERE id = $8`,
+          [nuevaEtiquetaId, cantDevuelta, devueltoUnidadMedidaId, devueltoPresentacion, devueltoObs,
+           cantConsumida, totalConsumido, linea.detalle_id]
         )
       } else {
         await client.query(`UPDATE etiquetas SET estado = 'EN_ALMACEN' WHERE id = $1`, [eid])
@@ -527,11 +543,13 @@ router.post('/:id/devolucion', verificarToken, soloRoles('admin', 'almacen'),
           tipo: linea.condicion === 'USADO' ? 'DEVOLUCION' : 'NUEVO',
         })
 
+        // Volvio entero y nuevo: no se consumio nada -> no se cobra.
         await client.query(
           `UPDATE notas_salida_detalle
-           SET devuelto_condicion = 'NUEVO', devuelto_en = NOW()
+           SET devuelto_condicion = 'NUEVO', devuelto_en = NOW(),
+               cantidad_consumida = 0, total_consumido = $2
            WHERE id = $1`,
-          [linea.detalle_id]
+          [linea.detalle_id, linea.p_unitario != null ? 0 : null]
         )
       }
     }
@@ -572,7 +590,9 @@ router.put('/:id/lineas/:etiquetaId/devolucion-usada', verificarToken, soloRoles
     await client.query('BEGIN')
 
     const linea = await client.query(`
-      SELECT d.id as detalle_id, d.cantidad as cantidad_salida, d.devuelto_cantidad,
+      SELECT d.id as detalle_id, d.cantidad::float8 as cantidad_salida,
+             d.devuelto_cantidad::float8 as devuelto_cantidad,
+             d.p_unitario::float8 as p_unitario,
              d.devuelto_condicion, d.etiqueta_devuelta_id,
              en.almacen_id, en.producto_id, en.estado as etiqueta_devuelta_estado
       FROM notas_salida_detalle d
@@ -600,9 +620,9 @@ router.put('/:id/lineas/:etiquetaId/devolucion-usada', verificarToken, soloRoles
       return res.status(400).json({ error: 'La cantidad que vuelve es requerida' })
     }
     const nuevaCantidad = Number(rawCant)
-    if (!Number.isInteger(nuevaCantidad) || nuevaCantidad <= 0 || nuevaCantidad > l.cantidad_salida) {
+    if (!Number.isFinite(nuevaCantidad) || nuevaCantidad <= 0 || nuevaCantidad > l.cantidad_salida) {
       await client.query('ROLLBACK')
-      return res.status(400).json({ error: `La cantidad que vuelve debe estar entre 1 y ${l.cantidad_salida}` })
+      return res.status(400).json({ error: `La cantidad que vuelve debe ser mayor a 0 y hasta ${l.cantidad_salida}` })
     }
 
     let unidadMedidaId = null
@@ -649,11 +669,19 @@ router.put('/:id/lineas/:etiquetaId/devolucion-usada', verificarToken, soloRoles
       )
     }
 
+    // Fase 11 (R6): recalcular lo consumido y lo que se cobra con la cantidad
+    // corregida (mismo criterio que al registrar la devolucion).
+    const cantConsumida = Math.round((l.cantidad_salida - nuevaCantidad) * 1000) / 1000
+    const totalConsumido = l.p_unitario != null
+      ? Math.round(l.p_unitario * cantConsumida * 100) / 100
+      : null
+
     await client.query(
       `UPDATE notas_salida_detalle
-       SET devuelto_cantidad = $1, devuelto_unidad_medida_id = $2, devuelto_presentacion = $3, devuelto_obs = $4
-       WHERE id = $5`,
-      [nuevaCantidad, unidadMedidaId, presentacion, obs, l.detalle_id]
+       SET devuelto_cantidad = $1, devuelto_unidad_medida_id = $2, devuelto_presentacion = $3, devuelto_obs = $4,
+           cantidad_consumida = $5, total_consumido = $6
+       WHERE id = $7`,
+      [nuevaCantidad, unidadMedidaId, presentacion, obs, cantConsumida, totalConsumido, l.detalle_id]
     )
 
     await client.query('COMMIT')

@@ -5,13 +5,14 @@ import { useAuth } from '../context/AuthContext'
 import { extraerProveedoresConocidos } from '../utils/proveedores'
 import { hoyLocal as hoy } from '../utils/fecha'
 import { TIPOS_DOCUMENTO, tipoDocumentoLabel } from '../utils/tiposDocumento'
+import { fmtCantidad, sumarCantidades } from '../utils/fmt'
 
-const LINEA_VACIA = () => ({ producto_id: '', producto_nombre: '', nuevo: false, tipo: 'PRODUCTO', cantidad: '', destino: 'ALMACEN', destino_detalle: '', unidad_medida_id: '', recogido: true, metrica: 'ENTERO', partidas: [], persona_retira: '', retira_obs: '' })
+const LINEA_VACIA = () => ({ producto_id: '', producto_nombre: '', nuevo: false, tipo: 'PRODUCTO', cantidad: '', destino: 'ALMACEN', destino_detalle: '', unidad_medida_id: '', recogido: true, metrica: 'ENTERO', partidas: [], persona_retira: '', retira_obs: '', id_agrupador: '', observaciones: '' })
 // Destinos que generan su propia Nota de Salida automatica al guardar la guia
 // (si ya lo recogieron) o al marcarlos retirados despues (Bloque 6).
 const DESTINOS_SALIDA_AUTO = ['OFICINA', 'LABORATORIO']
 const PARTIDA_VACIA = () => ({ cantidad: '', referencia: '' })
-const sumaPartidas = (partidas) => (partidas || []).reduce((s, p) => s + (Number(p.cantidad) || 0), 0)
+const sumaPartidas = (partidas) => sumarCantidades((partidas || []).map(p => p.cantidad))
 
 export default function Guias() {
   const { usuario } = useAuth()
@@ -24,7 +25,7 @@ export default function Guias() {
   const [mostrarForm, setMostrarForm] = useState(false)
   const [guardando, setGuardando] = useState(false)
   const [mensaje, setMensaje]     = useState(null)
-  const [form, setForm] = useState({ numero_guia: '', tipo_documento: 'GUIA', almacen_id: '', fecha: hoy(), proveedor: '', numero_oc: '', direccion: '', guia_remision: '', factura: '', items: [LINEA_VACIA()] })
+  const [form, setForm] = useState({ numero_guia: '', tipo_documento: 'GUIA', almacen_id: '', fecha: hoy(), proveedor: '', numero_oc: '', direccion: '', guia_remision: '', factura: '', observaciones: '', items: [LINEA_VACIA()] })
   const [proveedorOtro, setProveedorOtro] = useState(false)
   const [mostrarCerradas, setMostrarCerradas] = useState(false)
 
@@ -64,11 +65,11 @@ export default function Guias() {
   // antes de sumar lo que entra.
   const stockConsolidado = (productoId) => {
     const filas = inventario.filter(x => Number(x.producto_id) === Number(productoId))
-    const total = filas.reduce((s, x) => s + Number(x.cantidad), 0)
+    const total = sumarCantidades(filas.map(x => x.cantidad))
     const porAlmacen = {}
-    for (const x of filas) porAlmacen[x.almacen_nombre] = (porAlmacen[x.almacen_nombre] || 0) + Number(x.cantidad)
+    for (const x of filas) porAlmacen[x.almacen_nombre] = sumarCantidades([porAlmacen[x.almacen_nombre] || 0, x.cantidad])
     const enEsteAlmacen = form.almacen_id
-      ? filas.filter(x => Number(x.almacen_id) === Number(form.almacen_id)).reduce((s, x) => s + Number(x.cantidad), 0)
+      ? sumarCantidades(filas.filter(x => Number(x.almacen_id) === Number(form.almacen_id)).map(x => x.cantidad))
       : null
     return { total, porAlmacen, enEsteAlmacen }
   }
@@ -76,7 +77,7 @@ export default function Guias() {
   useEffect(() => { cargarDatos() }, [])
 
   const abrirNuevo = () => {
-    setForm({ numero_guia: '', tipo_documento: 'GUIA', almacen_id: '', fecha: hoy(), proveedor: '', numero_oc: '', direccion: '', guia_remision: '', factura: '', items: [LINEA_VACIA()] })
+    setForm({ numero_guia: '', tipo_documento: 'GUIA', almacen_id: '', fecha: hoy(), proveedor: '', numero_oc: '', direccion: '', guia_remision: '', factura: '', observaciones: '', items: [LINEA_VACIA()] })
     setProveedorOtro(false)
     setMostrarForm(true)
   }
@@ -192,11 +193,13 @@ export default function Guias() {
 
     const lineaEnPartidaInvalida = form.items.some(it => {
       if (it.tipo === 'SERVICIO' || it.metrica !== 'EN_PARTIDA') return false
-      const nums = it.partidas.map(p => Number(p.cantidad)).filter(n => n > 0)
-      return nums.length === 0 || nums.some(n => !Number.isInteger(n))
+      // Fase 11 (R6): las partidas admiten decimales (hasta 3). Solo se exige
+      // que haya al menos una y que todas sean numeros > 0.
+      const nums = it.partidas.map(p => Number(p.cantidad))
+      return nums.length === 0 || nums.some(n => !Number.isFinite(n) || n <= 0)
     })
     if (lineaEnPartidaInvalida) {
-      setMensaje({ tipo: 'error', texto: 'Hay una linea "en partida" con partidas invalidas: cada partida debe ser un entero mayor a 0 y debe haber al menos una.' })
+      setMensaje({ tipo: 'error', texto: 'Hay una linea "en partida" con partidas invalidas: cada partida debe ser un numero mayor a 0 y debe haber al menos una.' })
       setTimeout(() => setMensaje(null), 5000)
       return
     }
@@ -343,6 +346,15 @@ export default function Guias() {
                   className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
+              <div className="col-span-2">
+                <label className="block text-sm font-medium text-gray-600 mb-1">Observaciones de la guia <span className="text-gray-400 font-normal">(opcional, se imprime en la Nota de Ingreso)</span></label>
+                <textarea
+                  rows={2}
+                  value={form.observaciones}
+                  onChange={e => setForm({ ...form, observaciones: e.target.value.toUpperCase() })}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
             </div>
 
             <div className="space-y-3 mb-4">
@@ -354,6 +366,13 @@ export default function Guias() {
                 const esServicio = it.tipo === 'SERVICIO'
                 const enPartida = !esServicio && it.metrica === 'EN_PARTIDA'
                 const totalPartidas = sumaPartidas(it.partidas)
+                // Fase 11 (R6): la unidad de la linea (del catalogo o la elegida
+                // en el form) decide si se admiten decimales por Kilo / Metro.
+                const unidadLineaId = (prod && prod.unidad_medida_id) || it.unidad_medida_id
+                const unidadLinea = unidades.find(u => u.id === Number(unidadLineaId))
+                const permiteDecimal = !!unidadLinea?.permite_decimal
+                const stepCantidad = permiteDecimal ? '0.001' : '1'
+                const minCantidad = permiteDecimal ? '0.001' : '1'
                 return (
                   <div key={i} className="bg-gray-50 border border-gray-200 rounded-lg p-3">
                     <div className="flex gap-2 mb-3">
@@ -440,17 +459,20 @@ export default function Guias() {
                         <label className="block text-xs font-medium text-gray-500 mb-1">Cantidad</label>
                         {enPartida ? (
                           <div className="border border-gray-200 bg-gray-100 rounded-lg px-2.5 py-2 text-sm text-gray-700">
-                            {totalPartidas || 0}
+                            {fmtCantidad(totalPartidas || 0)}
                             <span className="block text-xs text-gray-400">suma de partidas</span>
                           </div>
                         ) : (
                           <input
                             required
-                            type="number" min="1"
+                            type="number" min={minCantidad} step={stepCantidad}
                             value={it.cantidad}
                             onChange={e => actualizarLinea(i, 'cantidad', e.target.value)}
                             className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                           />
+                        )}
+                        {permiteDecimal && (
+                          <span className="block text-[11px] text-gray-400 mt-0.5">admite decimales ({unidadLinea?.abreviatura || unidadLinea?.nombre})</span>
                         )}
                       </div>
                       {!esServicio && (
@@ -511,19 +533,55 @@ export default function Guias() {
                       </div>
                     </div>
 
+                    {/* Fase 11 (R4): ID de agrupacion (se puede repetir en
+                        varias lineas) y observacion por linea. */}
+                    <div className="grid grid-cols-12 gap-3 items-start mt-2">
+                      <div className="col-span-4">
+                        <label className="block text-xs font-medium text-gray-500 mb-1">ID (agrupador, opcional)</label>
+                        <div className="flex gap-1">
+                          <input
+                            value={it.id_agrupador}
+                            onChange={e => actualizarLinea(i, 'id_agrupador', e.target.value.toUpperCase())}
+                            maxLength={30}
+                            placeholder="Ej: A-12"
+                            className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                          {i > 0 && (
+                            <button
+                              type="button"
+                              title="Usar el mismo ID que la linea anterior"
+                              onClick={() => actualizarLinea(i, 'id_agrupador', form.items[i - 1].id_agrupador || '')}
+                              className="shrink-0 border border-gray-300 rounded-lg px-2 text-xs text-gray-600 hover:bg-gray-50"
+                            >
+                              = anterior
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <div className="col-span-8">
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Observacion de la linea (opcional)</label>
+                        <input
+                          value={it.observaciones}
+                          onChange={e => actualizarLinea(i, 'observaciones', e.target.value.toUpperCase())}
+                          maxLength={300}
+                          className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                    </div>
+
                     {enPartida && (
                       <div className="mt-3 border border-indigo-200 bg-indigo-50 rounded-lg p-3">
                         <div className="flex items-center justify-between mb-2">
                           <span className="text-xs font-semibold text-indigo-700 uppercase tracking-wide">
                             Partidas (producto en partida)
                           </span>
-                          <span className="text-xs text-indigo-600">Total: {totalPartidas || 0}</span>
+                          <span className="text-xs text-indigo-600">Total: {fmtCantidad(totalPartidas || 0)}</span>
                         </div>
                         <div className="space-y-2">
                           {it.partidas.map((pt, j) => (
                             <div key={j} className="grid grid-cols-12 gap-2 items-center">
                               <input
-                                type="number" min="1" step="1"
+                                type="number" min={minCantidad} step={stepCantidad}
                                 value={pt.cantidad}
                                 onChange={e => actualizarPartida(i, j, 'cantidad', e.target.value)}
                                 placeholder="Cantidad"

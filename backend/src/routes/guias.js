@@ -14,10 +14,18 @@ const DESTINOS = ['ALMACEN', 'OFICINA', 'LABORATORIO', 'OTRO']
 const DESTINOS_SALIDA_AUTO = ['OFICINA', 'LABORATORIO']
 const DESTINO_LABEL = { OFICINA: 'Oficina', LABORATORIO: 'Laboratorio' }
 
-// guia_items.cantidad y guia_item_partidas.cantidad son columnas INTEGER:
-// un decimal (ej. "1.5") reventaria como error crudo de Postgres (500), asi
-// que se rechaza aca con un 400 limpio.
-const esEnteroPositivo = (v) => Number.isInteger(Number(v)) && Number(v) > 0
+// Fase 11 (R6): guia_items.cantidad y guia_item_partidas.cantidad son
+// NUMERIC(12,3) -> se admiten fracciones por Kilo / Metro (1.2, 0.3, 3.5).
+// Se sigue rechazando aca con un 400 limpio: 0, negativos, NaN, Infinity y
+// mas de 3 decimales (antes de llegar al INSERT de Postgres).
+const MAX_DECIMALES = 3
+const esCantidadPositiva = (v) => {
+  const n = Number(v)
+  if (!Number.isFinite(n) || n <= 0) return false
+  const s = String(v).trim()
+  const dec = s.includes('.') ? (s.split('.')[1] || '').length : 0
+  return dec <= MAX_DECIMALES
+}
 
 // Consulta por almacen, producto o guia, de forma independiente o combinada (seccion 5.6, CU-04)
 router.get('/consulta/productos', verificarToken, async (req, res) => {
@@ -46,7 +54,7 @@ router.get('/consulta/productos', verificarToken, async (req, res) => {
     const result = await pool.query(`
       SELECT g.numero_guia, g.fecha, a.nombre as almacen_nombre,
              gi.id as guia_item_id, p.nombre as producto_nombre, p.categoria,
-             COALESCE(e.cantidad, gi.cantidad) as cantidad, gi.destino,
+             COALESCE(e.cantidad, gi.cantidad)::float8 as cantidad, gi.destino,
              e.id as etiqueta_id, e.codigo as etiqueta_codigo, e.estado as etiqueta_estado,
              e.condicion as etiqueta_condicion, e.ubicacion as etiqueta_ubicacion
       FROM guia_items gi
@@ -104,7 +112,8 @@ router.get('/:id', verificarToken, async (req, res) => {
     }
 
     const items = await pool.query(`
-      SELECT gi.id, gi.producto_id, gi.cantidad, gi.tipo, gi.destino, gi.destino_detalle, gi.recogido,
+      SELECT gi.id, gi.producto_id, gi.cantidad::float8 as cantidad, gi.tipo, gi.destino, gi.destino_detalle, gi.recogido,
+             gi.id_agrupador, gi.observaciones, gi.codigo_impresion,
              COALESCE(p.nombre, gi.descripcion) as producto_nombre, p.metrica as producto_metrica,
              um.nombre as unidad_medida_nombre, um.abreviatura as unidad_medida_abreviatura,
              e.id as etiqueta_id, e.codigo as etiqueta_codigo, e.estado as etiqueta_estado,
@@ -122,7 +131,7 @@ router.get('/:id', verificarToken, async (req, res) => {
     const partidasPorItem = {}
     if (itemIds.length > 0) {
       const partidas = await pool.query(
-        `SELECT id, guia_item_id, cantidad, referencia
+        `SELECT id, guia_item_id, cantidad::float8 as cantidad, referencia
          FROM guia_item_partidas WHERE guia_item_id = ANY($1::int[]) ORDER BY id`,
         [itemIds]
       )
@@ -141,7 +150,7 @@ router.get('/:id', verificarToken, async (req, res) => {
 router.post('/', verificarToken, soloRoles('admin', 'almacen'),
   log('CREAR_GUIA', req => `Guia ${req.body.numero_guia}, almacen ${req.body.almacen_id}, ${Array.isArray(req.body.items) ? req.body.items.length : 0} linea(s)`),
   async (req, res) => {
-  const { numero_guia, almacen_id, fecha, items, proveedor, numero_oc, direccion, guia_remision, factura } = req.body
+  const { numero_guia, almacen_id, fecha, items, proveedor, numero_oc, direccion, guia_remision, factura, observaciones } = req.body
   const TIPOS_DOC = ['GUIA', 'FACTURA', 'BOLETA', 'OTRO']
   const tipoDocumento = TIPOS_DOC.includes(req.body.tipo_documento) ? req.body.tipo_documento : 'GUIA'
 
@@ -171,6 +180,8 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
       'producto / servicio': [it.producto_nombre, 150],
       'destino (Otro)': [it.destino_detalle, 200],
       'persona que retira': [it.persona_retira, 150],
+      'ID de agrupacion': [it.id_agrupador, 30],
+      'observacion de la linea': [it.observaciones, 300],
     })
     if (errItem) return res.status(400).json({ error: errItem })
     for (const pt of (Array.isArray(it.partidas) ? it.partidas : [])) {
@@ -180,8 +191,8 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
     // Linea SERVICIO (Fase 8): solo se registra e imprime -> sin destino, sin
     // partidas, sin etiqueta. Solo se valida la cantidad.
     if (it.tipo === 'SERVICIO') {
-      if (!esEnteroPositivo(it.cantidad)) {
-        return res.status(400).json({ error: 'La cantidad debe ser un entero mayor a 0 en todas las lineas' })
+      if (!esCantidadPositiva(it.cantidad)) {
+        return res.status(400).json({ error: 'La cantidad debe ser mayor a 0 (hasta 3 decimales) en todas las lineas' })
       }
       continue
     }
@@ -202,12 +213,12 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
     const tienePartidas = Array.isArray(it.partidas) && it.partidas.length > 0
     if (tienePartidas) {
       for (const pt of it.partidas) {
-        if (!esEnteroPositivo(pt.cantidad)) {
-          return res.status(400).json({ error: 'Cada partida debe tener una cantidad entera mayor a 0' })
+        if (!esCantidadPositiva(pt.cantidad)) {
+          return res.status(400).json({ error: 'Cada partida debe tener una cantidad mayor a 0 (hasta 3 decimales)' })
         }
       }
-    } else if (!esEnteroPositivo(it.cantidad)) {
-      return res.status(400).json({ error: 'La cantidad debe ser un entero mayor a 0 en todas las lineas' })
+    } else if (!esCantidadPositiva(it.cantidad)) {
+      return res.status(400).json({ error: 'La cantidad debe ser mayor a 0 (hasta 3 decimales) en todas las lineas' })
     }
   }
 
@@ -267,8 +278,8 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
     }
 
     const guiaResult = await client.query(
-      `INSERT INTO guias (numero_guia, almacen_id, usuario_id, fecha, proveedor, numero_oc, direccion, guia_remision, factura, tipo_documento)
-       VALUES ($1, $2, $3, COALESCE($4, CURRENT_DATE), $5, $6, $7, $8, $9, $10) RETURNING *`,
+      `INSERT INTO guias (numero_guia, almacen_id, usuario_id, fecha, proveedor, numero_oc, direccion, guia_remision, factura, tipo_documento, observaciones)
+       VALUES ($1, $2, $3, COALESCE($4, CURRENT_DATE), $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
       [
         numero_guia.trim(), almacen_id, req.usuario.id, fecha || null,
         (proveedor || '').trim() || null,
@@ -277,6 +288,7 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
         (guia_remision || '').trim() || null,
         (factura || '').trim() || null,
         tipoDocumento,
+        (observaciones || '').trim() || null,
       ]
     )
     const guia = guiaResult.rows[0]
@@ -289,14 +301,19 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
     const salidaAutoGrupos = new Map()
 
     for (const it of items) {
+      // Fase 11 (R4): id de agrupacion y observacion por linea, comunes a
+      // PRODUCTO y SERVICIO.
+      const idAgrupador = (it.id_agrupador || '').trim() || null
+      const obsItem = (it.observaciones || '').trim() || null
+
       // Linea SERVICIO (Fase 8): no usa el catalogo de productos. Se guarda la
       // descripcion libre y nada mas: producto_id NULL, sin etiqueta, sin
       // inventario, sin partidas ni destino.
       if (it.tipo === 'SERVICIO') {
         await client.query(
-          `INSERT INTO guia_items (guia_id, producto_id, descripcion, cantidad, tipo, destino, destino_detalle, recogido)
-           VALUES ($1, NULL, $2, $3, 'SERVICIO', NULL, NULL, NULL)`,
-          [guia.id, (it.producto_nombre || '').trim(), it.cantidad]
+          `INSERT INTO guia_items (guia_id, producto_id, descripcion, cantidad, tipo, destino, destino_detalle, recogido, id_agrupador, observaciones)
+           VALUES ($1, NULL, $2, $3, 'SERVICIO', NULL, NULL, NULL, $4, $5)`,
+          [guia.id, (it.producto_nombre || '').trim(), it.cantidad, idAgrupador, obsItem]
         )
         continue
       }
@@ -365,11 +382,13 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
           await client.query('ROLLBACK')
           return res.status(400).json({ error: `El producto "${it.producto_nombre || 'seleccionado'}" se maneja EN PARTIDA: agrega al menos una partida` })
         }
-        it.cantidad = partidas.reduce((suma, pt) => suma + Number(pt.cantidad), 0)
+        // Redondeo a 3 decimales: sumar floats (0.1 + 0.2) arrastra ruido
+        // binario que esCantidadPositiva rechazaria por "mas de 3 decimales".
+        it.cantidad = Math.round(partidas.reduce((suma, pt) => suma + Number(pt.cantidad), 0) * 1000) / 1000
       }
-      if (!esEnteroPositivo(it.cantidad)) {
+      if (!esCantidadPositiva(it.cantidad)) {
         await client.query('ROLLBACK')
-        return res.status(400).json({ error: 'La cantidad debe ser un entero mayor a 0 en todas las lineas' })
+        return res.status(400).json({ error: 'La cantidad debe ser mayor a 0 (hasta 3 decimales) en todas las lineas' })
       }
 
       // Oficina/Laboratorio marcado "ya recogido" pero SIN indicar quien retira:
@@ -389,8 +408,9 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
       const salidaAutoInmediata = DESTINOS_SALIDA_AUTO.includes(it.destino) && !pendienteDeRecoger
 
       const itemResult = await client.query(
-        `INSERT INTO guia_items (guia_id, producto_id, cantidad, destino, destino_detalle, recogido, tipo) VALUES ($1, $2, $3, $4, $5, $6, 'PRODUCTO') RETURNING id`,
-        [guia.id, productoId, it.cantidad, it.destino, it.destino === 'OTRO' ? it.destino_detalle.trim() : null, recogidoValor]
+        `INSERT INTO guia_items (guia_id, producto_id, cantidad, destino, destino_detalle, recogido, tipo, id_agrupador, observaciones)
+         VALUES ($1, $2, $3, $4, $5, $6, 'PRODUCTO', $7, $8) RETURNING id`,
+        [guia.id, productoId, it.cantidad, it.destino, it.destino === 'OTRO' ? it.destino_detalle.trim() : null, recogidoValor, idAgrupador, obsItem]
       )
       const guiaItemId = itemResult.rows[0].id
 
@@ -561,8 +581,11 @@ router.post('/:id/items/:itemId/retirar', verificarToken, soloRoles('admin', 'al
 })
 
 // Edicion de guia (Fase A + Fase 8):
-// - Cabecera: proveedor/O.C./direccion/guia_remision/factura/estado.
-// - `items`: [{ id, cantidad }] corrige la CANTIDAD de lineas ya registradas.
+// - Cabecera: proveedor/O.C./direccion/guia_remision/factura/estado/observaciones.
+// - `items`: [{ id, cantidad, id_agrupador?, observaciones?, codigo_impresion? }].
+//   La CANTIDAD sigue las reglas de Fase 8 (abajo). id_agrupador / observaciones
+//   / codigo_impresion (Fase 11 R4) no afectan stock: se pueden editar aunque la
+//   guia este CERRADA o la etiqueta ya haya salido.
 //   Si la linea tiene etiqueta EN_ALMACEN, el inventario se ajusta por la
 //   diferencia. Si esa etiqueta ya salio (SALIO/REEMPLAZADA) la linea queda
 //   bloqueada. Las lineas EN_PARTIDA no se editan aqui (su cantidad sale del
@@ -573,7 +596,7 @@ router.post('/:id/items/:itemId/retirar', verificarToken, soloRoles('admin', 'al
 router.put('/:id', verificarToken, soloRoles('admin', 'almacen'),
   log('EDITAR_GUIA', req => `Guia ${req.params.id}: ${JSON.stringify(req.body)}`),
   async (req, res) => {
-  const { proveedor, numero_oc, direccion, estado, guia_remision, factura, tipo_documento, items } = req.body
+  const { proveedor, numero_oc, direccion, estado, guia_remision, factura, tipo_documento, items, observaciones } = req.body
   const ESTADOS = ['CARGADA', 'CERRADA']
   const TIPOS_DOC = ['GUIA', 'FACTURA', 'BOLETA', 'OTRO']
   if (tipo_documento !== undefined && !TIPOS_DOC.includes(tipo_documento)) {
@@ -594,12 +617,18 @@ router.put('/:id', verificarToken, soloRoles('admin', 'almacen'),
 
   const editItems = Array.isArray(items) ? items : []
   for (const it of editItems) {
-    if (!it || it.id === undefined || !esEnteroPositivo(it.cantidad)) {
-      return res.status(400).json({ error: 'Cada linea a editar necesita un id y una cantidad entera mayor a 0' })
+    if (!it || it.id === undefined || !esCantidadPositiva(it.cantidad)) {
+      return res.status(400).json({ error: 'Cada linea a editar necesita un id y una cantidad mayor a 0 (hasta 3 decimales)' })
     }
+    const errItem = validarLargos({
+      'ID de agrupacion': [it.id_agrupador, 30],
+      'observacion de la linea': [it.observaciones, 300],
+      'codigo de impresion': [it.codigo_impresion, 30],
+    })
+    if (errItem) return res.status(400).json({ error: errItem })
   }
 
-  const sinCabecera = [proveedor, numero_oc, direccion, estado, guia_remision, factura, tipo_documento].every(v => v === undefined)
+  const sinCabecera = [proveedor, numero_oc, direccion, estado, guia_remision, factura, tipo_documento, observaciones].every(v => v === undefined)
   if (sinCabecera && editItems.length === 0) {
     return res.status(400).json({ error: 'No se envio ningun campo para editar' })
   }
@@ -642,6 +671,9 @@ router.put('/:id', verificarToken, soloRoles('admin', 'almacen'),
     if (guia_remision !== undefined) push('guia_remision', (guia_remision || '').trim() || null)
     if (factura !== undefined)       push('factura', (factura || '').trim() || null)
     if (tipo_documento !== undefined) push('tipo_documento', tipo_documento)
+    // Fase 11 (R4): observacion general de la guia. No afecta stock -> se admite
+    // tambien en guias CERRADAS.
+    if (observaciones !== undefined) push('observaciones', (observaciones || '').trim() || null)
 
     let guiaFinal = guiaActual
     if (cambios.length > 0) {
@@ -653,10 +685,10 @@ router.put('/:id', verificarToken, soloRoles('admin', 'almacen'),
       guiaFinal = upd.rows[0]
     }
 
-    // --- Cantidad por linea (Fase 8) ---
+    // --- Cantidad por linea (Fase 8) + agrupador/observacion/codigo (Fase 11 R4) ---
     for (const edit of editItems) {
       const linea = await client.query(`
-        SELECT gi.id, gi.cantidad, gi.producto_id, gi.tipo, p.metrica AS producto_metrica,
+        SELECT gi.id, gi.cantidad::float8 AS cantidad, gi.producto_id, gi.tipo, p.metrica AS producto_metrica,
                e.id AS etiqueta_id, e.estado AS etiqueta_estado, e.codigo AS etiqueta_codigo,
                e.condicion AS etiqueta_condicion
         FROM guia_items gi
@@ -670,8 +702,23 @@ router.put('/:id', verificarToken, soloRoles('admin', 'almacen'),
         return res.status(400).json({ error: `La linea ${edit.id} no pertenece a esta guia` })
       }
       const l = linea.rows[0]
+
+      // Fase 11 (R4): id_agrupador / observacion / codigo_impresion no afectan
+      // stock -> se actualizan siempre que vengan, aunque la cantidad no cambie
+      // y aunque la guia este CERRADA o la etiqueta ya haya salido.
+      const setR4 = []
+      const valR4 = []
+      const pushR4 = (campo, valor) => { valR4.push(valor); setR4.push(`${campo} = $${valR4.length}`) }
+      if (edit.id_agrupador !== undefined)     pushR4('id_agrupador', (edit.id_agrupador || '').trim() || null)
+      if (edit.observaciones !== undefined)    pushR4('observaciones', (edit.observaciones || '').trim() || null)
+      if (edit.codigo_impresion !== undefined) pushR4('codigo_impresion', (edit.codigo_impresion || '').trim() || null)
+      if (setR4.length > 0) {
+        valR4.push(l.id)
+        await client.query(`UPDATE guia_items SET ${setR4.join(', ')} WHERE id = $${valR4.length}`, valR4)
+      }
+
       const nuevaCantidad = Number(edit.cantidad)
-      const delta = nuevaCantidad - l.cantidad
+      const delta = Math.round((nuevaCantidad - l.cantidad) * 1000) / 1000
       if (delta === 0) continue
 
       if (l.producto_metrica === 'EN_PARTIDA') {

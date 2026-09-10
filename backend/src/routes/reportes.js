@@ -36,7 +36,7 @@ router.get('/salidas-por-motivo', verificarToken, async (req, res) => {
       SELECT n.motivo,
              a.nombre as almacen,
              COUNT(DISTINCT n.id)::int as notas,
-             SUM(d.cantidad)::int as unidades
+             SUM(d.cantidad)::float8 as unidades
       FROM notas_salida n
       JOIN notas_salida_detalle d ON d.nota_salida_id = n.id
       JOIN etiquetas e ON d.etiqueta_id = e.id
@@ -100,10 +100,10 @@ router.get('/kardex', verificarToken, async (req, res) => {
              a.nombre                               AS almacen,
              COALESCE(gi.destino_detalle, gi.destino) AS motivo,
              um.abreviatura                         AS unid_med,
-             COALESCE(e.cantidad, gi.cantidad)      AS cantidad,
+             COALESCE(e.cantidad, gi.cantidad)::float8 AS cantidad,
              COALESCE((
                SELECT json_agg(json_build_object(
-                        'cant', d.cantidad,
+                        'cant', d.cantidad::float8,
                         'guia', n.numero_nota,
                         'fecha', n.fecha_salida
                       ) ORDER BY n.fecha_salida, n.id)
