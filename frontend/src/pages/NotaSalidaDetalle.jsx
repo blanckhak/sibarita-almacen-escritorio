@@ -443,6 +443,12 @@ export default function NotaSalidaDetalle() {
                           </span>
                         )}
                         {d.devuelto_obs && <span className="block font-normal text-gray-400 italic">{d.devuelto_obs}</span>}
+                        {d.cantidad_consumida != null && Number(d.cantidad_consumida) > 0 && (
+                          <span className="block font-normal text-gray-600">
+                            consumido {fmtCantidad(d.cantidad_consumida)}
+                            {d.total_consumido != null && ` · a cobrar S/ ${Number(d.total_consumido).toFixed(2)}`}
+                          </span>
+                        )}
                         {d.devuelto_condicion === 'USADO' && puedeGestionar && (
                           <button
                             type="button"
@@ -587,6 +593,21 @@ export default function NotaSalidaDetalle() {
                     className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
                   />
                 </div>
+                {/* Fase 11 (R6): lo que se consume y lo que se cobra si se
+                    devuelve usada esta cantidad. */}
+                {(() => {
+                  const salio = Number(lineaDevolucion.cantidad)
+                  const vuelve = Number(devCantidad || 0)
+                  const consumido = Math.max(0, Math.round((salio - vuelve) * 1000) / 1000)
+                  const pu = Number(lineaDevolucion.p_unitario)
+                  const cobro = Number.isFinite(pu) && pu > 0 ? consumido * pu : null
+                  return (
+                    <div className="col-span-2 border-t border-amber-200 pt-2 text-xs text-amber-800">
+                      Consumido: <b>{fmtCantidad(consumido)}</b>
+                      {cobro != null && <> · a cobrar: <b>S/ {cobro.toFixed(2)}</b></>}
+                    </div>
+                  )
+                })()}
               </div>
             </div>
 
@@ -822,6 +843,8 @@ export default function NotaSalidaDetalle() {
               <th className="text-left py-1 pr-3">Detalle</th>
               <th className="text-right py-1 pr-3">Salio</th>
               <th className="text-right py-1 pr-3">Volvio</th>
+              <th className="text-right py-1 pr-3">Consumido</th>
+              <th className="text-right py-1 pr-3">A cobrar</th>
               <th className="text-left py-1 pr-3">Presentacion</th>
               <th className="text-left py-1 pr-3">Unidad</th>
               <th className="text-left py-1 pr-3">Condicion</th>
@@ -836,6 +859,8 @@ export default function NotaSalidaDetalle() {
                 <td className="py-1 pr-3">{d.producto_nombre}</td>
                 <td className="py-1 pr-3 text-right">{fmtCantidad(d.cantidad)}</td>
                 <td className="py-1 pr-3 text-right">{fmtCantidad(d.devuelto_cantidad != null ? d.devuelto_cantidad : d.cantidad)}</td>
+                <td className="py-1 pr-3 text-right">{d.cantidad_consumida != null ? fmtCantidad(d.cantidad_consumida) : '—'}</td>
+                <td className="py-1 pr-3 text-right">{d.total_consumido != null ? Number(d.total_consumido).toFixed(2) : '—'}</td>
                 <td className="py-1 pr-3">{presentacionLabel(d.devuelto_presentacion) || '—'}</td>
                 <td className="py-1 pr-3">{d.devuelto_unidad_medida_nombre || '—'}</td>
                 <td className="py-1 pr-3">{d.devuelto_condicion === 'USADO' ? 'Usada' : 'Nueva'}</td>

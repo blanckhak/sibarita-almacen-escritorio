@@ -439,6 +439,13 @@ async function setup() {
     ALTER TABLE unidades_medida ADD COLUMN IF NOT EXISTS permite_decimal BOOLEAN NOT NULL DEFAULT false;
     UPDATE unidades_medida SET permite_decimal = true
       WHERE abreviatura IN ('KG', 'M', 'M2', 'L') AND permite_decimal = false;
+
+    -- Devolucion parcial: cobrar solo lo consumido (ej. salieron 3.5 m, vuelven
+    -- 2.5 m usados -> se consumio 1 m). cantidad_consumida = salio - volvio;
+    -- total_consumido = ese consumo x el p_unitario de la linea (NULL si la
+    -- nota no maneja precios). Se llenan al registrar/editar la devolucion.
+    ALTER TABLE notas_salida_detalle ADD COLUMN IF NOT EXISTS cantidad_consumida NUMERIC(12,3);
+    ALTER TABLE notas_salida_detalle ADD COLUMN IF NOT EXISTS total_consumido    NUMERIC(12,2);
   `)
 
   const rolesExist = await pool.query('SELECT COUNT(*) FROM roles')

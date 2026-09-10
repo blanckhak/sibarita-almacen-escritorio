@@ -2045,6 +2045,27 @@ comun; R7 va ultimo porque consume todo lo anterior.
     los numeros gracias a los casts ::float8 del backend.
   * frontend construido sin errores (npm run build) y copiado a
     backend/frontend-dist para probar en la app.
+- Paso 11.5 HECHO (10/09): devolucion parcial cobra solo lo consumido.
+  * notas_salida_detalle: + cantidad_consumida NUMERIC(12,3) y
+    total_consumido NUMERIC(12,2) (setup.js bloque Fase 11 + database.sql).
+  * notasSalida.js POST /:id/devolucion: la validacion previa de
+    devuelto_cantidad pasa de Number.isInteger a Number.isFinite (admite
+    decimales, redondea a 3). En la rama USADO se calcula
+    cantConsumida = salio - volvio y totalConsumido = cantConsumida *
+    p_unitario (NULL si la linea no tiene precio); se guardan en el
+    UPDATE. La rama NUEVO guarda cantidad_consumida = 0.
+  * PUT /:id/lineas/:etiquetaId/devolucion-usada: recalcula
+    cantidad_consumida / total_consumido con la cantidad corregida;
+    tambien pasa a Number.isFinite.
+  * GET /:id detalle expone cantidad_consumida / total_consumido ::float8.
+  * NotaSalidaDetalle.jsx: el modal de "Devuelta usada" muestra en vivo
+    "Consumido X - a cobrar S/ Y"; la tabla de detalle muestra
+    "consumido / a cobrar" bajo la linea devuelta; la Nota de Devolucion
+    impresa suma columnas "Consumido" y "A cobrar".
+  * Probado contra el server: salio 3.5 M, vuelven 2.5 usados ->
+    consumido 1, a cobrar 10.00 (p_unit 10), codigo nuevo 9002 USADO,
+    inventario DEVOLUCION 2.5. Editar la devolucion a 3.0 -> consumido
+    0.5, a cobrar 5.00, inventario DEVOLUCION 3.0.
 
 QUE QUEDA PENDIENTE (revision del proyecto, 31/08):
 - Fase 1 - Calibracion de impresion matricial (Bloque 2 "6 lineas" +

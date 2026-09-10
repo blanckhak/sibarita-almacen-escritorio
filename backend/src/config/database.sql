@@ -286,7 +286,12 @@ CREATE TABLE notas_salida_detalle (
   devuelto_unidad_medida_id INTEGER REFERENCES unidades_medida(id),
   -- Presentacion en la que vuelve fisicamente, aparte de la unidad de medida.
   -- Lista fija (no es un catalogo admin): CAJA / ROLLO / BOLSA / SACO.
-  devuelto_presentacion VARCHAR(20) CHECK (devuelto_presentacion IN ('CAJA', 'ROLLO', 'BOLSA', 'SACO'))
+  devuelto_presentacion VARCHAR(20) CHECK (devuelto_presentacion IN ('CAJA', 'ROLLO', 'BOLSA', 'SACO')),
+  -- Fase 11 (R6): devolucion parcial cobra solo lo consumido.
+  -- cantidad_consumida = lo que salio menos lo que volvio; total_consumido =
+  -- ese consumo x p_unitario (NULL si la nota no maneja precios).
+  cantidad_consumida NUMERIC(12,3),
+  total_consumido NUMERIC(12,2)
 );
 
 ALTER TABLE notas_salida ADD COLUMN requiere_devolucion BOOLEAN NOT NULL DEFAULT true;
