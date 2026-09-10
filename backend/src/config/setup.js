@@ -446,6 +446,20 @@ async function setup() {
     -- nota no maneja precios). Se llenan al registrar/editar la devolucion.
     ALTER TABLE notas_salida_detalle ADD COLUMN IF NOT EXISTS cantidad_consumida NUMERIC(12,3);
     ALTER TABLE notas_salida_detalle ADD COLUMN IF NOT EXISTS total_consumido    NUMERIC(12,2);
+
+    -- ==========================================================
+    -- FASE 11 (R4): agrupador, observaciones y codigo de impresion
+    -- ==========================================================
+    -- guias.observaciones: la impresion de la Nota de Ingreso ya la referenciaba
+    -- pero la columna no existia (nunca salia nada). guia_items.id_agrupador:
+    -- codigo libre, se puede repetir en varias lineas para agruparlas en la
+    -- impresion. observaciones por linea. codigo_impresion: etiqueta a imprimir
+    -- en lugar del numero de secuencia, editable a mano antes de imprimir; NO
+    -- toca etiquetas.codigo ni el codigo de barras.
+    ALTER TABLE guias      ADD COLUMN IF NOT EXISTS observaciones TEXT;
+    ALTER TABLE guia_items ADD COLUMN IF NOT EXISTS id_agrupador     VARCHAR(30);
+    ALTER TABLE guia_items ADD COLUMN IF NOT EXISTS observaciones    VARCHAR(300);
+    ALTER TABLE guia_items ADD COLUMN IF NOT EXISTS codigo_impresion VARCHAR(30);
   `)
 
   const rolesExist = await pool.query('SELECT COUNT(*) FROM roles')

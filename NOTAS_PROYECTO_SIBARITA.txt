@@ -2066,6 +2066,22 @@ comun; R7 va ultimo porque consume todo lo anterior.
     consumido 1, a cobrar 10.00 (p_unit 10), codigo nuevo 9002 USADO,
     inventario DEVOLUCION 2.5. Editar la devolucion a 3.0 -> consumido
     0.5, a cobrar 5.00, inventario DEVOLUCION 3.0.
+- Paso 11.7 + 11.8 HECHO (10/09): backend de R4 (ID agrupador,
+  observaciones, codigo de impresion).
+  * Migracion (setup.js bloque Fase 11 R4 + database.sql): guias.observaciones
+    TEXT; guia_items.id_agrupador VARCHAR(30), observaciones VARCHAR(300),
+    codigo_impresion VARCHAR(30).
+  * guias.js POST /: acepta observaciones (cabecera) y por linea
+    id_agrupador / observaciones; validarLargos de los nuevos campos; se
+    guardan en ambos INSERT de guia_items (PRODUCTO y SERVICIO).
+  * guias.js PUT /:id: acepta observaciones de cabecera (permitido aun en
+    guia CERRADA) y por linea id_agrupador / observaciones /
+    codigo_impresion -> se actualizan siempre que vengan, sin importar si
+    la cantidad cambio ni si la etiqueta ya salio (no afectan stock).
+  * GET /:id items expone gi.id_agrupador / observaciones / codigo_impresion.
+  * codigo_impresion NO toca etiquetas.codigo ni el codigo de barras: es
+    solo el texto que se imprime en la Nota de Ingreso.
+  * setup corrido OK; node -c OK.
 
 QUE QUEDA PENDIENTE (revision del proyecto, 31/08):
 - Fase 1 - Calibracion de impresion matricial (Bloque 2 "6 lineas" +

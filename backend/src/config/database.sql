@@ -166,7 +166,10 @@ CREATE TABLE guias (
   -- remision o factura que trae el proveedor, y el formato fisico "Nota de
   -- Ingresos de Activos" los pide como campos separados.
   guia_remision VARCHAR(50),
-  factura VARCHAR(50)
+  factura VARCHAR(50),
+  -- Fase 11 (R4): observacion general de la guia (se imprime en la Nota de
+  -- Ingreso; antes se referenciaba sin que la columna existiera).
+  observaciones TEXT
 );
 
 -- Unico solo entre guias vigentes: una guia ANULADA libera su numero para
@@ -198,7 +201,15 @@ CREATE TABLE guia_items (
   recogido BOOLEAN,
   -- Obligatorio cuando destino = 'OTRO' (Bloque 5, mismo patron que
   -- categoria/categoria_detalle de Solicitud de Materiales).
-  destino_detalle VARCHAR(200)
+  destino_detalle VARCHAR(200),
+  -- Fase 11 (R4): id_agrupador = codigo libre, se puede repetir en varias
+  -- lineas para agruparlas en la impresion. observaciones por linea.
+  -- codigo_impresion = etiqueta a imprimir en lugar del numero de secuencia
+  -- (editable a mano antes de imprimir); NO toca etiquetas.codigo ni el
+  -- codigo de barras.
+  id_agrupador VARCHAR(30),
+  observaciones VARCHAR(300),
+  codigo_impresion VARCHAR(30)
 );
 
 -- Desglose de una linea de guia cuyo producto se maneja EN_PARTIDA

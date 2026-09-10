@@ -113,6 +113,7 @@ router.get('/:id', verificarToken, async (req, res) => {
 
     const items = await pool.query(`
       SELECT gi.id, gi.producto_id, gi.cantidad::float8 as cantidad, gi.tipo, gi.destino, gi.destino_detalle, gi.recogido,
+             gi.id_agrupador, gi.observaciones, gi.codigo_impresion,
              COALESCE(p.nombre, gi.descripcion) as producto_nombre, p.metrica as producto_metrica,
              um.nombre as unidad_medida_nombre, um.abreviatura as unidad_medida_abreviatura,
              e.id as etiqueta_id, e.codigo as etiqueta_codigo, e.estado as etiqueta_estado,
@@ -149,7 +150,7 @@ router.get('/:id', verificarToken, async (req, res) => {
 router.post('/', verificarToken, soloRoles('admin', 'almacen'),
   log('CREAR_GUIA', req => `Guia ${req.body.numero_guia}, almacen ${req.body.almacen_id}, ${Array.isArray(req.body.items) ? req.body.items.length : 0} linea(s)`),
   async (req, res) => {
-  const { numero_guia, almacen_id, fecha, items, proveedor, numero_oc, direccion, guia_remision, factura } = req.body
+  const { numero_guia, almacen_id, fecha, items, proveedor, numero_oc, direccion, guia_remision, factura, observaciones } = req.body
   const TIPOS_DOC = ['GUIA', 'FACTURA', 'BOLETA', 'OTRO']
   const tipoDocumento = TIPOS_DOC.includes(req.body.tipo_documento) ? req.body.tipo_documento : 'GUIA'
 
@@ -179,6 +180,8 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
       'producto / servicio': [it.producto_nombre, 150],
       'destino (Otro)': [it.destino_detalle, 200],
       'persona que retira': [it.persona_retira, 150],
+      'ID de agrupacion': [it.id_agrupador, 30],
+      'observacion de la linea': [it.observaciones, 300],
     })
     if (errItem) return res.status(400).json({ error: errItem })
     for (const pt of (Array.isArray(it.partidas) ? it.partidas : [])) {
@@ -275,8 +278,8 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
     }
 
     const guiaResult = await client.query(
-      `INSERT INTO guias (numero_guia, almacen_id, usuario_id, fecha, proveedor, numero_oc, direccion, guia_remision, factura, tipo_documento)
-       VALUES ($1, $2, $3, COALESCE($4, CURRENT_DATE), $5, $6, $7, $8, $9, $10) RETURNING *`,
+      `INSERT INTO guias (numero_guia, almacen_id, usuario_id, fecha, proveedor, numero_oc, direccion, guia_remision, factura, tipo_documento, observaciones)
+       VALUES ($1, $2, $3, COALESCE($4, CURRENT_DATE), $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
       [
         numero_guia.trim(), almacen_id, req.usuario.id, fecha || null,
         (proveedor || '').trim() || null,
@@ -285,6 +288,7 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
         (guia_remision || '').trim() || null,
         (factura || '').trim() || null,
         tipoDocumento,
+        (observaciones || '').trim() || null,
       ]
     )
     const guia = guiaResult.rows[0]
@@ -297,14 +301,19 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
     const salidaAutoGrupos = new Map()
 
     for (const it of items) {
+      // Fase 11 (R4): id de agrupacion y observacion por linea, comunes a
+      // PRODUCTO y SERVICIO.
+      const idAgrupador = (it.id_agrupador || '').trim() || null
+      const obsItem = (it.observaciones || '').trim() || null
+
       // Linea SERVICIO (Fase 8): no usa el catalogo de productos. Se guarda la
       // descripcion libre y nada mas: producto_id NULL, sin etiqueta, sin
       // inventario, sin partidas ni destino.
       if (it.tipo === 'SERVICIO') {
         await client.query(
-          `INSERT INTO guia_items (guia_id, producto_id, descripcion, cantidad, tipo, destino, destino_detalle, recogido)
-           VALUES ($1, NULL, $2, $3, 'SERVICIO', NULL, NULL, NULL)`,
-          [guia.id, (it.producto_nombre || '').trim(), it.cantidad]
+          `INSERT INTO guia_items (guia_id, producto_id, descripcion, cantidad, tipo, destino, destino_detalle, recogido, id_agrupador, observaciones)
+           VALUES ($1, NULL, $2, $3, 'SERVICIO', NULL, NULL, NULL, $4, $5)`,
+          [guia.id, (it.producto_nombre || '').trim(), it.cantidad, idAgrupador, obsItem]
         )
         continue
       }
@@ -399,8 +408,9 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
       const salidaAutoInmediata = DESTINOS_SALIDA_AUTO.includes(it.destino) && !pendienteDeRecoger
 
       const itemResult = await client.query(
-        `INSERT INTO guia_items (guia_id, producto_id, cantidad, destino, destino_detalle, recogido, tipo) VALUES ($1, $2, $3, $4, $5, $6, 'PRODUCTO') RETURNING id`,
-        [guia.id, productoId, it.cantidad, it.destino, it.destino === 'OTRO' ? it.destino_detalle.trim() : null, recogidoValor]
+        `INSERT INTO guia_items (guia_id, producto_id, cantidad, destino, destino_detalle, recogido, tipo, id_agrupador, observaciones)
+         VALUES ($1, $2, $3, $4, $5, $6, 'PRODUCTO', $7, $8) RETURNING id`,
+        [guia.id, productoId, it.cantidad, it.destino, it.destino === 'OTRO' ? it.destino_detalle.trim() : null, recogidoValor, idAgrupador, obsItem]
       )
       const guiaItemId = itemResult.rows[0].id
 
@@ -571,8 +581,11 @@ router.post('/:id/items/:itemId/retirar', verificarToken, soloRoles('admin', 'al
 })
 
 // Edicion de guia (Fase A + Fase 8):
-// - Cabecera: proveedor/O.C./direccion/guia_remision/factura/estado.
-// - `items`: [{ id, cantidad }] corrige la CANTIDAD de lineas ya registradas.
+// - Cabecera: proveedor/O.C./direccion/guia_remision/factura/estado/observaciones.
+// - `items`: [{ id, cantidad, id_agrupador?, observaciones?, codigo_impresion? }].
+//   La CANTIDAD sigue las reglas de Fase 8 (abajo). id_agrupador / observaciones
+//   / codigo_impresion (Fase 11 R4) no afectan stock: se pueden editar aunque la
+//   guia este CERRADA o la etiqueta ya haya salido.
 //   Si la linea tiene etiqueta EN_ALMACEN, el inventario se ajusta por la
 //   diferencia. Si esa etiqueta ya salio (SALIO/REEMPLAZADA) la linea queda
 //   bloqueada. Las lineas EN_PARTIDA no se editan aqui (su cantidad sale del
@@ -583,7 +596,7 @@ router.post('/:id/items/:itemId/retirar', verificarToken, soloRoles('admin', 'al
 router.put('/:id', verificarToken, soloRoles('admin', 'almacen'),
   log('EDITAR_GUIA', req => `Guia ${req.params.id}: ${JSON.stringify(req.body)}`),
   async (req, res) => {
-  const { proveedor, numero_oc, direccion, estado, guia_remision, factura, tipo_documento, items } = req.body
+  const { proveedor, numero_oc, direccion, estado, guia_remision, factura, tipo_documento, items, observaciones } = req.body
   const ESTADOS = ['CARGADA', 'CERRADA']
   const TIPOS_DOC = ['GUIA', 'FACTURA', 'BOLETA', 'OTRO']
   if (tipo_documento !== undefined && !TIPOS_DOC.includes(tipo_documento)) {
@@ -607,9 +620,15 @@ router.put('/:id', verificarToken, soloRoles('admin', 'almacen'),
     if (!it || it.id === undefined || !esCantidadPositiva(it.cantidad)) {
       return res.status(400).json({ error: 'Cada linea a editar necesita un id y una cantidad mayor a 0 (hasta 3 decimales)' })
     }
+    const errItem = validarLargos({
+      'ID de agrupacion': [it.id_agrupador, 30],
+      'observacion de la linea': [it.observaciones, 300],
+      'codigo de impresion': [it.codigo_impresion, 30],
+    })
+    if (errItem) return res.status(400).json({ error: errItem })
   }
 
-  const sinCabecera = [proveedor, numero_oc, direccion, estado, guia_remision, factura, tipo_documento].every(v => v === undefined)
+  const sinCabecera = [proveedor, numero_oc, direccion, estado, guia_remision, factura, tipo_documento, observaciones].every(v => v === undefined)
   if (sinCabecera && editItems.length === 0) {
     return res.status(400).json({ error: 'No se envio ningun campo para editar' })
   }
@@ -652,6 +671,9 @@ router.put('/:id', verificarToken, soloRoles('admin', 'almacen'),
     if (guia_remision !== undefined) push('guia_remision', (guia_remision || '').trim() || null)
     if (factura !== undefined)       push('factura', (factura || '').trim() || null)
     if (tipo_documento !== undefined) push('tipo_documento', tipo_documento)
+    // Fase 11 (R4): observacion general de la guia. No afecta stock -> se admite
+    // tambien en guias CERRADAS.
+    if (observaciones !== undefined) push('observaciones', (observaciones || '').trim() || null)
 
     let guiaFinal = guiaActual
     if (cambios.length > 0) {
@@ -663,10 +685,10 @@ router.put('/:id', verificarToken, soloRoles('admin', 'almacen'),
       guiaFinal = upd.rows[0]
     }
 
-    // --- Cantidad por linea (Fase 8) ---
+    // --- Cantidad por linea (Fase 8) + agrupador/observacion/codigo (Fase 11 R4) ---
     for (const edit of editItems) {
       const linea = await client.query(`
-        SELECT gi.id, gi.cantidad, gi.producto_id, gi.tipo, p.metrica AS producto_metrica,
+        SELECT gi.id, gi.cantidad::float8 AS cantidad, gi.producto_id, gi.tipo, p.metrica AS producto_metrica,
                e.id AS etiqueta_id, e.estado AS etiqueta_estado, e.codigo AS etiqueta_codigo,
                e.condicion AS etiqueta_condicion
         FROM guia_items gi
@@ -680,8 +702,23 @@ router.put('/:id', verificarToken, soloRoles('admin', 'almacen'),
         return res.status(400).json({ error: `La linea ${edit.id} no pertenece a esta guia` })
       }
       const l = linea.rows[0]
+
+      // Fase 11 (R4): id_agrupador / observacion / codigo_impresion no afectan
+      // stock -> se actualizan siempre que vengan, aunque la cantidad no cambie
+      // y aunque la guia este CERRADA o la etiqueta ya haya salido.
+      const setR4 = []
+      const valR4 = []
+      const pushR4 = (campo, valor) => { valR4.push(valor); setR4.push(`${campo} = $${valR4.length}`) }
+      if (edit.id_agrupador !== undefined)     pushR4('id_agrupador', (edit.id_agrupador || '').trim() || null)
+      if (edit.observaciones !== undefined)    pushR4('observaciones', (edit.observaciones || '').trim() || null)
+      if (edit.codigo_impresion !== undefined) pushR4('codigo_impresion', (edit.codigo_impresion || '').trim() || null)
+      if (setR4.length > 0) {
+        valR4.push(l.id)
+        await client.query(`UPDATE guia_items SET ${setR4.join(', ')} WHERE id = $${valR4.length}`, valR4)
+      }
+
       const nuevaCantidad = Number(edit.cantidad)
-      const delta = nuevaCantidad - l.cantidad
+      const delta = Math.round((nuevaCantidad - l.cantidad) * 1000) / 1000
       if (delta === 0) continue
 
       if (l.producto_metrica === 'EN_PARTIDA') {
