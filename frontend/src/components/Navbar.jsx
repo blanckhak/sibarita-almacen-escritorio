@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { usePeriodo } from '../context/PeriodoContext'
 import Notificaciones from './Notificaciones'
 
 const colorRol = {
@@ -35,7 +34,6 @@ const ENLACES_SECUNDARIOS = [
 
 export default function Navbar() {
   const { usuario, logout } = useAuth()
-  const { almacenes, periodosDelAlmacen, almacenSel, setAlmacenSel, periodoSel, setPeriodoSel } = usePeriodo()
   const location = useLocation()
   const [masAbierto, setMasAbierto] = useState(false)
   const masRef = useRef(null)
@@ -99,29 +97,6 @@ export default function Navbar() {
 
       {usuario && (
         <div className="flex items-center gap-3">
-          {/* Fase 14: selector de almacen + periodo para ver (separado de los enlaces) */}
-          <div className="hidden lg:flex items-center gap-1.5 pl-4 border-l border-blue-700">
-            <span className="text-[10px] uppercase tracking-wide text-blue-300">Periodo</span>
-            <select
-              value={almacenSel}
-              onChange={e => setAlmacenSel(e.target.value)}
-              className="bg-blue-800 text-white text-xs rounded px-2 py-1.5 border border-blue-600 focus:outline-none"
-            >
-              {almacenes.map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}
-            </select>
-            <select
-              value={periodoSel}
-              onChange={e => setPeriodoSel(e.target.value)}
-              className="bg-blue-800 text-white text-xs rounded px-2 py-1.5 border border-blue-600 focus:outline-none max-w-[170px]"
-            >
-              {periodosDelAlmacen.length === 0 && <option value="">Sin periodos</option>}
-              {periodosDelAlmacen.map(p => (
-                <option key={p.id} value={p.id}>
-                  {p.nombre}{p.estado === 'ACTIVO' ? ' (activo)' : ''}
-                </option>
-              ))}
-            </select>
-          </div>
           <Notificaciones />
           <div className="text-right hidden md:block">
             <p className="text-sm font-semibold leading-tight">{usuario.nombre}</p>
