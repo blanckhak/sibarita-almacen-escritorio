@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import api from '../utils/api'
 import { useAuth } from '../context/AuthContext'
+import { usePeriodo } from '../context/PeriodoContext'
 import { MOTIVOS } from '../utils/motivos'
 import { textoStock } from '../utils/stockResumen'
 import { codigoAlmacen, numeroCodigo } from '../utils/colorAlmacen'
@@ -42,22 +43,26 @@ export default function NotasSalida() {
 
   const puedeRegistrar = ['admin', 'almacen', 'almacenero3'].includes(usuario?.rol)
   const esAdmin = usuario?.rol === 'admin'
+  const { periodoSel } = usePeriodo()
 
   const cargarNotas = () => {
-    api.get('/api/notas-salida')
+    api.get('/api/notas-salida', { params: periodoSel ? { periodo_id: periodoSel } : {} })
       .then(res => { setNotas(res.data); setCargando(false) })
       .catch(() => setCargando(false))
   }
 
   useEffect(() => {
     cargarNotas()
+  }, [periodoSel])
+
+  useEffect(() => {
     if (esAdmin) {
       api.get('/api/parametros-aprobacion').then(res => setParametro({
         monto_minimo: res.data.monto_minimo ?? '',
         activo: !!res.data.activo,
       }))
     }
-  }, [])
+  }, [esAdmin])
 
   const guardarConfig = async (e) => {
     e.preventDefault()

@@ -1,6 +1,7 @@
 import { Suspense, lazy } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
+import { PeriodoProvider } from './context/PeriodoContext'
 import Navbar from './components/Navbar'
 import Login from './pages/Login'
 
@@ -27,6 +28,7 @@ const Almacenes          = lazy(() => import('./pages/Almacenes'))
 const Reportes           = lazy(() => import('./pages/Reportes'))
 const Historial          = lazy(() => import('./pages/Historial'))
 const Configuracion      = lazy(() => import('./pages/Configuracion'))
+const Periodos           = lazy(() => import('./pages/Periodos'))
 
 function CargandoPagina() {
   return <div className="p-6 text-center py-12 text-gray-400">Cargando...</div>
@@ -61,6 +63,7 @@ function AppContent() {
 
   return (
     <BrowserRouter>
+      <PeriodoProvider>
       <Suspense fallback={<CargandoPagina />}>
       <Routes>
         <Route path="/login" element={usuario ? <Navigate to="/" /> : <Login onLogin={() => {}} />} />
@@ -185,9 +188,16 @@ function AppContent() {
           </RutaProtegida>
         } />
 
+        <Route path="/periodos" element={
+          <RutaProtegida roles={['admin', 'almacen', 'almacenero3', 'compras']}>
+            <Periodos />
+          </RutaProtegida>
+        } />
+
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
       </Suspense>
+      </PeriodoProvider>
     </BrowserRouter>
   )
 }

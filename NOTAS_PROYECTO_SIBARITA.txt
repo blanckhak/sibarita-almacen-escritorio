@@ -2274,6 +2274,69 @@ Rama fase-13-servicios-impresion (stack sobre fase-12-roles-destinos).
 
 PENDIENTE 13.9: bump instalador 1.7.0 + merge (al final, con todo revisado).
 
+--------------------------------------------------
+25. FASE 14 (R7-a): periodos por almacen (10/09/2026)
+--------------------------------------------------
+Rama fase-14-periodos (stack sobre fase-13-servicios-impresion).
+El usuario aclaro: ~8 periodos al año, rangos de fecha LIBRES (no semanal/
+mensual estricto). Por eso el modelo es solo nombre + fecha_inicio +
+fecha_fin (sin enum de tipo).
+
+BD (setup.js + database.sql):
+- periodos (id, almacen_id, nombre, fecha_inicio, fecha_fin, estado
+  ACTIVO/CERRADO, periodo_anterior_id, cerrado_por/cerrado_en/reabierto_en,
+  usuario_id). Indice unico PARCIAL periodos_activo_por_almacen (un solo
+  ACTIVO por almacen).
+- periodos_saldos (periodo_id, tipo APERTURA/CIERRE, producto_id,
+  stock_nuevo, stock_devolucion) -> foto de stock para el arrastre (Fase 15).
+- guias.periodo_id / notas_salida.periodo_id / etiquetas.periodo_id (FK).
+- BACKFILL (corre 1 sola vez, guarda: no hay periodos): por cada almacen
+  crea "Periodo inicial" ACTIVO (fecha_inicio = guia mas antigua o hoy) y
+  engancha guias/etiquetas por almacen_id y notas_salida por sus etiquetas
+  o por su guia (servicios EXTERNO). APERTURA del inicial = foto actual del
+  inventario.
+
+Backend:
+- Nuevo backend/src/routes/periodos.js + registro en server.js:
+  GET /api/periodos (filtros almacen_id/estado, con total_guias/total_notas),
+  GET /api/periodos/activo?almacen_id=, GET /api/periodos/:id,
+  POST /api/periodos (abre el PRIMER periodo de un almacen sin ACTIVO;
+  crea APERTURA = foto de inventario; 409 si ya hay uno activo).
+  Los periodos SIGUIENTES los creara el cierre (Fase 15).
+- guias.js POST /: resuelve el periodo ACTIVO del almacen; si no hay -> 400
+  "No hay un periodo activo...". La guia, sus etiquetas y las notas de
+  salida automaticas se graban con ese periodo_id.
+- guias.js /:id/items/:itemId/retirar: la nota automatica hereda el
+  periodo_id de la guia/etiqueta.
+- notasSalida.js POST /: la nota entra en el periodo activo del almacen de
+  sus codigos. /devolucion: la etiqueta nueva USADO hereda el periodo_id
+  del codigo original.
+- utils/salida.js: crearNotaSalidaAutomatica y crearNotaSalidaServicios
+  aceptan periodoId.
+- guias.js GET / y notasSalida.js GET / aceptan ?periodo_id= (+ devuelven
+  n.periodo_id / g.periodo_id).
+
+Frontend:
+- Nuevo context/PeriodoContext.jsx (PeriodoProvider en App.jsx dentro de
+  BrowserRouter): almacen + periodo seleccionados PARA VER; default =
+  periodo ACTIVO del almacen del usuario.
+- Navbar: selector compacto [Almacen][Periodo] (lg: y mas ancho).
+- Guias.jsx y NotasSalida.jsx: el listado filtra por el periodo
+  seleccionado (recarga al cambiarlo).
+- Nueva pantalla Periodos.jsx en /periodos (+ link navbar): listado por
+  almacen con estado / rango / conteo de guias y notas, y "Abrir periodo"
+  para almacenes sin uno activo. Cerrar/reabrir/export/purga = Fase 15.
+- Inventario y Movimientos NO se filtran por periodo (no tienen periodo_id;
+  inventario es siempre el stock vivo).
+
+Probado contra el server: 3 "Periodo inicial" ACTIVO (uno por almacen),
+MALSA con 5 guias + 4 notas backfilleadas; GET /activo?almacen_id=1 -> id 1;
+guia nueva -> periodo_id 1; GET /api/guias?periodo_id=1 -> todas con ese
+periodo; 2do periodo activo mismo almacen -> 409. setup corrido 2x sin
+error. Datos de prueba: guia TEST-F14-...
+
+PENDIENTE 14.7: bump instalador 1.8.0 + merge (al final).
+
 PENDIENTE NUEVO (10/09, de para giarse/):
 - Formato "NOTA DE INGRESO DE ACTIVOS - DESUSO" (para giarse/desuso.png,
   N. 001383): documento fisico APARTE para material usado / que vuelve a

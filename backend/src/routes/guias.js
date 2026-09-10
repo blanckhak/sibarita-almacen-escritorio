@@ -76,10 +76,16 @@ router.get('/consulta/productos', verificarToken, async (req, res) => {
 })
 
 router.get('/', verificarToken, async (req, res) => {
+  const { periodo_id, almacen_id } = req.query
+  const cond = []
+  const val = []
+  if (periodo_id) { val.push(periodo_id); cond.push(`g.periodo_id = $${val.length}`) }
+  if (almacen_id) { val.push(almacen_id); cond.push(`g.almacen_id = $${val.length}`) }
+  const where = cond.length ? `WHERE ${cond.join(' AND ')}` : ''
   try {
     const result = await pool.query(`
       SELECT g.id, g.numero_guia, g.fecha, g.creado_en,
-             g.proveedor, g.numero_oc, g.direccion, g.estado, g.tipo_documento,
+             g.proveedor, g.numero_oc, g.direccion, g.estado, g.tipo_documento, g.periodo_id,
              a.nombre as almacen_nombre, u.nombre as usuario_nombre,
              COUNT(gi.id)::int as total_items,
              COUNT(e.id)::int as total_etiquetas
@@ -88,9 +94,10 @@ router.get('/', verificarToken, async (req, res) => {
       LEFT JOIN usuarios u ON g.usuario_id = u.id
       LEFT JOIN guia_items gi ON gi.guia_id = g.id
       LEFT JOIN etiquetas e ON e.guia_item_id = gi.id
+      ${where}
       GROUP BY g.id, a.nombre, u.nombre
       ORDER BY g.creado_en DESC
-    `)
+    `, val)
     res.json(result.rows)
   } catch (err) {
     res.status(500).json({ error: err.message })
@@ -284,9 +291,20 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
       return res.status(409).json({ error: 'Ya existe una guia con ese numero en este almacen' })
     }
 
+    // Fase 14 (R7-a): toda guia entra en el periodo ACTIVO de su almacen.
+    const perAct = await client.query(
+      `SELECT id FROM periodos WHERE almacen_id = $1 AND estado = 'ACTIVO'`,
+      [almacen_id]
+    )
+    if (perAct.rows.length === 0) {
+      await client.query('ROLLBACK')
+      return res.status(400).json({ error: 'No hay un periodo activo para este almacen. Abrilo primero en Periodos.' })
+    }
+    const periodoActivoId = perAct.rows[0].id
+
     const guiaResult = await client.query(
-      `INSERT INTO guias (numero_guia, almacen_id, usuario_id, fecha, proveedor, numero_oc, direccion, guia_remision, factura, tipo_documento, observaciones)
-       VALUES ($1, $2, $3, COALESCE($4, CURRENT_DATE), $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+      `INSERT INTO guias (numero_guia, almacen_id, usuario_id, fecha, proveedor, numero_oc, direccion, guia_remision, factura, tipo_documento, observaciones, periodo_id)
+       VALUES ($1, $2, $3, COALESCE($4, CURRENT_DATE), $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
       [
         numero_guia.trim(), almacen_id, req.usuario.id, fecha || null,
         (proveedor || '').trim() || null,
@@ -296,6 +314,7 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
         (factura || '').trim() || null,
         tipoDocumento,
         (observaciones || '').trim() || null,
+        periodoActivoId,
       ]
     )
     const guia = guiaResult.rows[0]
@@ -331,9 +350,9 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
           const codigoResult = await client.query(`SELECT nextval('etiquetas_codigo_seq') as codigo`)
           const codigo = codigoResult.rows[0].codigo
           const etiquetaResult = await client.query(
-            `INSERT INTO etiquetas (codigo, guia_item_id, producto_id, almacen_id, estado)
-             VALUES ($1, $2, NULL, $3, 'EN_ALMACEN') RETURNING *`,
-            [codigo, itemResult.rows[0].id, almacen_id]
+            `INSERT INTO etiquetas (codigo, guia_item_id, producto_id, almacen_id, estado, periodo_id)
+             VALUES ($1, $2, NULL, $3, 'EN_ALMACEN', $4) RETURNING *`,
+            [codigo, itemResult.rows[0].id, almacen_id, periodoActivoId]
           )
           await client.query(
             `INSERT INTO etiqueta_historial (etiqueta_id, evento, almacen_destino_id, usuario_id, detalle)
@@ -457,9 +476,9 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
         const codigo = codigoResult.rows[0].codigo
 
         const etiquetaResult = await client.query(
-          `INSERT INTO etiquetas (codigo, guia_item_id, producto_id, almacen_id, estado)
-           VALUES ($1, $2, $3, $4, 'EN_ALMACEN') RETURNING *`,
-          [codigo, guiaItemId, productoId, almacen_id]
+          `INSERT INTO etiquetas (codigo, guia_item_id, producto_id, almacen_id, estado, periodo_id)
+           VALUES ($1, $2, $3, $4, 'EN_ALMACEN', $5) RETURNING *`,
+          [codigo, guiaItemId, productoId, almacen_id, periodoActivoId]
         )
         const etiqueta = { ...etiquetaResult.rows[0], cantidad: it.cantidad }
 
@@ -505,6 +524,7 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
         personaResponsable: grupo.personaRetira,
         observaciones: grupo.retiraObs,
         usuarioId: req.usuario.id,
+        periodoId: periodoActivoId,
       })
       notasSalidaGeneradas.push({ numero_nota: notaAuto.numero_nota, nota_id: notaAuto.id, productos: grupo.etiquetas.length })
     }
@@ -516,6 +536,7 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
         guiaId: guia.id,
         servicios: serviciosExternos,
         usuarioId: req.usuario.id,
+        periodoId: periodoActivoId,
       })
       notasSalidaGeneradas.push({ numero_nota: notaServ.numero_nota, nota_id: notaServ.id, productos: serviciosExternos.length })
     }
@@ -573,8 +594,10 @@ router.post('/:id/items/:itemId/retirar', verificarToken, soloRoles('admin', 'al
     const item = await client.query(`
       SELECT gi.id, gi.destino, gi.recogido, e.id as etiqueta_id, e.estado as etiqueta_estado,
              e.almacen_id, e.producto_id, e.condicion,
-             COALESCE(e.cantidad, gi.cantidad) as cantidad
+             COALESCE(e.cantidad, gi.cantidad) as cantidad,
+             COALESCE(e.periodo_id, g.periodo_id) as periodo_id
       FROM guia_items gi
+      JOIN guias g ON gi.guia_id = g.id
       LEFT JOIN etiquetas e ON e.guia_item_id = gi.id AND e.estado <> 'REEMPLAZADA'
       WHERE gi.guia_id = $1 AND gi.id = $2
       FOR UPDATE OF gi
@@ -604,6 +627,7 @@ router.post('/:id/items/:itemId/retirar', verificarToken, soloRoles('admin', 'al
       personaResponsable: personaRetira,
       observaciones: (req.body.retira_obs || '').trim() || null,
       usuarioId: req.usuario.id,
+      periodoId: it.periodo_id,
     })
 
     await client.query(`UPDATE guia_items SET recogido = true WHERE id = $1`, [it.id])

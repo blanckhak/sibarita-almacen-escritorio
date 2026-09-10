@@ -12,7 +12,7 @@ const MOTIVOS = ['USO_INTERNO', 'PRESTAMO', 'REPARACION', 'DESECHO', 'OTRO']
 const PRESENTACIONES = ['CAJA', 'ROLLO', 'BOLSA', 'SACO']
 
 router.get('/', verificarToken, async (req, res) => {
-  const { numero_nota, estado } = req.query
+  const { numero_nota, estado, periodo_id } = req.query
   const condiciones = []
   const valores = []
 
@@ -24,12 +24,16 @@ router.get('/', verificarToken, async (req, res) => {
     valores.push(estado)
     condiciones.push(`n.estado = $${valores.length}`)
   }
+  if (periodo_id) {
+    valores.push(periodo_id)
+    condiciones.push(`n.periodo_id = $${valores.length}`)
+  }
   const where = condiciones.length > 0 ? `WHERE ${condiciones.join(' AND ')}` : ''
 
   try {
     const result = await pool.query(`
       SELECT n.id, n.numero_nota, n.seccion, n.persona_responsable, n.motivo,
-             n.fecha, n.estado, g.numero_guia,
+             n.fecha, n.estado, n.periodo_id, g.numero_guia,
              u.nombre as usuario_nombre,
              COUNT(d.id)::int as total_lineas
       FROM notas_salida n
@@ -155,6 +159,14 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
     const guiaIds = new Set(etiquetas.rows.map(e => e.guia_id))
     const guiaRelacionada = guiaIds.size === 1 ? [...guiaIds][0] : null
 
+    // Fase 14 (R7-a): la nota entra en el periodo ACTIVO del almacen de sus
+    // codigos (todos del mismo almacen porque comparten guia/inventario).
+    const almNota = etiquetas.rows[0].almacen_id
+    const perNota = await client.query(
+      `SELECT id FROM periodos WHERE almacen_id = $1 AND estado = 'ACTIVO'`, [almNota]
+    )
+    const periodoNotaId = perNota.rows[0]?.id || null
+
     const numeroResult = await client.query(`SELECT nextval('notas_salida_numero_seq') as n`)
     const numeroNota = String(numeroResult.rows[0].n).padStart(6, '0')
 
@@ -177,8 +189,8 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
       : (requiere_devolucion === false ? 'CERRADO' : 'PENDIENTE')
 
     const notaResult = await client.query(
-      `INSERT INTO notas_salida (numero_nota, seccion, persona_responsable, motivo, guia_id, usuario_id, estado, observaciones, requiere_devolucion, fecha_salida)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+      `INSERT INTO notas_salida (numero_nota, seccion, persona_responsable, motivo, guia_id, usuario_id, estado, observaciones, requiere_devolucion, fecha_salida, periodo_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
       [
         numeroNota,
         seccion?.trim() || null,
@@ -190,6 +202,7 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
         observaciones?.trim() || null,
         requiere_devolucion !== false,
         requiereAprobacion ? null : new Date(),
+        periodoNotaId,
       ]
     )
     const nota = notaResult.rows[0]
@@ -434,7 +447,7 @@ router.post('/:id/devolucion', verificarToken, soloRoles('admin', 'almacen', 'al
     const detalle = await client.query(`
       SELECT d.id as detalle_id, d.etiqueta_id, d.cantidad::float8 as cantidad,
              d.p_unitario::float8 as p_unitario,
-             e.estado, e.almacen_id, e.producto_id, e.codigo, e.guia_item_id, e.condicion
+             e.estado, e.almacen_id, e.producto_id, e.codigo, e.guia_item_id, e.condicion, e.periodo_id
       FROM notas_salida_detalle d
       JOIN etiquetas e ON d.etiqueta_id = e.id
       WHERE d.nota_salida_id = $1
@@ -484,9 +497,9 @@ router.post('/:id/devolucion', verificarToken, soloRoles('admin', 'almacen', 'al
         const codigoResult = await client.query(`SELECT nextval('etiquetas_codigo_seq') as codigo`)
         const codigoNuevo = codigoResult.rows[0].codigo
         const nuevaEtiqueta = await client.query(
-          `INSERT INTO etiquetas (codigo, guia_item_id, producto_id, almacen_id, estado, condicion, cantidad)
-           VALUES ($1, $2, $3, $4, 'EN_ALMACEN', 'USADO', $5) RETURNING id`,
-          [codigoNuevo, linea.guia_item_id, linea.producto_id, linea.almacen_id, cantDevuelta]
+          `INSERT INTO etiquetas (codigo, guia_item_id, producto_id, almacen_id, estado, condicion, cantidad, periodo_id)
+           VALUES ($1, $2, $3, $4, 'EN_ALMACEN', 'USADO', $5, $6) RETURNING id`,
+          [codigoNuevo, linea.guia_item_id, linea.producto_id, linea.almacen_id, cantDevuelta, linea.periodo_id]
         )
         const nuevaEtiquetaId = nuevaEtiqueta.rows[0].id
         codigosNuevos.push({ codigo_viejo: linea.codigo, codigo_nuevo: Number(codigoNuevo) })

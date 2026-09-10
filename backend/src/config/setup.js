@@ -517,7 +517,97 @@ async function setup() {
     );
     INSERT INTO parametros_impresion (documento) VALUES ('INGRESO'), ('SALIDA'), ('DEVOLUCION')
       ON CONFLICT (documento) DO NOTHING;
+
+    -- ==========================================================
+    -- FASE 14 (R7-a): periodos por almacen
+    -- ==========================================================
+    -- Un periodo ACTIVO por almacen (indice unico parcial). Toda guia / nota
+    -- de salida / etiqueta nueva se graba con el periodo_id activo de su
+    -- almacen. ~8 periodos/año, rangos de fecha libres. Al cerrar (Fase 15) se
+    -- congela la foto de stock y se arrastra el saldo al periodo siguiente.
+    CREATE TABLE IF NOT EXISTS periodos (
+      id SERIAL PRIMARY KEY,
+      almacen_id INTEGER NOT NULL REFERENCES almacenes(id),
+      nombre VARCHAR(60) NOT NULL,
+      fecha_inicio DATE NOT NULL,
+      fecha_fin DATE,
+      estado VARCHAR(10) NOT NULL DEFAULT 'ACTIVO' CHECK (estado IN ('ACTIVO', 'CERRADO')),
+      periodo_anterior_id INTEGER REFERENCES periodos(id),
+      cerrado_por INTEGER REFERENCES usuarios(id),
+      cerrado_en TIMESTAMP,
+      reabierto_en TIMESTAMP,
+      usuario_id INTEGER REFERENCES usuarios(id),
+      creado_en TIMESTAMP DEFAULT NOW()
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS periodos_activo_por_almacen
+      ON periodos (almacen_id) WHERE estado = 'ACTIVO';
+
+    -- Foto de stock por producto al abrir (APERTURA) y al cerrar (CIERRE) un
+    -- periodo. APERTURA(n+1) = CIERRE(n) -> arrastre de saldo (Fase 15).
+    CREATE TABLE IF NOT EXISTS periodos_saldos (
+      id SERIAL PRIMARY KEY,
+      periodo_id INTEGER NOT NULL REFERENCES periodos(id) ON DELETE CASCADE,
+      tipo VARCHAR(10) NOT NULL CHECK (tipo IN ('APERTURA', 'CIERRE')),
+      producto_id INTEGER NOT NULL REFERENCES productos(id),
+      stock_nuevo      NUMERIC(12,3) NOT NULL DEFAULT 0,
+      stock_devolucion NUMERIC(12,3) NOT NULL DEFAULT 0,
+      UNIQUE (periodo_id, tipo, producto_id)
+    );
+
+    ALTER TABLE guias        ADD COLUMN IF NOT EXISTS periodo_id INTEGER REFERENCES periodos(id);
+    ALTER TABLE notas_salida ADD COLUMN IF NOT EXISTS periodo_id INTEGER REFERENCES periodos(id);
+    ALTER TABLE etiquetas    ADD COLUMN IF NOT EXISTS periodo_id INTEGER REFERENCES periodos(id);
   `)
+
+  // Fase 14: backfill. Corre una sola vez (guarda: no hay periodos todavia).
+  // Por cada almacen crea un "Periodo inicial" ACTIVO (desde la guia mas
+  // antigua o hoy) y engancha las guias / notas / etiquetas existentes. La
+  // APERTURA del periodo inicial = foto actual de inventario (asi el
+  // movimiento del periodo arranca en 0 desde ahora).
+  const hayPeriodos = await pool.query('SELECT 1 FROM periodos LIMIT 1')
+  if (hayPeriodos.rows.length === 0) {
+    const almacenes = await pool.query('SELECT id FROM almacenes ORDER BY id')
+    for (const alm of almacenes.rows) {
+      const desde = await pool.query(
+        `SELECT COALESCE(MIN(fecha), CURRENT_DATE) AS d FROM guias WHERE almacen_id = $1`,
+        [alm.id]
+      )
+      const per = await pool.query(
+        `INSERT INTO periodos (almacen_id, nombre, fecha_inicio, estado)
+         VALUES ($1, 'Periodo inicial', $2, 'ACTIVO') RETURNING id`,
+        [alm.id, desde.rows[0].d]
+      )
+      const periodoId = per.rows[0].id
+      await pool.query(`UPDATE guias SET periodo_id = $1 WHERE almacen_id = $2 AND periodo_id IS NULL`, [periodoId, alm.id])
+      await pool.query(
+        `UPDATE etiquetas SET periodo_id = $1 WHERE almacen_id = $2 AND periodo_id IS NULL`,
+        [periodoId, alm.id]
+      )
+      await pool.query(
+        `UPDATE notas_salida n SET periodo_id = $1
+         WHERE periodo_id IS NULL AND EXISTS (
+           SELECT 1 FROM notas_salida_detalle d JOIN etiquetas e ON d.etiqueta_id = e.id
+           WHERE d.nota_salida_id = n.id AND e.almacen_id = $2)`,
+        [periodoId, alm.id]
+      )
+      // Notas de servicio EXTERNO no tienen etiqueta -> se enganchan por su guia.
+      await pool.query(
+        `UPDATE notas_salida n SET periodo_id = $1
+         WHERE n.periodo_id IS NULL AND n.guia_id IN (SELECT id FROM guias WHERE almacen_id = $2)`,
+        [periodoId, alm.id]
+      )
+      await pool.query(
+        `INSERT INTO periodos_saldos (periodo_id, tipo, producto_id, stock_nuevo, stock_devolucion)
+         SELECT $1, 'APERTURA', producto_id,
+                COALESCE(SUM(cantidad) FILTER (WHERE tipo = 'NUEVO'), 0),
+                COALESCE(SUM(cantidad) FILTER (WHERE tipo = 'DEVOLUCION'), 0)
+         FROM inventario WHERE almacen_id = $2 AND producto_id IS NOT NULL
+         GROUP BY producto_id`,
+        [periodoId, alm.id]
+      )
+    }
+    console.log('Fase 14: periodos iniciales creados')
+  }
 
   const rolesExist = await pool.query('SELECT COUNT(*) FROM roles')
   if (parseInt(rolesExist.rows[0].count) === 0) {

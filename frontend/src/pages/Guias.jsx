@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import api from '../utils/api'
 import { useAuth } from '../context/AuthContext'
+import { usePeriodo } from '../context/PeriodoContext'
 import { extraerProveedoresConocidos } from '../utils/proveedores'
 import { hoyLocal as hoy } from '../utils/fecha'
 import { TIPOS_DOCUMENTO, tipoDocumentoLabel } from '../utils/tiposDocumento'
@@ -16,6 +17,7 @@ const sumaPartidas = (partidas) => sumarCantidades((partidas || []).map(p => p.c
 
 export default function Guias() {
   const { usuario } = useAuth()
+  const { periodoSel } = usePeriodo()
   const [guias, setGuias]         = useState([])
   const [almacenes, setAlmacenes] = useState([])
   const [productos, setProductos] = useState([])
@@ -45,7 +47,7 @@ export default function Guias() {
 
   const cargarDatos = async () => {
     const [g, a, p, u, inv] = await Promise.all([
-      api.get('/api/guias'),
+      api.get('/api/guias', { params: periodoSel ? { periodo_id: periodoSel } : {} }),
       api.get('/api/almacenes'),
       api.get('/api/productos'),
       api.get('/api/unidades-medida'),
@@ -74,7 +76,7 @@ export default function Guias() {
     return { total, porAlmacen, enEsteAlmacen }
   }
 
-  useEffect(() => { cargarDatos() }, [])
+  useEffect(() => { cargarDatos() }, [periodoSel])
 
   const abrirNuevo = () => {
     setForm({ numero_guia: '', tipo_documento: 'GUIA', almacen_id: '', fecha: hoy(), proveedor: '', numero_oc: '', direccion: '', guia_remision: '', factura: '', observaciones: '', items: [LINEA_VACIA()] })

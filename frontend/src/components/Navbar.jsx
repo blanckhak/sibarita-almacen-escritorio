@@ -1,5 +1,6 @@
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { usePeriodo } from '../context/PeriodoContext'
 import Notificaciones from './Notificaciones'
 
 const colorRol = {
@@ -12,6 +13,7 @@ const colorRol = {
 
 export default function Navbar() {
   const { usuario, logout } = useAuth()
+  const { almacenes, periodosDelAlmacen, almacenSel, setAlmacenSel, periodoSel, setPeriodoSel } = usePeriodo()
   const location = useLocation()
 
   const activo = (path) =>
@@ -30,6 +32,7 @@ export default function Navbar() {
     { path: '/compras-diarias', label: 'Compras Diarias', roles: ['admin','compras'] },
     { path: '/consulta-productos', label: 'Consulta', roles: ['admin','almacen','almacenero3','mantenimiento','compras'] },
     { path: '/movimientos', label: 'Movimientos', roles: ['admin','almacen','almacenero3'] },
+    { path: '/periodos', label: 'Periodos', roles: ['admin','almacen','almacenero3','compras'] },
     { path: '/reportes',    label: 'Reportes',    roles: ['admin','almacen','almacenero3','compras'] },
     { path: '/historial',   label: 'Historial',   roles: ['admin','almacen','almacenero3','compras'] },
     { path: '/usuarios',    label: 'Usuarios',    roles: ['admin'] },
@@ -56,6 +59,28 @@ export default function Navbar() {
 
       {usuario && (
         <div className="flex items-center gap-3">
+          {/* Fase 14: selector de almacen + periodo para ver */}
+          <div className="hidden lg:flex items-center gap-1">
+            <select
+              value={almacenSel}
+              onChange={e => setAlmacenSel(e.target.value)}
+              className="bg-blue-800 text-white text-xs rounded px-1.5 py-1 border border-blue-700 focus:outline-none"
+            >
+              {almacenes.map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}
+            </select>
+            <select
+              value={periodoSel}
+              onChange={e => setPeriodoSel(e.target.value)}
+              className="bg-blue-800 text-white text-xs rounded px-1.5 py-1 border border-blue-700 focus:outline-none max-w-[160px]"
+            >
+              {periodosDelAlmacen.length === 0 && <option value="">Sin periodos</option>}
+              {periodosDelAlmacen.map(p => (
+                <option key={p.id} value={p.id}>
+                  {p.nombre}{p.estado === 'ACTIVO' ? ' (activo)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
           <Notificaciones />
           <div className="text-right hidden md:block">
             <p className="text-sm font-semibold leading-tight">{usuario.nombre}</p>

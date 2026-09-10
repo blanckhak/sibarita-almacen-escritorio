@@ -397,3 +397,39 @@ CREATE TABLE compras_diarias_detalle (
   cantidad NUMERIC(12,2) NOT NULL,
   monto_unitario NUMERIC(12,2) NOT NULL DEFAULT 0
 );
+
+-- Fase 14 (R7-a): periodos por almacen. Un periodo ACTIVO por almacen
+-- (indice unico parcial). guias / notas_salida / etiquetas llevan periodo_id.
+CREATE TABLE periodos (
+  id SERIAL PRIMARY KEY,
+  almacen_id INTEGER NOT NULL REFERENCES almacenes(id),
+  nombre VARCHAR(60) NOT NULL,
+  fecha_inicio DATE NOT NULL,
+  fecha_fin DATE,
+  estado VARCHAR(10) NOT NULL DEFAULT 'ACTIVO' CHECK (estado IN ('ACTIVO', 'CERRADO')),
+  periodo_anterior_id INTEGER REFERENCES periodos(id),
+  cerrado_por INTEGER REFERENCES usuarios(id),
+  cerrado_en TIMESTAMP,
+  reabierto_en TIMESTAMP,
+  usuario_id INTEGER REFERENCES usuarios(id),
+  creado_en TIMESTAMP DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX periodos_activo_por_almacen
+  ON periodos (almacen_id) WHERE estado = 'ACTIVO';
+
+-- Foto de stock por producto al abrir (APERTURA) y cerrar (CIERRE) un periodo.
+-- APERTURA(n+1) = CIERRE(n): arrastre de saldo (Fase 15).
+CREATE TABLE periodos_saldos (
+  id SERIAL PRIMARY KEY,
+  periodo_id INTEGER NOT NULL REFERENCES periodos(id) ON DELETE CASCADE,
+  tipo VARCHAR(10) NOT NULL CHECK (tipo IN ('APERTURA', 'CIERRE')),
+  producto_id INTEGER NOT NULL REFERENCES productos(id),
+  stock_nuevo      NUMERIC(12,3) NOT NULL DEFAULT 0,
+  stock_devolucion NUMERIC(12,3) NOT NULL DEFAULT 0,
+  UNIQUE (periodo_id, tipo, producto_id)
+);
+
+ALTER TABLE guias        ADD COLUMN periodo_id INTEGER REFERENCES periodos(id);
+ALTER TABLE notas_salida ADD COLUMN periodo_id INTEGER REFERENCES periodos(id);
+ALTER TABLE etiquetas    ADD COLUMN periodo_id INTEGER REFERENCES periodos(id);

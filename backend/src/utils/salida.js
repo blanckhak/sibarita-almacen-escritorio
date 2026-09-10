@@ -28,14 +28,14 @@ async function marcarSalida(client, etiqueta, numeroNota, usuarioId) {
 // seccion = destino. Varias lineas de la misma guia con el mismo destino y
 // la misma persona que retira quedan agrupadas en UNA sola nota (no una por
 // producto).
-async function crearNotaSalidaAutomatica(client, { guiaId, etiquetas, seccion, personaResponsable, observaciones, usuarioId }) {
+async function crearNotaSalidaAutomatica(client, { guiaId, etiquetas, seccion, personaResponsable, observaciones, usuarioId, periodoId = null }) {
   const numeroResult = await client.query(`SELECT nextval('notas_salida_numero_seq') as n`)
   const numeroNota = String(numeroResult.rows[0].n).padStart(6, '0')
 
   const notaResult = await client.query(
-    `INSERT INTO notas_salida (numero_nota, seccion, persona_responsable, motivo, guia_id, usuario_id, estado, observaciones, requiere_devolucion, fecha_salida)
-     VALUES ($1, $2, $3, 'USO_INTERNO', $4, $5, 'CERRADO', $6, false, NOW()) RETURNING *`,
-    [numeroNota, seccion, personaResponsable, guiaId, usuarioId, observaciones || null]
+    `INSERT INTO notas_salida (numero_nota, seccion, persona_responsable, motivo, guia_id, usuario_id, estado, observaciones, requiere_devolucion, fecha_salida, periodo_id)
+     VALUES ($1, $2, $3, 'USO_INTERNO', $4, $5, 'CERRADO', $6, false, NOW(), $7) RETURNING *`,
+    [numeroNota, seccion, personaResponsable, guiaId, usuarioId, observaciones || null, periodoId]
   )
   const nota = notaResult.rows[0]
 
@@ -55,14 +55,14 @@ async function crearNotaSalidaAutomatica(client, { guiaId, etiquetas, seccion, p
 // de una guia. No hay etiquetas ni inventario: cada linea guarda solo la
 // descripcion del servicio y la cantidad. seccion 'Servicios', motivo
 // USO_INTERNO, sin devolucion.
-async function crearNotaSalidaServicios(client, { guiaId, servicios, usuarioId }) {
+async function crearNotaSalidaServicios(client, { guiaId, servicios, usuarioId, periodoId = null }) {
   const numeroResult = await client.query(`SELECT nextval('notas_salida_numero_seq') as n`)
   const numeroNota = String(numeroResult.rows[0].n).padStart(6, '0')
 
   const notaResult = await client.query(
-    `INSERT INTO notas_salida (numero_nota, seccion, persona_responsable, motivo, guia_id, usuario_id, estado, requiere_devolucion, fecha_salida)
-     VALUES ($1, 'Servicios', 'SERVICIO EXTERNO', 'USO_INTERNO', $2, $3, 'CERRADO', false, NOW()) RETURNING *`,
-    [numeroNota, guiaId, usuarioId]
+    `INSERT INTO notas_salida (numero_nota, seccion, persona_responsable, motivo, guia_id, usuario_id, estado, requiere_devolucion, fecha_salida, periodo_id)
+     VALUES ($1, 'Servicios', 'SERVICIO EXTERNO', 'USO_INTERNO', $2, $3, 'CERRADO', false, NOW(), $4) RETURNING *`,
+    [numeroNota, guiaId, usuarioId, periodoId]
   )
   const nota = notaResult.rows[0]
 
