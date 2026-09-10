@@ -373,30 +373,9 @@ CREATE TABLE solicitudes_materiales_detalle (
   cantidad NUMERIC(12,2) NOT NULL
 );
 
--- Compras diarias (Fase 10, Bloque 5): log de compras del dia, ligado
--- opcionalmente a una Solicitud de Materiales. Sin flujo de estados, no toca
--- inventario ni etiquetas.
-CREATE SEQUENCE compras_diarias_numero_seq START 1;
-
-CREATE TABLE compras_diarias (
-  id SERIAL PRIMARY KEY,
-  numero_compra VARCHAR(20) NOT NULL UNIQUE,
-  fecha DATE NOT NULL,
-  oficina VARCHAR(150) NOT NULL,
-  proveedor VARCHAR(150),
-  solicitud_id INTEGER REFERENCES solicitudes_materiales(id),
-  usuario_id INTEGER REFERENCES usuarios(id),
-  fecha_registro TIMESTAMP DEFAULT NOW(),
-  observaciones TEXT
-);
-
-CREATE TABLE compras_diarias_detalle (
-  id SERIAL PRIMARY KEY,
-  compra_id INTEGER REFERENCES compras_diarias(id),
-  descripcion VARCHAR(200) NOT NULL,
-  cantidad NUMERIC(12,2) NOT NULL,
-  monto_unitario NUMERIC(12,2) NOT NULL DEFAULT 0
-);
+-- Fase 16: el modulo "Compras Diarias" (Fase 10, Bloque 5) se elimino. Esa
+-- funcion la cubre ahora el destino por linea de la guia (ALMACEN /
+-- COMPRAS_DIARIAS / OTRO). setup.js hace DROP de compras_diarias*.
 
 -- Fase 14 (R7-a): periodos por almacen. Un periodo ACTIVO por almacen
 -- (indice unico parcial). guias / notas_salida / etiquetas llevan periodo_id.

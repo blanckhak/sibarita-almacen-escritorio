@@ -18,7 +18,6 @@ const ENLACES_PRIMARIOS = [
   { path: '/inventario',    label: 'Inventario',      roles: ['admin','almacen','almacenero3','mantenimiento','compras'] },
   { path: '/guias',         label: 'Guias',           roles: ['admin','almacen','almacenero3','mantenimiento','compras'] },
   { path: '/notas-salida',  label: 'Notas de Salida', roles: ['admin','almacen','almacenero3','mantenimiento','compras'] },
-  { path: '/compras-diarias', label: 'Compras Diarias', roles: ['admin','compras'] },
   { path: '/periodos',      label: 'Periodos',        roles: ['admin','almacen','almacenero3','compras'] },
 ]
 const ENLACES_SECUNDARIOS = [

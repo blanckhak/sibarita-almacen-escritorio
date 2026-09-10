@@ -17,8 +17,6 @@ const NotasSalida        = lazy(() => import('./pages/NotasSalida'))
 const NotaSalidaDetalle  = lazy(() => import('./pages/NotaSalidaDetalle'))
 const SolicitudesMateriales = lazy(() => import('./pages/SolicitudesMateriales'))
 const SolicitudMaterialesDetalle = lazy(() => import('./pages/SolicitudMaterialesDetalle'))
-const ComprasDiarias     = lazy(() => import('./pages/ComprasDiarias'))
-const CompraDiariaDetalle = lazy(() => import('./pages/CompraDiariaDetalle'))
 const ConsultaProductos  = lazy(() => import('./pages/ConsultaProductos'))
 const EtiquetaDetalle    = lazy(() => import('./pages/EtiquetaDetalle'))
 const Usuarios           = lazy(() => import('./pages/Usuarios'))
@@ -137,18 +135,6 @@ function AppContent() {
         <Route path="/solicitudes-materiales/:id" element={
           <RutaProtegida roles={['admin', 'almacen', 'almacenero3', 'mantenimiento', 'compras']}>
             <SolicitudMaterialesDetalle />
-          </RutaProtegida>
-        } />
-
-        <Route path="/compras-diarias" element={
-          <RutaProtegida roles={['admin', 'compras']}>
-            <ComprasDiarias />
-          </RutaProtegida>
-        } />
-
-        <Route path="/compras-diarias/:id" element={
-          <RutaProtegida roles={['admin', 'compras']}>
-            <CompraDiariaDetalle />
           </RutaProtegida>
         } />
 
