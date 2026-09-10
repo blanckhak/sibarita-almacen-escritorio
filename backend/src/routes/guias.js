@@ -14,10 +14,18 @@ const DESTINOS = ['ALMACEN', 'OFICINA', 'LABORATORIO', 'OTRO']
 const DESTINOS_SALIDA_AUTO = ['OFICINA', 'LABORATORIO']
 const DESTINO_LABEL = { OFICINA: 'Oficina', LABORATORIO: 'Laboratorio' }
 
-// guia_items.cantidad y guia_item_partidas.cantidad son columnas INTEGER:
-// un decimal (ej. "1.5") reventaria como error crudo de Postgres (500), asi
-// que se rechaza aca con un 400 limpio.
-const esEnteroPositivo = (v) => Number.isInteger(Number(v)) && Number(v) > 0
+// Fase 11 (R6): guia_items.cantidad y guia_item_partidas.cantidad son
+// NUMERIC(12,3) -> se admiten fracciones por Kilo / Metro (1.2, 0.3, 3.5).
+// Se sigue rechazando aca con un 400 limpio: 0, negativos, NaN, Infinity y
+// mas de 3 decimales (antes de llegar al INSERT de Postgres).
+const MAX_DECIMALES = 3
+const esCantidadPositiva = (v) => {
+  const n = Number(v)
+  if (!Number.isFinite(n) || n <= 0) return false
+  const s = String(v).trim()
+  const dec = s.includes('.') ? (s.split('.')[1] || '').length : 0
+  return dec <= MAX_DECIMALES
+}
 
 // Consulta por almacen, producto o guia, de forma independiente o combinada (seccion 5.6, CU-04)
 router.get('/consulta/productos', verificarToken, async (req, res) => {
@@ -46,7 +54,7 @@ router.get('/consulta/productos', verificarToken, async (req, res) => {
     const result = await pool.query(`
       SELECT g.numero_guia, g.fecha, a.nombre as almacen_nombre,
              gi.id as guia_item_id, p.nombre as producto_nombre, p.categoria,
-             COALESCE(e.cantidad, gi.cantidad) as cantidad, gi.destino,
+             COALESCE(e.cantidad, gi.cantidad)::float8 as cantidad, gi.destino,
              e.id as etiqueta_id, e.codigo as etiqueta_codigo, e.estado as etiqueta_estado,
              e.condicion as etiqueta_condicion, e.ubicacion as etiqueta_ubicacion
       FROM guia_items gi
@@ -104,7 +112,7 @@ router.get('/:id', verificarToken, async (req, res) => {
     }
 
     const items = await pool.query(`
-      SELECT gi.id, gi.producto_id, gi.cantidad, gi.tipo, gi.destino, gi.destino_detalle, gi.recogido,
+      SELECT gi.id, gi.producto_id, gi.cantidad::float8 as cantidad, gi.tipo, gi.destino, gi.destino_detalle, gi.recogido,
              COALESCE(p.nombre, gi.descripcion) as producto_nombre, p.metrica as producto_metrica,
              um.nombre as unidad_medida_nombre, um.abreviatura as unidad_medida_abreviatura,
              e.id as etiqueta_id, e.codigo as etiqueta_codigo, e.estado as etiqueta_estado,
@@ -122,7 +130,7 @@ router.get('/:id', verificarToken, async (req, res) => {
     const partidasPorItem = {}
     if (itemIds.length > 0) {
       const partidas = await pool.query(
-        `SELECT id, guia_item_id, cantidad, referencia
+        `SELECT id, guia_item_id, cantidad::float8 as cantidad, referencia
          FROM guia_item_partidas WHERE guia_item_id = ANY($1::int[]) ORDER BY id`,
         [itemIds]
       )
@@ -180,8 +188,8 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
     // Linea SERVICIO (Fase 8): solo se registra e imprime -> sin destino, sin
     // partidas, sin etiqueta. Solo se valida la cantidad.
     if (it.tipo === 'SERVICIO') {
-      if (!esEnteroPositivo(it.cantidad)) {
-        return res.status(400).json({ error: 'La cantidad debe ser un entero mayor a 0 en todas las lineas' })
+      if (!esCantidadPositiva(it.cantidad)) {
+        return res.status(400).json({ error: 'La cantidad debe ser mayor a 0 (hasta 3 decimales) en todas las lineas' })
       }
       continue
     }
@@ -202,12 +210,12 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
     const tienePartidas = Array.isArray(it.partidas) && it.partidas.length > 0
     if (tienePartidas) {
       for (const pt of it.partidas) {
-        if (!esEnteroPositivo(pt.cantidad)) {
-          return res.status(400).json({ error: 'Cada partida debe tener una cantidad entera mayor a 0' })
+        if (!esCantidadPositiva(pt.cantidad)) {
+          return res.status(400).json({ error: 'Cada partida debe tener una cantidad mayor a 0 (hasta 3 decimales)' })
         }
       }
-    } else if (!esEnteroPositivo(it.cantidad)) {
-      return res.status(400).json({ error: 'La cantidad debe ser un entero mayor a 0 en todas las lineas' })
+    } else if (!esCantidadPositiva(it.cantidad)) {
+      return res.status(400).json({ error: 'La cantidad debe ser mayor a 0 (hasta 3 decimales) en todas las lineas' })
     }
   }
 
@@ -365,11 +373,13 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
           await client.query('ROLLBACK')
           return res.status(400).json({ error: `El producto "${it.producto_nombre || 'seleccionado'}" se maneja EN PARTIDA: agrega al menos una partida` })
         }
-        it.cantidad = partidas.reduce((suma, pt) => suma + Number(pt.cantidad), 0)
+        // Redondeo a 3 decimales: sumar floats (0.1 + 0.2) arrastra ruido
+        // binario que esCantidadPositiva rechazaria por "mas de 3 decimales".
+        it.cantidad = Math.round(partidas.reduce((suma, pt) => suma + Number(pt.cantidad), 0) * 1000) / 1000
       }
-      if (!esEnteroPositivo(it.cantidad)) {
+      if (!esCantidadPositiva(it.cantidad)) {
         await client.query('ROLLBACK')
-        return res.status(400).json({ error: 'La cantidad debe ser un entero mayor a 0 en todas las lineas' })
+        return res.status(400).json({ error: 'La cantidad debe ser mayor a 0 (hasta 3 decimales) en todas las lineas' })
       }
 
       // Oficina/Laboratorio marcado "ya recogido" pero SIN indicar quien retira:
@@ -594,8 +604,8 @@ router.put('/:id', verificarToken, soloRoles('admin', 'almacen'),
 
   const editItems = Array.isArray(items) ? items : []
   for (const it of editItems) {
-    if (!it || it.id === undefined || !esEnteroPositivo(it.cantidad)) {
-      return res.status(400).json({ error: 'Cada linea a editar necesita un id y una cantidad entera mayor a 0' })
+    if (!it || it.id === undefined || !esCantidadPositiva(it.cantidad)) {
+      return res.status(400).json({ error: 'Cada linea a editar necesita un id y una cantidad mayor a 0 (hasta 3 decimales)' })
     }
   }
 

@@ -2011,6 +2011,22 @@ comun; R7 va ultimo porque consume todo lo anterior.
   7 columnas; permite_decimal correcto. La BD de dev esta vacia (sin datos
   historicos que revisar); la conversion es widening losless para la BD
   real al instalar.
+- Paso 11.3 + 11.4 HECHO (10/09): backend acepta y devuelve cantidades
+  decimales.
+  * guias.js: esEnteroPositivo -> esCantidadPositiva (acepta hasta 3
+    decimales; sigue rechazando 0, negativos, NaN, Infinity y >3 decimales
+    con 400 limpio). Mensajes "entero mayor a 0" -> "mayor a 0 (hasta 3
+    decimales)". La suma de partidas EN_PARTIDA se redondea a 3 decimales
+    (evita ruido binario 0.1+0.2 que la validacion rechazaria).
+  * Casts ::int -> ::float8 en las agregaciones/COALESCE de cantidad que
+    consume el front (SUM de NUMERIC vuelve string en node-pg y ::int
+    truncaria): notasSalida.js (stock_agregado_actual, detalle
+    cantidad/devuelto_cantidad, POST create), guias.js (/consulta,
+    GET/:id items + partidas), dashboard.js (total_movido), reportes.js
+    (unidades, kardex cantidad + 'cant'), etiquetas.js (lista, detalle,
+    transferencia). inventario.js/alertas.js NO se tocan: SUM(int) ya
+    devolvia bigint=string, el front ya lo maneja.
+  * node -c OK en los 5 archivos.
 
 QUE QUEDA PENDIENTE (revision del proyecto, 31/08):
 - Fase 1 - Calibracion de impresion matricial (Bloque 2 "6 lineas" +

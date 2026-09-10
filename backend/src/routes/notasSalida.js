@@ -60,7 +60,10 @@ router.get('/:id', verificarToken, async (req, res) => {
     }
 
     const detalle = await pool.query(`
-      SELECT d.*, e.codigo as etiqueta_codigo, e.estado as etiqueta_estado,
+      SELECT d.*,
+             d.cantidad::float8 as cantidad,
+             d.devuelto_cantidad::float8 as devuelto_cantidad,
+             e.codigo as etiqueta_codigo, e.estado as etiqueta_estado,
              e.condicion as etiqueta_condicion, e.almacen_id,
              p.nombre as producto_nombre, a.nombre as almacen_nombre,
              um.abreviatura as unidad_medida_abreviatura,
@@ -69,7 +72,7 @@ router.get('/:id', verificarToken, async (req, res) => {
              en.codigo as etiqueta_devuelta_codigo,
              -- Stock actual del producto en ese almacen (Fase 9, Bloque 7):
              -- lo que queda hoy, no una foto al momento de la salida.
-             (SELECT COALESCE(SUM(i.cantidad), 0)::int FROM inventario i
+             (SELECT COALESCE(SUM(i.cantidad), 0)::float8 FROM inventario i
                 WHERE i.almacen_id = e.almacen_id AND i.producto_id = e.producto_id) as stock_agregado_actual,
              (SELECT COUNT(*)::int FROM etiquetas e2
                 WHERE e2.almacen_id = e.almacen_id AND e2.producto_id = e.producto_id
@@ -121,7 +124,7 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen'),
 
     const etiquetas = await client.query(`
       SELECT e.id, e.estado, e.almacen_id, e.producto_id, e.codigo, e.condicion,
-             COALESCE(e.cantidad, gi.cantidad) as cantidad, gi.guia_id
+             COALESCE(e.cantidad, gi.cantidad)::float8 as cantidad, gi.guia_id
       FROM etiquetas e
       JOIN guia_items gi ON e.guia_item_id = gi.id
       WHERE e.id = ANY($1::int[])
