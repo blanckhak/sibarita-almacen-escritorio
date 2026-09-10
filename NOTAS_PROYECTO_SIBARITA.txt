@@ -2335,6 +2335,28 @@ guia nueva -> periodo_id 1; GET /api/guias?periodo_id=1 -> todas con ese
 periodo; 2do periodo activo mismo almacen -> 409. setup corrido 2x sin
 error. Datos de prueba: guia TEST-F14-...
 
+AJUSTES 14.b (pedido del usuario, image11.png: cuadro rojo = navbar muy
+junto, cuadro azul = el selector de periodo deberia llevar a ver los
+productos del periodo + Excel):
+- Navbar.jsx reordenado: enlaces PRIMARIOS siempre visibles (Dashboard,
+  Inventario, Guias, Notas de Salida, Compras Diarias, Periodos) + menu
+  "Mas v" (click, cierra al hacer click afuera o al navegar) con el resto
+  (Almacenes, Catalogo, Solicitud Materiales, Consulta, Movimientos,
+  Reportes, Historial, Usuarios, Duplicados, Configuracion). El selector
+  [Almacen][Periodo] va separado por un borde, con label "PERIODO" y un
+  poco mas grande.
+- Backend: GET /api/reportes/periodo?periodo_id= -> por producto: apertura
+  (nuevo/devol), ingresos (guias del periodo), salidas (notas del periodo
+  que ya salieron), y stock actual (el vivo si ACTIVO, la foto de CIERRE
+  si CERRADO). CTE con productos_periodo = union de todos.
+- Frontend: Periodos.jsx gana columna "Ver productos" -> modal con la
+  tabla (Apertura / Ingresos / Salidas / Stock / Mov. neto) + boton
+  "Exportar Excel" (nuevo utils/periodoExcel.js, SpreadsheetML sin
+  dependencias, mismo enfoque que kardexExcel.js).
+- Probado: GET /api/reportes/periodo?periodo_id=1 devuelve 7 productos con
+  apertura/ingresos/salidas/stock coherentes (ej. CABLE PRUEBA DECIMAL:
+  ing 3.5, sal 3.5, stock_devolucion 3 de la devolucion parcial).
+
 PENDIENTE 14.7: bump instalador 1.8.0 + merge (al final).
 
 PENDIENTE NUEVO (10/09, de para giarse/):

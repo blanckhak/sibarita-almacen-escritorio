@@ -3,6 +3,8 @@ import api from '../utils/api'
 import { useAuth } from '../context/AuthContext'
 import { usePeriodo } from '../context/PeriodoContext'
 import { hoyLocal } from '../utils/fecha'
+import { fmtCantidad } from '../utils/fmt'
+import { exportarProductosPeriodo } from '../utils/periodoExcel'
 
 // Fase 14 (R7-a): listado de periodos por almacen + abrir el primer periodo de
 // un almacen que todavia no tiene ninguno. Cerrar / reabrir / export / purga
@@ -14,6 +16,9 @@ export default function Periodos() {
   const [mensaje, setMensaje]   = useState(null)
   const [form, setForm] = useState(null) // { almacen_id, nombre, fecha_inicio }
   const [guardando, setGuardando] = useState(false)
+  // Productos del periodo (panel + export Excel)
+  const [verProductos, setVerProductos] = useState(null) // { periodo, cerrado, productos }
+  const [cargandoProd, setCargandoProd] = useState(false)
 
   const puedeAbrir = ['admin', 'almacen', 'almacenero3'].includes(usuario?.rol)
 
@@ -40,6 +45,21 @@ export default function Periodos() {
     } finally {
       setGuardando(false)
       setTimeout(() => setMensaje(null), 4000)
+    }
+  }
+
+  const abrirProductos = async (p) => {
+    setCargandoProd(true)
+    setVerProductos({ periodo: p, cerrado: p.estado === 'CERRADO', productos: null })
+    try {
+      const { data } = await api.get('/api/reportes/periodo', { params: { periodo_id: p.id } })
+      setVerProductos(data)
+    } catch (err) {
+      setMensaje({ tipo: 'error', texto: err.response?.data?.error || 'No se pudieron cargar los productos' })
+      setVerProductos(null)
+      setTimeout(() => setMensaje(null), 4000)
+    } finally {
+      setCargandoProd(false)
     }
   }
 
@@ -123,11 +143,12 @@ export default function Periodos() {
               <th className="px-4 py-3 text-left">Estado</th>
               <th className="px-4 py-3 text-right">Guias</th>
               <th className="px-4 py-3 text-right">Notas</th>
+              <th className="px-4 py-3 text-right">Productos</th>
             </tr>
           </thead>
           <tbody>
             {periodos.length === 0 && (
-              <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">No hay periodos todavia</td></tr>
+              <tr><td colSpan={7} className="px-4 py-6 text-center text-gray-400">No hay periodos todavia</td></tr>
             )}
             {periodos.map((p, i) => (
               <tr key={p.id} className={i % 2 ? 'bg-gray-50' : 'bg-white'}>
@@ -141,11 +162,89 @@ export default function Periodos() {
                 </td>
                 <td className="px-4 py-3 text-right">{p.total_guias}</td>
                 <td className="px-4 py-3 text-right">{p.total_notas}</td>
+                <td className="px-4 py-3 text-right">
+                  <button
+                    onClick={() => abrirProductos(p)}
+                    className="text-sm border border-blue-200 text-blue-700 rounded-lg px-3 py-1.5 hover:bg-blue-50 transition"
+                  >
+                    Ver productos
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {verProductos && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setVerProductos(null)}>
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-800">
+                  Productos del periodo — {verProductos.periodo.almacen_nombre} · {verProductos.periodo.nombre}
+                </h2>
+                <p className="text-xs text-gray-500">
+                  {verProductos.cerrado ? 'Periodo CERRADO: se muestra la foto de cierre.' : 'Periodo ACTIVO: el stock es el actual.'}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => exportarProductosPeriodo(verProductos)}
+                  disabled={!verProductos.productos || verProductos.productos.length === 0}
+                  className="bg-green-700 hover:bg-green-800 text-white text-sm px-4 py-2 rounded-lg font-medium disabled:opacity-50"
+                >
+                  Exportar Excel
+                </button>
+                <button onClick={() => setVerProductos(null)} className="border border-gray-300 text-gray-700 text-sm px-4 py-2 rounded-lg hover:bg-gray-50">
+                  Cerrar
+                </button>
+              </div>
+            </div>
+            <div className="overflow-auto">
+              {cargandoProd || !verProductos.productos ? (
+                <div className="p-8 text-center text-gray-400">Cargando productos...</div>
+              ) : verProductos.productos.length === 0 ? (
+                <div className="p-8 text-center text-gray-400">Sin productos en este periodo</div>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-100 text-gray-600 sticky top-0">
+                    <tr>
+                      <th className="px-3 py-2 text-left">Producto</th>
+                      <th className="px-3 py-2 text-left">Unid.</th>
+                      <th className="px-3 py-2 text-right">Apertura</th>
+                      <th className="px-3 py-2 text-right">Ingresos</th>
+                      <th className="px-3 py-2 text-right">Salidas</th>
+                      <th className="px-3 py-2 text-right">{verProductos.cerrado ? 'Cierre' : 'Stock actual'}</th>
+                      <th className="px-3 py-2 text-right">Mov. neto</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {verProductos.productos.map(p => {
+                      const apertura = Number(p.apertura_nuevo) + Number(p.apertura_devolucion)
+                      const stock = Number(p.stock_nuevo) + Number(p.stock_devolucion)
+                      const mov = Math.round((stock - apertura) * 1000) / 1000
+                      return (
+                        <tr key={p.producto_id} className="border-b border-gray-100">
+                          <td className="px-3 py-2 text-gray-800">{p.producto_nombre}</td>
+                          <td className="px-3 py-2 text-gray-500">{p.unidad || '—'}</td>
+                          <td className="px-3 py-2 text-right">{fmtCantidad(apertura)}</td>
+                          <td className="px-3 py-2 text-right text-green-700">{fmtCantidad(p.ingresos)}</td>
+                          <td className="px-3 py-2 text-right text-red-700">{fmtCantidad(p.salidas)}</td>
+                          <td className="px-3 py-2 text-right font-semibold">{fmtCantidad(stock)}</td>
+                          <td className={`px-3 py-2 text-right ${mov < 0 ? 'text-red-700' : mov > 0 ? 'text-green-700' : 'text-gray-400'}`}>
+                            {mov > 0 ? '+' : ''}{fmtCantidad(mov)}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

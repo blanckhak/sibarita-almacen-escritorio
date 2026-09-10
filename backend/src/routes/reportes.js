@@ -129,4 +129,78 @@ router.get('/kardex', verificarToken, async (req, res) => {
   }
 })
 
+// Fase 14/15: productos de un periodo. Por producto: apertura (foto del inicio),
+// ingresos (guias del periodo), salidas (notas del periodo que ya salieron) y
+// stock actual -> el vivo si el periodo esta ACTIVO, o la foto de CIERRE si ya
+// esta CERRADO. Alimenta la tabla y el export a Excel de la pantalla Periodos.
+router.get('/periodo', verificarToken, async (req, res) => {
+  const { periodo_id } = req.query
+  if (!periodo_id) return res.status(400).json({ error: 'periodo_id requerido' })
+  try {
+    const per = await pool.query('SELECT * FROM periodos WHERE id = $1', [periodo_id])
+    if (per.rows.length === 0) return res.status(404).json({ error: 'Periodo no encontrado' })
+    const p = per.rows[0]
+    const cerrado = p.estado === 'CERRADO'
+
+    const r = await pool.query(`
+      WITH apertura AS (
+        SELECT producto_id, stock_nuevo, stock_devolucion
+        FROM periodos_saldos WHERE periodo_id = $1 AND tipo = 'APERTURA'
+      ),
+      cierre AS (
+        SELECT producto_id, stock_nuevo, stock_devolucion
+        FROM periodos_saldos WHERE periodo_id = $1 AND tipo = 'CIERRE'
+      ),
+      ingresos AS (
+        SELECT gi.producto_id, SUM(gi.cantidad)::float8 AS cant
+        FROM guia_items gi JOIN guias g ON gi.guia_id = g.id
+        WHERE g.periodo_id = $1 AND gi.tipo = 'PRODUCTO' AND g.estado <> 'ANULADA'
+        GROUP BY gi.producto_id
+      ),
+      salidas AS (
+        SELECT e.producto_id, SUM(d.cantidad)::float8 AS cant
+        FROM notas_salida_detalle d
+        JOIN notas_salida n ON d.nota_salida_id = n.id
+        JOIN etiquetas e ON d.etiqueta_id = e.id
+        WHERE n.periodo_id = $1 AND n.fecha_salida IS NOT NULL
+        GROUP BY e.producto_id
+      ),
+      stock_vivo AS (
+        SELECT producto_id,
+               COALESCE(SUM(cantidad) FILTER (WHERE tipo = 'NUEVO'), 0)::float8 AS nuevo,
+               COALESCE(SUM(cantidad) FILTER (WHERE tipo = 'DEVOLUCION'), 0)::float8 AS devol
+        FROM inventario WHERE almacen_id = $2 AND producto_id IS NOT NULL
+        GROUP BY producto_id
+      ),
+      productos_periodo AS (
+        SELECT producto_id FROM apertura
+        UNION SELECT producto_id FROM cierre
+        UNION SELECT producto_id FROM ingresos
+        UNION SELECT producto_id FROM salidas
+        UNION SELECT producto_id FROM stock_vivo
+      )
+      SELECT pp.producto_id, pr.nombre AS producto_nombre, um.abreviatura AS unidad,
+             COALESCE(a.stock_nuevo, 0)::float8       AS apertura_nuevo,
+             COALESCE(a.stock_devolucion, 0)::float8  AS apertura_devolucion,
+             COALESCE(i.cant, 0)                      AS ingresos,
+             COALESCE(s.cant, 0)                      AS salidas,
+             (CASE WHEN $3::boolean THEN COALESCE(c.stock_nuevo, 0)      ELSE COALESCE(sv.nuevo, 0) END)::float8 AS stock_nuevo,
+             (CASE WHEN $3::boolean THEN COALESCE(c.stock_devolucion, 0) ELSE COALESCE(sv.devol, 0) END)::float8 AS stock_devolucion
+      FROM productos_periodo pp
+      JOIN productos pr ON pr.id = pp.producto_id
+      LEFT JOIN unidades_medida um ON pr.unidad_medida_id = um.id
+      LEFT JOIN apertura   a  ON a.producto_id  = pp.producto_id
+      LEFT JOIN cierre     c  ON c.producto_id  = pp.producto_id
+      LEFT JOIN ingresos   i  ON i.producto_id  = pp.producto_id
+      LEFT JOIN salidas    s  ON s.producto_id  = pp.producto_id
+      LEFT JOIN stock_vivo sv ON sv.producto_id = pp.producto_id
+      ORDER BY pr.nombre
+    `, [periodo_id, p.almacen_id, cerrado])
+
+    res.json({ periodo: p, cerrado, productos: r.rows, generado_en: new Date().toISOString() })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 module.exports = router
