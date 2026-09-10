@@ -1949,6 +1949,57 @@ DATOS DE PRUEBA DEJADOS EN sibarita_db (02/09, se pueden anular/limpiar):
   (admin@sibarita.com / admin123) para probar que el detalle ya no
   muestra precio.
 
+--------------------------------------------------
+22. PLAN DE FASES 11-15 (nuevo pedido del usuario, 10/09/2026)
+--------------------------------------------------
+Nuevo lote de requerimientos (notas manuscritas transcritas por el
+usuario). Documento completo: PLAN_cambios_almacen_guias.md (raiz del
+proyecto): estructura de BD, endpoints, maquetas y desglose paso a paso.
+
+Requerimientos y decisiones tomadas con el usuario:
+- R1 Impresion parametrizada (Ingreso/Salida): catalogo parametros_impresion
+  + wrap de la descripcion a 2 lineas en la columna DETALLE.
+- R2 Forma de pago (B/v, RH, tk, Otro): DESCARTADO por el usuario, no se hace.
+- R3 Servicios: EXTERNO -> genera su Nota de Salida automatica (sin mover
+  inventario). INTERNO -> genera codigo unico, queda retenido en almacen,
+  no ajusta inventario. Columna guia_items.servicio_modo.
+- R4 guia_items: id_agrupador (mismo ID en varias lineas), observaciones,
+  codigo_impresion (etiqueta a imprimir SIN tocar etiquetas.codigo ni el
+  codigo de barras). guias.observaciones (corrige bug: la impresion ya lo
+  referenciaba y la columna no existia). Edicion manual de ID/codigo antes
+  de imprimir.
+- R5 Destinos OFICINA + LABORATORIO -> se unifican en COMPRAS_DIARIAS.
+  Nuevo rol 'almacenero3' = copia completa de permisos de 'almacen'.
+- R6 Cantidades por Kilo/Metro con decimales: INTEGER -> NUMERIC(12,3) en
+  guia_items, guia_item_partidas, etiquetas, notas_salida_detalle
+  (cantidad + devuelto_cantidad), inventario, movimientos.
+  unidades_medida.permite_decimal. Devolucion parcial: cobra solo lo
+  consumido (notas_salida_detalle.cantidad_consumida / total_consumido),
+  codigo reingresado con condicion 'PARCIAL'.
+- R7 Periodos: entidad 'periodos' + 'periodos_saldos'. Un periodo ACTIVO
+  por almacen (indice unico parcial). guias/notas_salida/etiquetas llevan
+  periodo_id. Al cerrar un periodo: foto CIERRE = inventario, se crea el
+  periodo siguiente ACTIVO con APERTURA = CIERRE anterior (arrastre de
+  saldo). Periodo CERRADO = solo lectura; admin puede reabrir y recerrar.
+  Cierre general (todos los almacenes) + purga de temporales con dry_run
+  y respaldo .xlsx previo. Alcance por almacen ASUMIDO (falta confirmar si
+  se quiere periodo global unico).
+
+Orden de fases (instalador hoy 1.5.0):
+  Fase 11 -> 1.6.0  : R6 decimales + R4 ID/observaciones/codigo manual
+  Fase 12 -> 1.7.0  : R5 rol almacenero3 + rename destinos COMPRAS_DIARIAS
+  Fase 13 -> 1.8.0  : R3 servicios interno/externo + R1 impresion parametrizada
+  Fase 14 -> 1.9.0  : R7-a periodos (entidad + periodo activo + filtro vistas)
+  Fase 15 -> 1.10.0 : R7-b cierre + arrastre + reabrir + cierre general + purga
+R6 va primero porque las columnas de cantidad y los validadores son base
+comun; R7 va ultimo porque consume todo lo anterior.
+
+--- EN CURSO: Fase 11 (rama fase-11-decimales) ---
+- Paso 11.1 HECHO (10/09): rama fase-11-decimales creada; backup de la BD
+  con scripts/backup-db.ps1 -> backups/sibarita_db_20260910_114441.sql
+  (exit 0, copiado a OneDrive). node -c de server.js y setup.js OK.
+  PLAN_cambios_almacen_guias.md agregado a la raiz.
+
 QUE QUEDA PENDIENTE (revision del proyecto, 31/08):
 - Fase 1 - Calibracion de impresion matricial (Bloque 2 "6 lineas" +
   Bloque 6 impresora Epson FX-890 II): BLOQUEADA esperando que el usuario
