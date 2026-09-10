@@ -70,18 +70,20 @@ router.get('/:id', verificarToken, async (req, res) => {
   }
 })
 
-// POST /api/periodos  { almacen_id, nombre, fecha_inicio }
+// POST /api/periodos  { almacen_id, nombre?, fecha_inicio? }
 // Abre el PRIMER periodo de un almacen que todavia no tiene uno ACTIVO. Los
 // periodos siguientes los crea el cierre (Fase 15), no este endpoint.
+// Fase 16: nombre y fecha_inicio son opcionales. Sin nombre -> "Periodo N"
+// (N = cantidad de periodos del almacen + 1). Sin fecha -> hoy.
 router.post('/', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
-  log('CREAR_PERIODO', req => `Almacen ${req.body.almacen_id}, ${req.body.nombre}`),
+  log('CREAR_PERIODO', req => `Almacen ${req.body.almacen_id}`),
   async (req, res) => {
   const { almacen_id, nombre, fecha_inicio } = req.body
   if (!almacen_id) return res.status(400).json({ error: 'El almacen es requerido' })
-  if (!nombre || !nombre.trim()) return res.status(400).json({ error: 'El nombre del periodo es requerido' })
-  if (!fecha_inicio) return res.status(400).json({ error: 'La fecha de inicio es requerida' })
-  const errLargo = validarLargos({ 'nombre del periodo': [nombre, 60] })
-  if (errLargo) return res.status(400).json({ error: errLargo })
+  if (nombre && nombre.trim()) {
+    const errLargo = validarLargos({ 'nombre del periodo': [nombre, 60] })
+    if (errLargo) return res.status(400).json({ error: errLargo })
+  }
 
   const client = await pool.connect()
   try {
@@ -94,10 +96,15 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
       await client.query('ROLLBACK')
       return res.status(409).json({ error: 'Ese almacen ya tiene un periodo activo' })
     }
+    let nombreFinal = (nombre || '').trim()
+    if (!nombreFinal) {
+      const cuenta = await client.query('SELECT COUNT(*)::int n FROM periodos WHERE almacen_id = $1', [almacen_id])
+      nombreFinal = `Periodo ${cuenta.rows[0].n + 1}`
+    }
     const per = await client.query(
       `INSERT INTO periodos (almacen_id, nombre, fecha_inicio, estado, usuario_id)
-       VALUES ($1, $2, $3, 'ACTIVO', $4) RETURNING *`,
-      [almacen_id, nombre.trim(), fecha_inicio, req.usuario.id]
+       VALUES ($1, $2, COALESCE($3::date, CURRENT_DATE), 'ACTIVO', $4) RETURNING *`,
+      [almacen_id, nombreFinal, fecha_inicio || null, req.usuario.id]
     )
     // APERTURA = foto actual del inventario del almacen.
     await client.query(

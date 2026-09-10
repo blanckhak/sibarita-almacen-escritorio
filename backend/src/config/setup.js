@@ -539,13 +539,18 @@ async function setup() {
     ALTER TABLE guias        ADD COLUMN IF NOT EXISTS periodo_id INTEGER REFERENCES periodos(id);
     ALTER TABLE notas_salida ADD COLUMN IF NOT EXISTS periodo_id INTEGER REFERENCES periodos(id);
     ALTER TABLE etiquetas    ADD COLUMN IF NOT EXISTS periodo_id INTEGER REFERENCES periodos(id);
+
+    -- Fase 16: los periodos se numeran "Periodo 1", "Periodo 2"... El primero
+    -- se llamaba "Periodo inicial"; se renombra a "Periodo 1" para que la
+    -- secuencia sea uniforme (el cierre ya nombra el siguiente "Periodo N+1").
+    UPDATE periodos SET nombre = 'Periodo 1' WHERE nombre = 'Periodo inicial';
   `)
 
   // Fase 14: backfill. Corre una sola vez (guarda: no hay periodos todavia).
-  // Por cada almacen crea un "Periodo inicial" ACTIVO (desde la guia mas
-  // antigua o hoy) y engancha las guias / notas / etiquetas existentes. La
-  // APERTURA del periodo inicial = foto actual de inventario (asi el
-  // movimiento del periodo arranca en 0 desde ahora).
+  // Por cada almacen crea un "Periodo 1" ACTIVO (desde la guia mas antigua o
+  // hoy) y engancha las guias / notas / etiquetas existentes. La APERTURA del
+  // primer periodo = foto actual de inventario (asi el movimiento del periodo
+  // arranca en 0 desde ahora).
   const hayPeriodos = await pool.query('SELECT 1 FROM periodos LIMIT 1')
   if (hayPeriodos.rows.length === 0) {
     const almacenes = await pool.query('SELECT id FROM almacenes ORDER BY id')
@@ -556,7 +561,7 @@ async function setup() {
       )
       const per = await pool.query(
         `INSERT INTO periodos (almacen_id, nombre, fecha_inicio, estado)
-         VALUES ($1, 'Periodo inicial', $2, 'ACTIVO') RETURNING id`,
+         VALUES ($1, 'Periodo 1', $2, 'ACTIVO') RETURNING id`,
         [alm.id, desde.rows[0].d]
       )
       const periodoId = per.rows[0].id

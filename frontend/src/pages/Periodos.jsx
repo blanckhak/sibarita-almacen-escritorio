@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import api from '../utils/api'
 import { useAuth } from '../context/AuthContext'
 import { usePeriodo } from '../context/PeriodoContext'
-import { hoyLocal } from '../utils/fecha'
 import { fmtCantidad } from '../utils/fmt'
 import { exportarProductosPeriodo } from '../utils/periodoExcel'
 
@@ -14,7 +13,7 @@ export default function Periodos() {
   const { periodos, almacenes, recargarPeriodos } = usePeriodo()
   const [cargando, setCargando] = useState(true)
   const [mensaje, setMensaje]   = useState(null)
-  const [form, setForm] = useState(null) // { almacen_id, nombre, fecha_inicio }
+  const [form, setForm] = useState(null) // { almacen_id }
   const [guardando, setGuardando] = useState(false)
   // Productos del periodo (panel + export Excel)
   const [verProductos, setVerProductos] = useState(null) // { periodo, cerrado, productos }
@@ -55,14 +54,10 @@ export default function Periodos() {
   )
 
   const abrir = async () => {
-    if (!form?.almacen_id || !form.nombre.trim() || !form.fecha_inicio) return
+    if (!form?.almacen_id) return
     setGuardando(true)
     try {
-      await api.post('/api/periodos', {
-        almacen_id: Number(form.almacen_id),
-        nombre: form.nombre.trim(),
-        fecha_inicio: form.fecha_inicio,
-      })
+      await api.post('/api/periodos', { almacen_id: Number(form.almacen_id) })
       setMensaje({ tipo: 'ok', texto: 'Periodo abierto' })
       setForm(null)
       await recargarPeriodos()
@@ -102,7 +97,7 @@ export default function Periodos() {
         </div>
         {puedeAbrir && almacenesSinActivo.length > 0 && !form && (
           <button
-            onClick={() => setForm({ almacen_id: String(almacenesSinActivo[0].id), nombre: '', fecha_inicio: hoyLocal() })}
+            onClick={() => setForm({ almacen_id: String(almacenesSinActivo[0].id) })}
             className="bg-blue-700 hover:bg-blue-800 text-white text-sm px-4 py-2 rounded-lg font-medium"
           >
             Abrir periodo
@@ -118,9 +113,14 @@ export default function Periodos() {
 
       {form && (
         <div className="bg-white rounded-xl shadow p-5 mb-6 border border-blue-100">
-          <h2 className="text-lg font-semibold text-gray-700 mb-3">Abrir periodo</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
+          <h2 className="text-lg font-semibold text-gray-700 mb-1">Abrir periodo</h2>
+          <p className="text-xs text-gray-500 mb-3">
+            Se abre el primer periodo del almacen. El nombre es automatico
+            (<b>Periodo 1</b>, luego <b>Periodo 2</b>...) y la fecha de inicio es hoy.
+            Los periodos siguientes se crean solos al cerrar el anterior.
+          </p>
+          <div className="flex items-end gap-3 flex-wrap">
+            <div className="min-w-[220px]">
               <label className="block text-xs font-medium text-gray-500 mb-1">Almacen</label>
               <select
                 value={form.almacen_id}
@@ -130,30 +130,9 @@ export default function Periodos() {
                 {almacenesSinActivo.map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}
               </select>
             </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Nombre del periodo</label>
-              <input
-                value={form.nombre}
-                onChange={e => setForm(f => ({ ...f, nombre: e.target.value.toUpperCase() }))}
-                maxLength={60}
-                placeholder="Ej: Periodo 1 - 2026"
-                className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Fecha de inicio</label>
-              <input
-                type="date"
-                value={form.fecha_inicio}
-                onChange={e => setForm(f => ({ ...f, fecha_inicio: e.target.value }))}
-                className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-          </div>
-          <div className="flex justify-end gap-2 mt-4">
             <button onClick={() => setForm(null)} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">Cancelar</button>
             <button onClick={abrir} disabled={guardando} className="px-5 py-2 text-sm bg-blue-700 text-white rounded-lg hover:bg-blue-800 disabled:opacity-50">
-              {guardando ? 'Abriendo...' : 'Abrir'}
+              {guardando ? 'Abriendo...' : 'Abrir periodo'}
             </button>
           </div>
         </div>
