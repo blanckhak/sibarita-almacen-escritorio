@@ -2130,6 +2130,24 @@ comun; R7 va ultimo porque consume todo lo anterior.
     llena a mano), dodne se colocara el contenido.png (anotacion del
     usuario marcando la zona DETALLE).
 
+- Paso 11.11 HECHO (10/09): cierre de la Fase 11.
+  * package.json (raiz) "version" 1.5.0 -> 1.6.0; package-lock.json
+    resincronizado (lineas 3 y 9). El .exe NO se regenero todavia (queda
+    para cuando el usuario quiera empaquetar: npm run build en frontend/,
+    reemplazar backend/frontend-dist, npm run build electron-builder).
+  * Rama fase-11-decimales (12 commits, R6 + R4) mergeada a master con
+    --no-ff. Resumen de lo que entra: NUMERIC(12,3) en las 7 columnas de
+    cantidad + unidades_medida.permite_decimal; validadores decimales;
+    casts ::float8; devolucion parcial que cobra solo lo consumido
+    (cantidad_consumida / total_consumido); id_agrupador / observaciones /
+    codigo_impresion en guia_items + guias.observaciones; "Revisar antes
+    de imprimir"; Nota de Ingreso con la celda DETALLE enriquecida
+    (ITEM n+ID, ubicacion, motivo, codigo a imprimir).
+  * Datos de prueba dejados en sibarita_db (borrables): guia TEST-DEC-...
+    (id 1, CABLE PRUEBA DECIMAL 3.5 M, cod 9001->9002), Nota de Salida
+    000001 con devolucion parcial, guia TEST-R4-... (id 2, IDs A1/A1/B2,
+    codigo_impresion MANUAL-001).
+
 PENDIENTE NUEVO (10/09, de para giarse/):
 - Formato "NOTA DE INGRESO DE ACTIVOS - DESUSO" (para giarse/desuso.png,
   N. 001383): documento fisico APARTE para material usado / que vuelve a
