@@ -43,6 +43,11 @@ export default function GuiaDetalle() {
   const [personaRetira, setPersonaRetira] = useState('')
   const [retiraObs, setRetiraObs]         = useState('')
   const [procesandoRetiro, setProcesandoRetiro] = useState(false)
+  // Fase 11 (R4): revisar ID / codigo a imprimir por linea justo antes de
+  // imprimir la Nota de Ingreso.
+  const [revisando, setRevisando] = useState(false)
+  const [revItems, setRevItems]   = useState([])
+  const [guardandoRev, setGuardandoRev] = useState(false)
 
   const puedeImprimir = ['admin', 'almacen'].includes(usuario?.rol)
   const puedeEditar = ['admin', 'almacen'].includes(usuario?.rol)
@@ -99,9 +104,12 @@ export default function GuiaDetalle() {
       guia_remision: guia.guia_remision || '',
       factura: guia.factura || '',
       tipo_documento: guia.tipo_documento || 'GUIA',
+      observaciones: guia.observaciones || '',
       // Fase 8: correccion de cantidad por linea. Una linea no se puede editar
       // si su producto es EN_PARTIDA (cantidad = suma de partidas) o si su
       // codigo ya salio del almacen.
+      // Fase 11 (R4): id_agrupador / observaciones / codigo_impresion por linea
+      // se editan siempre (no afectan stock).
       items: guia.items.map(it => {
         const bloqueadaPartida = it.producto_metrica === 'EN_PARTIDA' && it.tipo !== 'SERVICIO'
         const bloqueadaSalida = it.etiqueta_id && it.etiqueta_estado !== 'EN_ALMACEN'
@@ -115,6 +123,10 @@ export default function GuiaDetalle() {
           motivo: bloqueadaPartida
             ? 'cantidad por partidas'
             : bloqueadaSalida ? `codigo ${it.etiqueta_codigo} ya salio` : null,
+          id_agrupador: it.id_agrupador || '',
+          observaciones: it.observaciones || '',
+          codigo_impresion: it.codigo_impresion || '',
+          r4Original: `${it.id_agrupador || ''}|${it.observaciones || ''}|${it.codigo_impresion || ''}`,
         }
       }),
     })
@@ -181,13 +193,27 @@ export default function GuiaDetalle() {
     e.preventDefault()
     setGuardandoEdicion(true)
     try {
+      // Se manda una linea si cambio la cantidad (solo si es editable) o si
+      // cambio algun campo R4 (id_agrupador / observacion / codigo_impresion,
+      // que se pueden editar siempre). El backend exige cantidad en cada item.
       const itemsCambiados = formEdicion.items
-        .filter(li => li.editable && Number(li.cantidad) > 0 && Number(li.cantidad) !== li.cantidadOriginal)
-        .map(li => ({ id: li.id, cantidad: Number(li.cantidad) }))
+        .filter(li => {
+          const cantCambio = li.editable && Number(li.cantidad) > 0 && Number(li.cantidad) !== li.cantidadOriginal
+          const r4Cambio = `${li.id_agrupador}|${li.observaciones}|${li.codigo_impresion}` !== li.r4Original
+          return cantCambio || r4Cambio
+        })
+        .map(li => ({
+          id: li.id,
+          cantidad: li.editable && Number(li.cantidad) > 0 ? Number(li.cantidad) : li.cantidadOriginal,
+          id_agrupador: li.id_agrupador,
+          observaciones: li.observaciones,
+          codigo_impresion: li.codigo_impresion,
+        }))
 
-      // Guia CERRADA: el backend solo admite numero_oc / estado / items.
+      // Guia CERRADA: el backend solo admite numero_oc / estado / items /
+      // observaciones (y los campos R4 por linea).
       const body = cerrada
-        ? { numero_oc: formEdicion.numero_oc, estado: formEdicion.estado, items: itemsCambiados }
+        ? { numero_oc: formEdicion.numero_oc, estado: formEdicion.estado, observaciones: formEdicion.observaciones, items: itemsCambiados }
         : {
             proveedor: formEdicion.proveedor,
             numero_oc: formEdicion.numero_oc,
@@ -196,6 +222,7 @@ export default function GuiaDetalle() {
             guia_remision: formEdicion.guia_remision,
             factura: formEdicion.factura,
             tipo_documento: formEdicion.tipo_documento,
+            observaciones: formEdicion.observaciones,
             items: itemsCambiados,
           }
       await api.put(`/api/guias/${id}`, body)
@@ -233,7 +260,51 @@ export default function GuiaDetalle() {
     setVistaImpresion('etiquetas')
   }
 
-  const handleImprimirNota = () => setVistaImpresion('nota')
+  // Fase 11 (R4): abre el repaso de ID / codigo a imprimir antes de mandar la
+  // Nota de Ingreso a la impresora.
+  const handleImprimirNota = () => {
+    setRevItems(guia.items.map(it => ({
+      id: it.id,
+      producto_nombre: it.producto_nombre,
+      tipo: it.tipo,
+      etiqueta_codigo: it.etiqueta_codigo,
+      cantidad: it.cantidad,
+      id_agrupador: it.id_agrupador || '',
+      codigo_impresion: it.codigo_impresion || '',
+    })))
+    setRevisando(true)
+  }
+
+  const imprimirAhora = () => {
+    setRevisando(false)
+    setVistaImpresion('nota')
+  }
+
+  const guardarYimprimir = async () => {
+    setGuardandoRev(true)
+    try {
+      await api.put(`/api/guias/${id}`, {
+        items: revItems.map(r => ({
+          id: r.id,
+          cantidad: Number(r.cantidad),
+          id_agrupador: r.id_agrupador,
+          codigo_impresion: r.codigo_impresion,
+        })),
+      })
+      const { data } = await api.get(`/api/guias/${id}`)
+      setGuia(data)
+      setUbicEdits(Object.fromEntries(
+        data.items.filter(it => it.etiqueta_id).map(it => [it.etiqueta_id, it.etiqueta_ubicacion || ''])
+      ))
+      setRevisando(false)
+      setVistaImpresion('nota')
+    } catch (err) {
+      setMensaje({ tipo: 'error', texto: err.response?.data?.error || 'No se pudo guardar antes de imprimir' })
+      setTimeout(() => setMensaje(null), 4000)
+    } finally {
+      setGuardandoRev(false)
+    }
+  }
 
   if (cargando) {
     return <div className="p-6 text-center py-12 text-gray-400">Cargando guia...</div>
@@ -244,6 +315,14 @@ export default function GuiaDetalle() {
 
   const conEtiqueta = guia.items.filter(it => it.etiqueta_id)
   const itemsAImprimir = imprimiendo ? guia.items.filter(it => imprimiendo.includes(it.etiqueta_id)) : []
+  // Fase 11 (R4): en la Nota de Ingreso las lineas con el mismo ID de
+  // agrupacion van juntas; las que no tienen ID quedan al final en su orden.
+  const itemsImpresion = [...guia.items].sort((a, b) => {
+    const ga = a.id_agrupador || '￿'
+    const gb = b.id_agrupador || '￿'
+    if (ga !== gb) return ga < gb ? -1 : 1
+    return a.id - b.id
+  })
 
   return (
     <div className="p-6">
@@ -438,35 +517,80 @@ export default function GuiaDetalle() {
                     <option value="CERRADA">CERRADA</option>
                   </select>
                 </div>
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-gray-600 mb-1">Observaciones de la guia <span className="text-gray-400 font-normal">(se imprime en la Nota de Ingreso)</span></label>
+                  <textarea
+                    rows={2}
+                    value={formEdicion.observaciones}
+                    onChange={e => setFormEdicion(f => ({ ...f, observaciones: e.target.value.toUpperCase() }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
               </div>
 
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-600 mb-2">Cantidad por linea</label>
-                <div className="space-y-2 border border-gray-200 rounded-lg p-3">
-                  {formEdicion.items.map((li, idx) => (
-                    <div key={li.id} className="flex items-center gap-3 text-sm">
-                      <span className="flex-1 text-gray-700">
-                        {li.producto_nombre}
-                        {li.tipo === 'SERVICIO' && <span className="ml-2 text-[10px] font-bold text-slate-500">SERVICIO</span>}
-                      </span>
-                      {li.editable ? (
-                        <input
-                          type="number" min="0.001" step="0.001"
-                          value={li.cantidad}
-                          onChange={e => setFormEdicion(f => {
-                            const items = [...f.items]
-                            items[idx] = { ...items[idx], cantidad: e.target.value }
-                            return { ...f, items }
-                          })}
-                          className="w-24 border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                      ) : (
-                        <span className="text-gray-400 text-xs text-right">
-                          {fmtCantidad(li.cantidad)} · {li.motivo}
+                <label className="block text-sm font-medium text-gray-600 mb-2">Lineas: cantidad, ID de agrupacion, codigo a imprimir y observacion</label>
+                <div className="space-y-3 border border-gray-200 rounded-lg p-3">
+                  {formEdicion.items.map((li, idx) => {
+                    const setLi = (campo, valor) => setFormEdicion(f => {
+                      const items = [...f.items]
+                      items[idx] = { ...items[idx], [campo]: valor }
+                      return { ...f, items }
+                    })
+                    return (
+                    <div key={li.id} className="text-sm border-b border-gray-100 last:border-0 pb-3 last:pb-0">
+                      <div className="flex items-center gap-3">
+                        <span className="flex-1 text-gray-700">
+                          {li.producto_nombre}
+                          {li.tipo === 'SERVICIO' && <span className="ml-2 text-[10px] font-bold text-slate-500">SERVICIO</span>}
                         </span>
-                      )}
+                        {li.editable ? (
+                          <input
+                            type="number" min="0.001" step="0.001"
+                            value={li.cantidad}
+                            onChange={e => setLi('cantidad', e.target.value)}
+                            className="w-24 border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        ) : (
+                          <span className="text-gray-400 text-xs text-right">
+                            {fmtCantidad(li.cantidad)} · {li.motivo}
+                          </span>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-12 gap-2 mt-2">
+                        <div className="col-span-3">
+                          <label className="block text-[11px] text-gray-400 mb-0.5">ID (agrupador)</label>
+                          <input
+                            value={li.id_agrupador}
+                            onChange={e => setLi('id_agrupador', e.target.value.toUpperCase())}
+                            maxLength={30}
+                            placeholder="Ej: A-12"
+                            className="w-full border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                        <div className="col-span-3">
+                          <label className="block text-[11px] text-gray-400 mb-0.5">Codigo a imprimir</label>
+                          <input
+                            value={li.codigo_impresion}
+                            onChange={e => setLi('codigo_impresion', e.target.value.toUpperCase())}
+                            maxLength={30}
+                            placeholder={li.tipo === 'SERVICIO' ? '—' : 'por defecto: el del sistema'}
+                            className="w-full border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                        <div className="col-span-6">
+                          <label className="block text-[11px] text-gray-400 mb-0.5">Observacion de la linea</label>
+                          <input
+                            value={li.observaciones}
+                            onChange={e => setLi('observaciones', e.target.value.toUpperCase())}
+                            maxLength={300}
+                            className="w-full border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                      </div>
                     </div>
-                  ))}
+                    )
+                  })}
                 </div>
                 <p className="text-xs text-gray-400 mt-2">
                   Cambiar la cantidad de una linea con codigo ajusta tambien el inventario del almacen.
@@ -512,6 +636,11 @@ export default function GuiaDetalle() {
               {guia.items.map((it, i) => (
                 <tr key={it.id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                   <td className="px-6 py-3 font-semibold text-gray-800">
+                    {it.id_agrupador && (
+                      <span className="mr-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-gray-200 text-gray-700 align-middle">
+                        ID {it.id_agrupador}
+                      </span>
+                    )}
                     {it.producto_nombre}
                     {it.tipo === 'SERVICIO' && (
                       <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-700 align-middle">
@@ -529,6 +658,9 @@ export default function GuiaDetalle() {
                           <li key={pt.id}>{fmtCantidad(pt.cantidad)}{pt.referencia ? ` — ${pt.referencia}` : ''}</li>
                         ))}
                       </ul>
+                    )}
+                    {it.observaciones && (
+                      <div className="mt-1 text-xs font-normal text-gray-500 italic">{it.observaciones}</div>
                     )}
                   </td>
                   <td className="px-6 py-3 text-right">{fmtCantidad(it.cantidad)}</td>
@@ -555,6 +687,9 @@ export default function GuiaDetalle() {
                     {it.etiqueta_id
                       ? <Link to={`/etiquetas/${it.etiqueta_id}`} className={`hover:underline px-1.5 rounded ${claseCodigoAlmacen(guia.almacen_nombre)}`}>{codigoAlmacen(it.etiqueta_codigo, guia.almacen_nombre)}</Link>
                       : '—'}
+                    {it.codigo_impresion && (
+                      <div className="text-[11px] text-amber-700 font-sans mt-0.5">imprime: <b>{it.codigo_impresion}</b></div>
+                    )}
                   </td>
                   <td className="px-6 py-3">
                     {it.etiqueta_id ? (
@@ -683,6 +818,56 @@ export default function GuiaDetalle() {
         </div>
       )}
 
+      {/* Fase 11 (R4): repaso de ID / codigo a imprimir antes de la Nota de Ingreso */}
+      {revisando && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 print:hidden" onClick={() => setRevisando(false)}>
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <h2 className="text-lg font-semibold text-gray-800 mb-1">Revisar antes de imprimir</h2>
+            <p className="text-sm text-gray-500 mb-4">
+              Ajusta el <b>ID</b> (agrupa lineas con el mismo ID) y el <b>codigo a imprimir</b> de cada linea.
+              El codigo a imprimir reemplaza al numero del sistema solo en el papel; no cambia el codigo real
+              ni el codigo de barras. Vacio = se imprime el del sistema.
+            </p>
+            <div className="space-y-2 border border-gray-200 rounded-lg p-3 mb-4">
+              {revItems.map((r, idx) => {
+                const setR = (campo, valor) => setRevItems(list => {
+                  const n = [...list]; n[idx] = { ...n[idx], [campo]: valor }; return n
+                })
+                return (
+                  <div key={r.id} className="grid grid-cols-12 gap-2 items-center text-sm">
+                    <span className="col-span-5 text-gray-700 truncate">
+                      {r.producto_nombre}
+                      {r.tipo === 'SERVICIO' && <span className="ml-1 text-[10px] font-bold text-slate-500">SERV</span>}
+                    </span>
+                    <input
+                      value={r.id_agrupador}
+                      onChange={e => setR('id_agrupador', e.target.value.toUpperCase())}
+                      maxLength={30}
+                      placeholder="ID"
+                      className="col-span-3 border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <input
+                      value={r.codigo_impresion}
+                      onChange={e => setR('codigo_impresion', e.target.value.toUpperCase())}
+                      maxLength={30}
+                      placeholder={r.tipo === 'SERVICIO' ? '—' : (r.etiqueta_codigo ? `sistema: ${r.etiqueta_codigo}` : 'codigo a imprimir')}
+                      className="col-span-4 border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                )
+              })}
+            </div>
+            <div className="flex flex-wrap justify-end gap-2">
+              <button type="button" onClick={() => setRevisando(false)} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">Cancelar</button>
+              <button type="button" onClick={imprimirAhora} className="px-4 py-2 text-sm border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">Imprimir sin cambios</button>
+              <button type="button" onClick={guardarYimprimir} disabled={guardandoRev} className="px-4 py-2 text-sm bg-blue-700 text-white rounded-lg hover:bg-blue-800 disabled:opacity-50">
+                {guardandoRev ? 'Guardando...' : 'Guardar e imprimir'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <PreviewImpresion abierto={preview} onCerrar={cerrarPreview}>
       {/* Vista de impresion de etiquetas: solo visible al imprimir etiquetas */}
       <div className={vistaImpresion === 'etiquetas' ? (preview ? '' : 'hidden print:block') : 'hidden'}>
@@ -721,7 +906,7 @@ export default function GuiaDetalle() {
 
       {vistaImpresion === 'nota' && (
         <div className={preview ? '' : 'hidden print:block'}>
-          {enPaginas(guia.items).map((filas, pi, todas) => {
+          {enPaginas(itemsImpresion).map((filas, pi, todas) => {
             const ultima = pi === todas.length - 1
             const [yy, mm, dd] = String(guia.fecha).slice(0, 10).split('-')
             return (
@@ -767,9 +952,12 @@ export default function GuiaDetalle() {
                     {filas.map((it, ri) => (
                       <tr key={ri} className="border-b border-gray-400 h-7 align-top">
                         <td className="py-1 px-1">
-                          {it?.etiqueta_codigo && (
+                          {it?.id_agrupador && (
+                            <span className="font-mono font-bold mr-1">[{it.id_agrupador}]</span>
+                          )}
+                          {(it?.codigo_impresion || it?.etiqueta_codigo) && (
                             <span className="font-mono font-bold px-1 mr-1 rounded" style={estiloCodigoImpreso(guia.almacen_nombre)}>
-                              {codigoAlmacen(it.etiqueta_codigo, guia.almacen_nombre)}
+                              {it.codigo_impresion || codigoAlmacen(it.etiqueta_codigo, guia.almacen_nombre)}
                             </span>
                           )}
                           {it ? it.producto_nombre : ''}
@@ -778,6 +966,9 @@ export default function GuiaDetalle() {
                             <span className="block text-[10px] text-gray-500">
                               {it.partidas.map(pt => `${fmtCantidad(pt.cantidad)}${pt.referencia ? ` (${pt.referencia})` : ''}`).join(' · ')}
                             </span>
+                          )}
+                          {it?.observaciones && (
+                            <span className="block text-[10px] text-gray-500 italic">{it.observaciones}</span>
                           )}
                         </td>
                         <td className="py-1 text-center border-l border-gray-400">{it ? `${fmtCantidad(it.cantidad)}${it.unidad_medida_abreviatura ? ` ${it.unidad_medida_abreviatura}` : ''}` : ''}</td>

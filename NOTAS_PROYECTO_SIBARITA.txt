@@ -2082,6 +2082,30 @@ comun; R7 va ultimo porque consume todo lo anterior.
   * codigo_impresion NO toca etiquetas.codigo ni el codigo de barras: es
     solo el texto que se imprime en la Nota de Ingreso.
   * setup corrido OK; node -c OK.
+- Paso 11.9 + 11.10 HECHO (10/09): frontend de R4.
+  * Guias.jsx (alta): campo "Observaciones de la guia" (cabecera) +, por
+    linea, "ID (agrupador)" con boton "= anterior" y "Observacion de la
+    linea". Se mandan en el payload (via ...form y ...it).
+  * GuiaDetalle.jsx:
+    - "Editar guia": textarea de observaciones de cabecera (permitida aun
+      CERRADA) + por linea inputs ID / codigo a imprimir / observacion,
+      editables siempre (no solo si cambia la cantidad). guardarEdicion
+      manda la linea si cambio la cantidad O algun campo R4.
+    - Tabla de detalle: chip "ID xx", observacion en italica bajo el
+      producto, y "imprime: xxx" bajo el codigo cuando hay codigo_impresion.
+    - "Imprimir Nota de Ingreso" ahora abre primero el modal "Revisar
+      antes de imprimir" (ID + codigo a imprimir por linea) con
+      "Guardar e imprimir" / "Imprimir sin cambios".
+    - Plantilla Nota de Ingreso: las lineas se ordenan por id_agrupador
+      (mismas IDs juntas, sin ID al final); el DETALLE muestra "[ID]" +
+      codigo_impresion (o el del sistema) + observacion de la linea;
+      guia.observaciones ya imprime (la columna ahora existe).
+  * codigo_impresion NO cambia etiquetas.codigo ni el codigo de barras
+    del sticker (ese sigue con el numero real).
+  * Probado contra el server: guia con 2 lineas ID "A1" + 1 ID "B2",
+    observacion de cabecera y de linea guardadas; PUT codigo_impresion
+    "MANUAL-001" -> guardado, etiqueta_codigo real 9003 intacto.
+  * frontend build OK, copiado a backend/frontend-dist, app reiniciada.
 
 QUE QUEDA PENDIENTE (revision del proyecto, 31/08):
 - Fase 1 - Calibracion de impresion matricial (Bloque 2 "6 lineas" +

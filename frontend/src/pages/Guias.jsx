@@ -7,7 +7,7 @@ import { hoyLocal as hoy } from '../utils/fecha'
 import { TIPOS_DOCUMENTO, tipoDocumentoLabel } from '../utils/tiposDocumento'
 import { fmtCantidad, sumarCantidades } from '../utils/fmt'
 
-const LINEA_VACIA = () => ({ producto_id: '', producto_nombre: '', nuevo: false, tipo: 'PRODUCTO', cantidad: '', destino: 'ALMACEN', destino_detalle: '', unidad_medida_id: '', recogido: true, metrica: 'ENTERO', partidas: [], persona_retira: '', retira_obs: '' })
+const LINEA_VACIA = () => ({ producto_id: '', producto_nombre: '', nuevo: false, tipo: 'PRODUCTO', cantidad: '', destino: 'ALMACEN', destino_detalle: '', unidad_medida_id: '', recogido: true, metrica: 'ENTERO', partidas: [], persona_retira: '', retira_obs: '', id_agrupador: '', observaciones: '' })
 // Destinos que generan su propia Nota de Salida automatica al guardar la guia
 // (si ya lo recogieron) o al marcarlos retirados despues (Bloque 6).
 const DESTINOS_SALIDA_AUTO = ['OFICINA', 'LABORATORIO']
@@ -25,7 +25,7 @@ export default function Guias() {
   const [mostrarForm, setMostrarForm] = useState(false)
   const [guardando, setGuardando] = useState(false)
   const [mensaje, setMensaje]     = useState(null)
-  const [form, setForm] = useState({ numero_guia: '', tipo_documento: 'GUIA', almacen_id: '', fecha: hoy(), proveedor: '', numero_oc: '', direccion: '', guia_remision: '', factura: '', items: [LINEA_VACIA()] })
+  const [form, setForm] = useState({ numero_guia: '', tipo_documento: 'GUIA', almacen_id: '', fecha: hoy(), proveedor: '', numero_oc: '', direccion: '', guia_remision: '', factura: '', observaciones: '', items: [LINEA_VACIA()] })
   const [proveedorOtro, setProveedorOtro] = useState(false)
   const [mostrarCerradas, setMostrarCerradas] = useState(false)
 
@@ -77,7 +77,7 @@ export default function Guias() {
   useEffect(() => { cargarDatos() }, [])
 
   const abrirNuevo = () => {
-    setForm({ numero_guia: '', tipo_documento: 'GUIA', almacen_id: '', fecha: hoy(), proveedor: '', numero_oc: '', direccion: '', guia_remision: '', factura: '', items: [LINEA_VACIA()] })
+    setForm({ numero_guia: '', tipo_documento: 'GUIA', almacen_id: '', fecha: hoy(), proveedor: '', numero_oc: '', direccion: '', guia_remision: '', factura: '', observaciones: '', items: [LINEA_VACIA()] })
     setProveedorOtro(false)
     setMostrarForm(true)
   }
@@ -346,6 +346,15 @@ export default function Guias() {
                   className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
+              <div className="col-span-2">
+                <label className="block text-sm font-medium text-gray-600 mb-1">Observaciones de la guia <span className="text-gray-400 font-normal">(opcional, se imprime en la Nota de Ingreso)</span></label>
+                <textarea
+                  rows={2}
+                  value={form.observaciones}
+                  onChange={e => setForm({ ...form, observaciones: e.target.value.toUpperCase() })}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
             </div>
 
             <div className="space-y-3 mb-4">
@@ -521,6 +530,42 @@ export default function Guias() {
                             Quitar
                           </button>
                         )}
+                      </div>
+                    </div>
+
+                    {/* Fase 11 (R4): ID de agrupacion (se puede repetir en
+                        varias lineas) y observacion por linea. */}
+                    <div className="grid grid-cols-12 gap-3 items-start mt-2">
+                      <div className="col-span-4">
+                        <label className="block text-xs font-medium text-gray-500 mb-1">ID (agrupador, opcional)</label>
+                        <div className="flex gap-1">
+                          <input
+                            value={it.id_agrupador}
+                            onChange={e => actualizarLinea(i, 'id_agrupador', e.target.value.toUpperCase())}
+                            maxLength={30}
+                            placeholder="Ej: A-12"
+                            className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                          {i > 0 && (
+                            <button
+                              type="button"
+                              title="Usar el mismo ID que la linea anterior"
+                              onClick={() => actualizarLinea(i, 'id_agrupador', form.items[i - 1].id_agrupador || '')}
+                              className="shrink-0 border border-gray-300 rounded-lg px-2 text-xs text-gray-600 hover:bg-gray-50"
+                            >
+                              = anterior
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <div className="col-span-8">
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Observacion de la linea (opcional)</label>
+                        <input
+                          value={it.observaciones}
+                          onChange={e => actualizarLinea(i, 'observaciones', e.target.value.toUpperCase())}
+                          maxLength={300}
+                          className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
                       </div>
                     </div>
 
