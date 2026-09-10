@@ -20,10 +20,61 @@ export default function Periodos() {
   const [cargandoProd, setCargandoProd] = useState(false)
   const [accionando, setAccionando] = useState(null) // id del periodo en proceso
   const [confirmarCierre, setConfirmarCierre] = useState(null) // periodo a cerrar
+  // Fase 15 (R7-b): herramientas de admin (cierre general + purga)
+  const [mostrarAdmin, setMostrarAdmin] = useState(false)
+  const [confirmarGeneral, setConfirmarGeneral] = useState(false)
+  const [procesando, setProcesando] = useState(null) // 'general' | 'purga'
+  const [purgaDias, setPurgaDias] = useState(365)
+  const [purgaPrevia, setPurgaPrevia] = useState(null) // { a_borrar } del dry_run
 
   const puedeAbrir  = ['admin', 'almacen', 'almacenero3'].includes(usuario?.rol)
   const puedeCerrar = puedeAbrir
   const esAdmin     = usuario?.rol === 'admin'
+
+  const flash = (tipo, texto) => {
+    setMensaje({ tipo, texto })
+    setTimeout(() => setMensaje(null), 6000)
+  }
+
+  const cierreGeneral = async () => {
+    setProcesando('general')
+    setConfirmarGeneral(false)
+    try {
+      const { data } = await api.post('/api/periodos/cierre-general', {})
+      flash('ok', `Cierre general: ${data.cerrados} periodo(s) cerrados. Se abrieron los siguientes con el saldo arrastrado.`)
+      await recargarPeriodos()
+    } catch (err) {
+      flash('error', err.response?.data?.error || 'El cierre general fallo')
+    } finally {
+      setProcesando(null)
+    }
+  }
+
+  const purgaDryRun = async () => {
+    setProcesando('purga')
+    setPurgaPrevia(null)
+    try {
+      const { data } = await api.post('/api/periodos/purga', { dias: Number(purgaDias), dry_run: true })
+      setPurgaPrevia(data)
+    } catch (err) {
+      flash('error', err.response?.data?.error || 'No se pudo consultar la purga')
+    } finally {
+      setProcesando(null)
+    }
+  }
+
+  const purgaEjecutar = async () => {
+    setProcesando('purga')
+    try {
+      const { data } = await api.post('/api/periodos/purga', { dias: Number(purgaDias), dry_run: false, confirmar: true })
+      flash('ok', `Purga hecha: ${data.borrado.actividad_log} registro(s) de auditoria borrados.`)
+      setPurgaPrevia(null)
+    } catch (err) {
+      flash('error', err.response?.data?.error || 'La purga fallo')
+    } finally {
+      setProcesando(null)
+    }
+  }
 
   const conAccion = async (id, fn, okMsg) => {
     setAccionando(id)
@@ -95,15 +146,88 @@ export default function Periodos() {
           <h1 className="text-3xl font-bold text-gray-800">Periodos</h1>
           <p className="text-gray-500">Un periodo activo por almacen. Toda guia y nota de salida entra en el periodo activo de su almacen.</p>
         </div>
-        {puedeAbrir && almacenesSinActivo.length > 0 && !form && (
-          <button
-            onClick={() => setForm({ almacen_id: String(almacenesSinActivo[0].id) })}
-            className="bg-blue-700 hover:bg-blue-800 text-white text-sm px-4 py-2 rounded-lg font-medium"
-          >
-            Abrir periodo
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {esAdmin && (
+            <button
+              onClick={() => setMostrarAdmin(v => !v)}
+              className="border border-gray-300 text-gray-600 text-sm px-4 py-2 rounded-lg font-medium hover:bg-gray-50"
+            >
+              {mostrarAdmin ? 'Ocultar herramientas' : 'Herramientas de cierre'}
+            </button>
+          )}
+          {puedeAbrir && almacenesSinActivo.length > 0 && !form && (
+            <button
+              onClick={() => setForm({ almacen_id: String(almacenesSinActivo[0].id) })}
+              className="bg-blue-700 hover:bg-blue-800 text-white text-sm px-4 py-2 rounded-lg font-medium"
+            >
+              Abrir periodo
+            </button>
+          )}
+        </div>
       </div>
+
+      {esAdmin && mostrarAdmin && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          {/* Cierre general */}
+          <div className="bg-white rounded-xl shadow p-5 border border-amber-100">
+            <h2 className="text-base font-semibold text-gray-800 mb-1">Cierre general</h2>
+            <p className="text-xs text-gray-500 mb-3">
+              Cierra de una vez el periodo activo de <b>todos los almacenes</b> (los que ya
+              arrancaron), con fecha de hoy. Cada uno abre su periodo siguiente con el saldo
+              arrastrado. Util para el cierre de fin de mes / fin de año.
+            </p>
+            <button
+              onClick={() => setConfirmarGeneral(true)}
+              disabled={procesando === 'general'}
+              className="text-sm bg-amber-600 hover:bg-amber-700 text-white rounded-lg px-4 py-2 font-medium disabled:opacity-50"
+            >
+              {procesando === 'general' ? 'Cerrando...' : 'Cerrar todos los periodos activos'}
+            </button>
+          </div>
+
+          {/* Purga de auditoria */}
+          <div className="bg-white rounded-xl shadow p-5 border border-red-100">
+            <h2 className="text-base font-semibold text-gray-800 mb-1">Purga de auditoria</h2>
+            <p className="text-xs text-gray-500 mb-3">
+              Borra el historial de acciones (<b>actividad_log</b>) mas viejo que los dias
+              indicados. No toca inventario, periodos, guias ni notas. Minimo 30 dias.
+            </p>
+            <div className="flex items-end gap-2 flex-wrap">
+              <div>
+                <label className="block text-[11px] font-medium text-gray-500 mb-1">Dias a conservar</label>
+                <input
+                  type="number" min={30} step={1}
+                  value={purgaDias}
+                  onChange={e => { setPurgaDias(e.target.value); setPurgaPrevia(null) }}
+                  className="w-28 border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <button
+                onClick={purgaDryRun}
+                disabled={procesando === 'purga' || Number(purgaDias) < 30}
+                className="text-sm border border-gray-300 text-gray-700 rounded-lg px-4 py-1.5 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Ver que se borraria
+              </button>
+              {purgaPrevia && (
+                <button
+                  onClick={purgaEjecutar}
+                  disabled={procesando === 'purga' || (purgaPrevia.a_borrar?.actividad_log || 0) === 0}
+                  className="text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg px-4 py-1.5 font-medium disabled:opacity-50"
+                >
+                  {procesando === 'purga' ? 'Purgando...' : `Purgar ${purgaPrevia.a_borrar?.actividad_log || 0} registro(s)`}
+                </button>
+              )}
+            </div>
+            {purgaPrevia && (
+              <p className="text-xs text-gray-500 mt-2">
+                Se borrarian <b>{purgaPrevia.a_borrar?.actividad_log ?? 0}</b> registro(s) de auditoria
+                anteriores a hoy − {purgaPrevia.criterio?.dias} dias.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
       {mensaje && (
         <div className={`mb-4 px-4 py-3 rounded-lg text-sm font-medium ${
@@ -222,6 +346,32 @@ export default function Periodos() {
                 className="px-4 py-2 text-sm bg-blue-700 text-white rounded-lg hover:bg-blue-800 disabled:opacity-50"
               >
                 Cerrar periodo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmarGeneral && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setConfirmarGeneral(false)}>
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+            <h2 className="text-lg font-semibold text-gray-800 mb-1">Cierre general</h2>
+            <p className="text-sm text-gray-500 mb-4">
+              Se cierra el periodo activo de <b>todos los almacenes</b> (los que ya arrancaron)
+              con fecha de hoy. Cada uno abre su periodo siguiente con el <b>saldo arrastrado</b>.
+              Los periodos cerrados quedan de solo lectura.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setConfirmarGeneral(false)} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={cierreGeneral}
+                disabled={procesando === 'general'}
+                className="px-4 py-2 text-sm bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50"
+              >
+                Cerrar todos
               </button>
             </div>
           </div>
