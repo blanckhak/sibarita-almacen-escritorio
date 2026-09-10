@@ -2405,8 +2405,8 @@ Datos de prueba: JOPISA quedo con "Periodo inicial" CERRADO + "Periodo 2"
 ACTIVO (con 1 guia anulada J-F15-... de la prueba); MALSA volvio a un solo
 "Periodo inicial" ACTIVO tras reabrir.
 
-PENDIENTE 15.7/15.8: cierre general (todos los almacenes) + purga de
-temporales con dry_run. Despues: bumps de version + merges + push.
+15.7/15.8: cierre general + purga -> BACKEND hecho aca; FRONTEND en Fase 16
+(seccion 27). Despues: bumps de version + merges + push.
 
 PENDIENTE 14.7: bump instalador 1.8.0 + merge (al final).
 
@@ -2432,10 +2432,80 @@ QUE QUEDA PENDIENTE (revision del proyecto, 31/08):
 - Bloque 6 "procesos en segundo plano" (solicitudes / servicios de
   limpieza al firmar): AMBIGUO, falta que el cliente/usuario aclare que
   espera concretamente.
-- Menores: Compras Diarias sin filtro de fecha en pantalla ni edicion;
-  Solicitud de Materiales sin edicion; Reportes "Salidas por Motivo" sin
-  tabla en pantalla (solo grafica + export). Web Vercel/Render congelada
-  (la base de Render vence el 20/09/2026).
+- Menores: Solicitud de Materiales sin edicion; Reportes "Salidas por
+  Motivo" sin tabla en pantalla (solo grafica + export). Web Vercel/Render
+  congelada (la base de Render vence el 20/09/2026).
+  (El modulo Compras Diarias se elimino en Fase 16 -- seccion 27.)
+
+27. FASE 16: limpieza (quitar Compras Diarias) + UI de periodos (10/09/2026)
+--------------------------------------------------
+Rama fase-16-limpieza-periodos-ui (stack sobre fase-15-cierre-periodo).
+Decisiones del usuario (imagen 11 de "para giarse/" + charla):
+  a) periodos SIGUEN por almacen (no se rehace el modelo de Fase 14/15)
+  b) el selector de periodo sale del navbar (estaba pegado al perfil)
+  c) el modulo "Compras Diarias" se elimina ENTERO
+  d) los periodos se numeran "Periodo 1, Periodo 2..." (no "Periodo inicial")
+
+16.1 - ELIMINAR MODULO COMPRAS DIARIAS (commit cb22731):
+- Era Fase 10 Bloque 5: un LOG aparte (tablas compras_diarias /
+  compras_diarias_detalle, ruta /api/compras-diarias, paginas
+  ComprasDiarias.jsx / CompraDiariaDetalle.jsx, link del navbar).
+- Backend: fuera require + app.use en server.js; borrado
+  src/routes/comprasDiarias.js. setup.js: DROP TABLE
+  compras_diarias_detalle / compras_diarias + DROP SEQUENCE (reemplaza los
+  CREATE TABLE IF NOT EXISTS). database.sql sincronizado.
+- Frontend: borrados ComprasDiarias.jsx y CompraDiariaDetalle.jsx; fuera
+  lazy imports + 2 rutas en App.jsx; fuera el link del navbar.
+- NO se toca guia_items.destino (ALMACEN / COMPRAS_DIARIAS / OTRO por
+  linea, con su Nota de Salida automatica) ni notas_salida.seccion. Esa es
+  la funcion que el usuario quiere conservar.
+- Probado: GET /api/compras-diarias -> 404; migracion corre limpia.
+
+16.2 - SELECTOR DE PERIODO FUERA DEL NAVBAR (commit dc21e80):
+- Nuevo components/PeriodoFiltro.jsx: almacen + periodo, compacto.
+- Guias.jsx y NotasSalida.jsx lo muestran en una barra blanca propia sobre
+  la lista ("PERIODO [almacen] [periodo]" + nota de ayuda).
+- Navbar.jsx: fuera el bloque de <select> y el import de usePeriodo. El
+  header queda: enlaces | Mas v | campana | perfil | ROL | Salir.
+- El estado sigue en PeriodoContext (se comparte Guias <-> Notas). La
+  pantalla Periodos es el unico hub para abrir/cerrar/ver productos.
+
+16.3 - PERIODOS NUMERADOS + ALTA DE 1 CLIC (commit bf5de86):
+- setup.js: el backfill nombra el primero "Periodo 1"; migracion
+  idempotente UPDATE periodos SET nombre='Periodo 1' WHERE nombre='Periodo
+  inicial' para bases existentes.
+- periodos.js POST /: nombre y fecha_inicio ahora OPCIONALES. Sin nombre ->
+  "Periodo N" (N = periodos del almacen + 1). Sin fecha -> CURRENT_DATE.
+- Periodos.jsx: el form "Abrir periodo" queda con solo el selector de
+  almacen (nombre y fecha automaticos).
+- El cierre (Fase 15) ya nombraba el siguiente "Periodo N+1": la secuencia
+  queda uniforme.
+- Probado: las 3 bases pasan a "Periodo 1" ACTIVO; POST {almacen_id} sin
+  nombre/fecha -> 409 "ya tiene un periodo activo" (no 400).
+
+16.4 - PANEL ADMIN CIERRE GENERAL + PURGA (commit a8c775b) = FRONTEND de
+       las 15.7/15.8 (backend ya estaba en Fase 15 parte 2, bbe0198):
+- Periodos.jsx: boton "Herramientas de cierre" (solo admin) abre 2
+  tarjetas.
+  * Cierre general: modal -> POST /api/periodos/cierre-general. Cierra el
+    periodo activo de TODOS los almacenes (los ya iniciados) y abre el
+    siguiente de cada uno con arrastre.
+  * Purga de auditoria: dias a conservar (min 30), "Ver que se borraria"
+    (dry_run, muestra el conteo) y recien entonces "Purgar N registros"
+    -> POST /api/periodos/purga { dry_run:false, confirmar:true }.
+- Probado por API: cierre-general cierra 3x "Periodo 1" y abre 3x "Periodo
+  2"; reabrir los 3 (admin) revierte a 3x "Periodo 1" ACTIVO. purga
+  dry_run 365 dias -> a_borrar.actividad_log 0.
+
+CAPTURAS (captura/fases/):
+- fase16_navbar_sin_compras_ni_selector.jpg
+- fase16_guias_filtro_periodo_en_pagina.jpg
+- fase16_periodos_herramientas_cierre_purga.jpg
+
+PENDIENTE (al final, con todo revisado): bump instalador (1.6.0 -> 1.7.0
+1.8.0 ... segun fase), merge de fase-12..fase-16 a master, git push. El
+usuario pidio explicitamente NO subir a git hasta revisar todo.
+PENDIENTE aparte: formato DESUSO (ver "PENDIENTE NUEVO" arriba).
 
 --------------------------------------------------
 FIN DE LA NOTA
