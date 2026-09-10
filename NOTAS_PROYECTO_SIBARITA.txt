@@ -2507,6 +2507,45 @@ PENDIENTE (al final, con todo revisado): bump instalador (1.6.0 -> 1.7.0
 usuario pidio explicitamente NO subir a git hasta revisar todo.
 PENDIENTE aparte: formato DESUSO (ver "PENDIENTE NUEVO" arriba).
 
+==================================================
+ESTADO AL CERRAR EL 10/09/2026  --  RETOMAR MAÑANA
+==================================================
+Rama actual: fase-16-limpieza-periodos-ui  (arbol limpio, todo commiteado).
+Nada subido a git todavia (el usuario pidio: push SOLO al final, con todo
+revisado). Servidor local apagado.
+
+RAMAS APILADAS (12 -> 13 -> 14 -> 15 -> 16), todas commiteadas, sin merge:
+  master ............ Fase 11 mergeada (instalador v1.6.0)
+  fase-12-roles-destinos ......... Fase 12 (rol Almacenero 3 + destinos)
+  fase-13-servicios-impresion ... Fase 13 (servicio ext/int + impresion param)
+  fase-14-periodos .............. Fase 14 (periodos por almacen + navbar)
+  fase-15-cierre-periodo ........ Fase 15 (cerrar/arrastre/reabrir + backend
+                                  cierre general + purga)
+  fase-16-limpieza-periodos-ui .. Fase 16 (seccion 27): HECHA
+    16.1 cb22731  quitar modulo Compras Diarias entero
+    16.2 dc21e80  selector de periodo fuera del navbar -> PeriodoFiltro.jsx
+    16.3 bf5de86  "Periodo 1, 2..." + abrir periodo en 1 clic
+    16.4 a8c775b  panel admin cierre general + purga (frontend de 15.7/15.8)
+    16.5 1c77909  capturas + estas NOTAS
+
+QUE SIGUE (en orden):
+1) Formato DESUSO -- "NOTA DE INGRESO DE ACTIVOS - DESUSO" (para giarse/
+   desuso.png). Documento fisico NUEVO para material usado que vuelve de un
+   area. Columnas: DESCRIPCION | CANTIDAD | UNIDAD | AREA-MAQUINA. Cabecera
+   SECCION / PERSONA RESPONSABLE / ref Nota de Salida. Firmas SOLICITADO /
+   REVISADO x3 / APROBADO. Va en una fase nueva (Fase 17). NO empezada.
+2) CIERRE FINAL (cuando el usuario revise todo):
+   - bump instalador: 1.6.0 -> subir por cada fase (12=1.7.0, 13=1.8.0,
+     14=1.9.0, 15=1.10.0, 16=1.11.0) o un solo salto, a decidir con el
+     usuario.
+   - merge fase-12 -> ... -> fase-16 a master (local).
+   - git push (recien aca).
+
+COMO LEVANTAR PARA PROBAR:
+   cd backend && node server.js      (puerto 3000, corre migraciones solas)
+   luego abrir http://localhost:3000
+   admin@sibarita.com / admin123
+
 --------------------------------------------------
 FIN DE LA NOTA
 --------------------------------------------------
