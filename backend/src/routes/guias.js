@@ -116,12 +116,14 @@ router.get('/:id', verificarToken, async (req, res) => {
       SELECT gi.id, gi.producto_id, gi.cantidad::float8 as cantidad, gi.tipo, gi.destino, gi.destino_detalle, gi.recogido,
              gi.id_agrupador, gi.observaciones, gi.codigo_impresion, gi.servicio_modo,
              COALESCE(p.nombre, gi.descripcion) as producto_nombre, p.metrica as producto_metrica,
-             um.nombre as unidad_medida_nombre, um.abreviatura as unidad_medida_abreviatura,
+             COALESCE(um.nombre, umgi.nombre) as unidad_medida_nombre,
+             COALESCE(um.abreviatura, umgi.abreviatura) as unidad_medida_abreviatura,
              e.id as etiqueta_id, e.codigo as etiqueta_codigo, e.estado as etiqueta_estado,
              e.condicion as etiqueta_condicion, e.ubicacion as etiqueta_ubicacion
       FROM guia_items gi
       LEFT JOIN productos p ON gi.producto_id = p.id
       LEFT JOIN unidades_medida um ON p.unidad_medida_id = um.id
+      LEFT JOIN unidades_medida umgi ON gi.unidad_medida_id = umgi.id
       LEFT JOIN etiquetas e ON e.guia_item_id = gi.id AND e.estado <> 'REEMPLAZADA'
       WHERE gi.guia_id = $1
       ORDER BY gi.id
@@ -321,9 +323,9 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
       if (it.tipo === 'SERVICIO') {
         const descripcionServicio = (it.producto_nombre || '').trim()
         const itemResult = await client.query(
-          `INSERT INTO guia_items (guia_id, producto_id, descripcion, cantidad, tipo, destino, destino_detalle, recogido, id_agrupador, observaciones, servicio_modo)
-           VALUES ($1, NULL, $2, $3, 'SERVICIO', NULL, NULL, NULL, $4, $5, $6) RETURNING id`,
-          [guia.id, descripcionServicio, it.cantidad, idAgrupador, obsItem, it.servicio_modo]
+          `INSERT INTO guia_items (guia_id, producto_id, descripcion, cantidad, tipo, destino, destino_detalle, recogido, id_agrupador, observaciones, servicio_modo, unidad_medida_id)
+           VALUES ($1, NULL, $2, $3, 'SERVICIO', NULL, NULL, NULL, $4, $5, $6, $7) RETURNING id`,
+          [guia.id, descripcionServicio, it.cantidad, idAgrupador, obsItem, it.servicio_modo, it.unidad_medida_id || null]
         )
         if (it.servicio_modo === 'INTERNO') {
           const codigoResult = await client.query(`SELECT nextval('etiquetas_codigo_seq') as codigo`)
@@ -435,9 +437,9 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
       const salidaAutoInmediata = DESTINOS_SALIDA_AUTO.includes(it.destino) && !pendienteDeRecoger
 
       const itemResult = await client.query(
-        `INSERT INTO guia_items (guia_id, producto_id, cantidad, destino, destino_detalle, recogido, tipo, id_agrupador, observaciones)
-         VALUES ($1, $2, $3, $4, $5, $6, 'PRODUCTO', $7, $8) RETURNING id`,
-        [guia.id, productoId, it.cantidad, it.destino, it.destino === 'OTRO' ? it.destino_detalle.trim() : null, recogidoValor, idAgrupador, obsItem]
+        `INSERT INTO guia_items (guia_id, producto_id, cantidad, destino, destino_detalle, recogido, tipo, id_agrupador, observaciones, unidad_medida_id)
+         VALUES ($1, $2, $3, $4, $5, $6, 'PRODUCTO', $7, $8, $9) RETURNING id`,
+        [guia.id, productoId, it.cantidad, it.destino, it.destino === 'OTRO' ? it.destino_detalle.trim() : null, recogidoValor, idAgrupador, obsItem, it.unidad_medida_id || null]
       )
       const guiaItemId = itemResult.rows[0].id
 

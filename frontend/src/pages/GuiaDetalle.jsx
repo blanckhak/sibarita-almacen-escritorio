@@ -8,6 +8,7 @@ import { colorEtiquetaEstado, labelEtiquetaEstado } from '../utils/etiquetaEstad
 import { TIPOS_DOCUMENTO, tipoDocumentoLabel } from '../utils/tiposDocumento'
 import { enPaginas } from '../utils/paginarImpresion'
 import { fmtCantidad } from '../utils/fmt'
+import { cargarParamsImpresion, PARAMS_IMPRESION_DEFAULT } from '../utils/parametrosImpresion'
 import { claseCodigoAlmacen, estiloCodigoImpreso, codigoAlmacen } from '../utils/colorAlmacen'
 import PreviewImpresion from '../components/PreviewImpresion'
 
@@ -47,6 +48,8 @@ export default function GuiaDetalle() {
   const [revisando, setRevisando] = useState(false)
   const [revItems, setRevItems]   = useState([])
   const [guardandoRev, setGuardandoRev] = useState(false)
+  // Fase 13 (R1): que mostrar en la Nota de Ingreso impresa.
+  const [paramsImp, setParamsImp] = useState(null)
 
   const puedeImprimir = ['admin', 'almacen', 'almacenero3'].includes(usuario?.rol)
   const puedeEditar = ['admin', 'almacen', 'almacenero3'].includes(usuario?.rol)
@@ -87,6 +90,7 @@ export default function GuiaDetalle() {
   }
 
   useEffect(() => { cargar() }, [id])
+  useEffect(() => { cargarParamsImpresion().then(setParamsImp) }, [])
 
   useEffect(() => {
     api.get('/api/guias')
@@ -912,9 +916,11 @@ export default function GuiaDetalle() {
         </div>
       </div>
 
-      {vistaImpresion === 'nota' && (
+      {vistaImpresion === 'nota' && (() => {
+        const pI = paramsImp?.INGRESO || PARAMS_IMPRESION_DEFAULT
+        return (
         <div className={preview ? '' : 'hidden print:block'}>
-          {enPaginas(itemsImpresion).map((filas, pi, todas) => {
+          {enPaginas(itemsImpresion, pI.lineas_por_pagina).map((filas, pi, todas) => {
             const ultima = pi === todas.length - 1
             const [yy, mm, dd] = String(guia.fecha).slice(0, 10).split('-')
             return (
@@ -956,8 +962,10 @@ export default function GuiaDetalle() {
                     <tr className="bg-gray-100 border-y-2 border-gray-800">
                       <th className="text-center py-1 tracking-widest">D E T A L L E</th>
                       <th className="text-center py-1 border-l border-gray-800 w-24">CANTIDAD</th>
-                      <th className="text-center py-1 border-l border-gray-800 w-16">P. UNIT.</th>
-                      <th className="text-center py-1 border-l border-gray-800 w-20">TOTAL</th>
+                      {pI.mostrar_precio && <>
+                        <th className="text-center py-1 border-l border-gray-800 w-16">P. UNIT.</th>
+                        <th className="text-center py-1 border-l border-gray-800 w-20">TOTAL</th>
+                      </>}
                     </tr>
                   </thead>
                   <tbody>
@@ -972,26 +980,30 @@ export default function GuiaDetalle() {
                                   {it.codigo_impresion || codigoAlmacen(it.etiqueta_codigo, guia.almacen_nombre)}
                                 </span>
                               )}
-                              {it.producto_nombre}
-                              {it.tipo === 'SERVICIO' && <span className="text-[10px] text-gray-500"> (servicio)</span>}
-                              {it.partidas?.length > 0 && (
+                              <span className="line-clamp-2 align-top">
+                                {it.producto_nombre}
+                                {it.tipo === 'SERVICIO' && <span className="text-[10px] text-gray-500"> (servicio{it.servicio_modo ? ` ${it.servicio_modo.toLowerCase()}` : ''})</span>}
+                              </span>
+                              {pI.mostrar_partidas && it.partidas?.length > 0 && (
                                 <span className="block text-[10px] text-gray-500">
                                   {it.partidas.map(pt => `${fmtCantidad(pt.cantidad)}${pt.referencia ? ` (${pt.referencia})` : ''}`).join(' · ')}
                                 </span>
                               )}
-                              {(it.etiqueta_ubicacion || it.destino_detalle || (it.destino && it.destino !== 'ALMACEN')) && (
+                              {((pI.mostrar_ubicacion && it.etiqueta_ubicacion) || (pI.mostrar_motivo && (it.destino_detalle || (it.destino && it.destino !== 'ALMACEN')))) && (
                                 <span className="block text-[10px] text-gray-500">
-                                  {it.etiqueta_ubicacion && <>Ubic.: {it.etiqueta_ubicacion}&nbsp;&nbsp;</>}
-                                  {(it.destino_detalle || (it.destino && it.destino !== 'ALMACEN')) && <>Motivo/Maq.: {it.destino_detalle || it.destino}</>}
+                                  {pI.mostrar_ubicacion && it.etiqueta_ubicacion && <>Ubic.: {it.etiqueta_ubicacion}&nbsp;&nbsp;</>}
+                                  {pI.mostrar_motivo && (it.destino_detalle || (it.destino && it.destino !== 'ALMACEN')) && <>Motivo/Maq.: {it.destino_detalle || it.destino}</>}
                                 </span>
                               )}
-                              {it.observaciones && <span className="block text-[10px] text-gray-500 italic">{it.observaciones}</span>}
+                              {pI.mostrar_observaciones && it.observaciones && <span className="block text-[10px] text-gray-500 italic">{it.observaciones}</span>}
                             </>
                           )}
                         </td>
                         <td className="py-1 text-center border-l border-gray-400">{it ? `${fmtCantidad(it.cantidad)}${it.unidad_medida_abreviatura ? ` ${it.unidad_medida_abreviatura}` : ''}` : ''}</td>
-                        <td className="py-1 border-l border-gray-400">&nbsp;</td>
-                        <td className="py-1 border-l border-gray-400">&nbsp;</td>
+                        {pI.mostrar_precio && <>
+                          <td className="py-1 border-l border-gray-400">&nbsp;</td>
+                          <td className="py-1 border-l border-gray-400">&nbsp;</td>
+                        </>}
                       </tr>
                     ))}
                     {ultima && (
@@ -1000,8 +1012,10 @@ export default function GuiaDetalle() {
                         <td className="border-l border-gray-800 text-center">
                           {fmtCantidad(itemsImpresion.reduce((s, it) => s + Number(it.cantidad || 0), 0))}
                         </td>
-                        <td className="border-l border-gray-800">&nbsp;</td>
-                        <td className="border-l border-gray-800">&nbsp;</td>
+                        {pI.mostrar_precio && <>
+                          <td className="border-l border-gray-800">&nbsp;</td>
+                          <td className="border-l border-gray-800">&nbsp;</td>
+                        </>}
                       </tr>
                     )}
                   </tbody>
@@ -1009,10 +1023,12 @@ export default function GuiaDetalle() {
 
                 {/* Observaciones y firmas van en CADA hoja (no solo la ultima): cada
                     hoja fisica se imprime y se firma por separado. */}
-                <div className="px-4 py-2 text-xs flex">
-                  <b className="text-gray-600 mr-1">OBSERVACIONES:</b>
-                  <span className="border-b border-gray-400 flex-1">{guia.observaciones || ''}</span>
-                </div>
+                {pI.mostrar_observaciones && (
+                  <div className="px-4 py-2 text-xs flex">
+                    <b className="text-gray-600 mr-1">OBSERVACIONES:</b>
+                    <span className="border-b border-gray-400 flex-1">{guia.observaciones || ''}</span>
+                  </div>
+                )}
                 <div className="px-4 py-2 text-xs text-gray-600 border-t border-gray-300">
                   Por medio de la presente se da conformidad a los siguientes materiales ingresados segun la calidad
                   y caracteristicas por Produccion y Dpto. de Compras.
@@ -1031,11 +1047,15 @@ export default function GuiaDetalle() {
                   <div className="border-t border-gray-800 pt-1">Revisado por: Almacen</div>
                   <div className="border-t border-gray-800 pt-1">Aprobado por: Jefe de Produccion</div>
                 </div>
+                {pI.pie_texto && (
+                  <div className="px-4 pb-2 text-[10px] text-gray-500 border-t border-gray-300 pt-1">{pI.pie_texto}</div>
+                )}
               </div>
             )
           })}
         </div>
-      )}
+        )
+      })()}
       </PreviewImpresion>
     </div>
   )

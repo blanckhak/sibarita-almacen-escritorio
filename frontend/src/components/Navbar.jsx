@@ -34,6 +34,7 @@ export default function Navbar() {
     { path: '/historial',   label: 'Historial',   roles: ['admin','almacen','almacenero3','compras'] },
     { path: '/usuarios',    label: 'Usuarios',    roles: ['admin'] },
     { path: '/posibles-duplicados', label: 'Duplicados', roles: ['admin'] },
+    { path: '/configuracion', label: 'Config', roles: ['admin'] },
   ]
 
   const enlacesFiltrados = enlaces.filter(e =>

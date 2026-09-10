@@ -99,7 +99,7 @@ router.get('/kardex', verificarToken, async (req, res) => {
              COALESCE(p.nombre, gi.descripcion)     AS detalle,
              a.nombre                               AS almacen,
              COALESCE(gi.destino_detalle, gi.destino) AS motivo,
-             um.abreviatura                         AS unid_med,
+             COALESCE(um.abreviatura, umgi.abreviatura) AS unid_med,
              COALESCE(e.cantidad, gi.cantidad)::float8 AS cantidad,
              COALESCE((
                SELECT json_agg(json_build_object(
@@ -117,6 +117,7 @@ router.get('/kardex', verificarToken, async (req, res) => {
       LEFT JOIN productos p ON e.producto_id = p.id
       JOIN almacenes a   ON e.almacen_id = a.id
       LEFT JOIN unidades_medida um ON p.unidad_medida_id = um.id
+      LEFT JOIN unidades_medida umgi ON gi.unidad_medida_id = umgi.id
       ORDER BY a.nombre, g.fecha, e.codigo
     `)
 

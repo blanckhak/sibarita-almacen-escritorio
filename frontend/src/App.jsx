@@ -26,6 +26,7 @@ const Movimientos        = lazy(() => import('./pages/Movimientos'))
 const Almacenes          = lazy(() => import('./pages/Almacenes'))
 const Reportes           = lazy(() => import('./pages/Reportes'))
 const Historial          = lazy(() => import('./pages/Historial'))
+const Configuracion      = lazy(() => import('./pages/Configuracion'))
 
 function CargandoPagina() {
   return <div className="p-6 text-center py-12 text-gray-400">Cargando...</div>
@@ -175,6 +176,12 @@ function AppContent() {
         <Route path="/posibles-duplicados" element={
           <RutaProtegida roles={['admin']}>
             <PosiblesDuplicados />
+          </RutaProtegida>
+        } />
+
+        <Route path="/configuracion" element={
+          <RutaProtegida roles={['admin']}>
+            <Configuracion />
           </RutaProtegida>
         } />
 

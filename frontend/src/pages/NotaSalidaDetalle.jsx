@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { colorEtiquetaEstado, labelEtiquetaEstado } from '../utils/etiquetaEstados'
 import { textoStock } from '../utils/stockResumen'
 import { enPaginas } from '../utils/paginarImpresion'
+import { cargarParamsImpresion, PARAMS_IMPRESION_DEFAULT } from '../utils/parametrosImpresion'
 import { claseCodigoAlmacen, estiloCodigoImpreso, codigoAlmacen, numeroCodigo } from '../utils/colorAlmacen'
 import { PRESENTACIONES, presentacionLabel } from '../utils/presentaciones'
 import PreviewImpresion from '../components/PreviewImpresion'
@@ -96,6 +97,9 @@ export default function NotaSalidaDetalle() {
 
   useEffect(() => { cargar() }, [id])
   useEffect(() => { api.get('/api/unidades-medida').then(res => setUnidades(res.data)).catch(() => {}) }, [])
+  // Fase 13 (R1): que mostrar en las notas de Salida / Devolucion impresas.
+  const [paramsImp, setParamsImp] = useState(null)
+  useEffect(() => { cargarParamsImpresion().then(setParamsImp) }, [])
 
   // Cierra el preview y vuelve el modo a 'salida' para que un Ctrl+P posterior
   // no saque la nota de devolucion por error.
@@ -716,9 +720,11 @@ export default function NotaSalidaDetalle() {
       )}
 
       <PreviewImpresion abierto={preview} onCerrar={cerrarPreview}>
-      {modoImpresion === 'salida' && (
+      {modoImpresion === 'salida' && (() => {
+        const pS = paramsImp?.SALIDA || PARAMS_IMPRESION_DEFAULT
+        return (
         <div className={preview ? '' : 'hidden print:block'}>
-          {enPaginas(nota.detalle).map((filas, pi, todas) => {
+          {enPaginas(nota.detalle, pS.lineas_por_pagina).map((filas, pi, todas) => {
             const ultima = pi === todas.length - 1
             const [yy, mm, dd] = String(nota.fecha).slice(0, 10).split('-')
             return (
@@ -755,8 +761,10 @@ export default function NotaSalidaDetalle() {
                     <tr className="bg-gray-100 border-y-2 border-gray-800">
                       <th className="text-center py-1 tracking-widest">D E T A L L E</th>
                       <th className="text-center py-1 border-l border-gray-800 w-20">CANTIDAD</th>
-                      <th className="text-center py-1 border-l border-gray-800 w-16">P. UNIT.</th>
-                      <th className="text-center py-1 border-l border-gray-800 w-20">TOTAL</th>
+                      {pS.mostrar_precio && <>
+                        <th className="text-center py-1 border-l border-gray-800 w-16">P. UNIT.</th>
+                        <th className="text-center py-1 border-l border-gray-800 w-20">TOTAL</th>
+                      </>}
                     </tr>
                   </thead>
                   <tbody>
@@ -765,23 +773,27 @@ export default function NotaSalidaDetalle() {
                         <td className="py-1 px-1">
                           {d ? (
                             <>
-                              <span className="font-mono font-bold px-1 mr-1 rounded" style={estiloCodigoImpreso(d.almacen_nombre)}>{codigoAlmacen(d.etiqueta_codigo, d.almacen_nombre)}</span>
+                              {d.etiqueta_codigo && <span className="font-mono font-bold px-1 mr-1 rounded" style={estiloCodigoImpreso(d.almacen_nombre)}>{codigoAlmacen(d.etiqueta_codigo, d.almacen_nombre)}</span>}
                               {d.producto_nombre}
                               {d.devuelto_condicion === 'USADO' && <span className="text-[10px] text-gray-500"> (devuelto usado)</span>}
                             </>
                           ) : ''}
                         </td>
                         <td className="py-1 text-center border-l border-gray-400">{d ? fmtCantidad(d.cantidad) : ''}</td>
-                        <td className="py-1 text-right px-1 border-l border-gray-400">{d?.p_unitario ? Number(d.p_unitario).toFixed(2) : ''}</td>
-                        <td className="py-1 text-right px-1 border-l border-gray-400">{d?.total ? Number(d.total).toFixed(2) : ''}</td>
+                        {pS.mostrar_precio && <>
+                          <td className="py-1 text-right px-1 border-l border-gray-400">{d?.p_unitario ? Number(d.p_unitario).toFixed(2) : ''}</td>
+                          <td className="py-1 text-right px-1 border-l border-gray-400">{d?.total ? Number(d.total).toFixed(2) : ''}</td>
+                        </>}
                       </tr>
                     ))}
                     {ultima && (
                       <tr className="border-y-2 border-gray-800 h-7 font-semibold">
                         <td className="py-1 text-right pr-2">TOTAL</td>
                         <td className="border-l border-gray-800">&nbsp;</td>
-                        <td className="border-l border-gray-800">&nbsp;</td>
-                        <td className="py-1 text-right px-1 border-l border-gray-800">{total > 0 ? total.toFixed(2) : ''}</td>
+                        {pS.mostrar_precio && <>
+                          <td className="border-l border-gray-800">&nbsp;</td>
+                          <td className="py-1 text-right px-1 border-l border-gray-800">{total > 0 ? total.toFixed(2) : ''}</td>
+                        </>}
                       </tr>
                     )}
                   </tbody>
@@ -815,6 +827,9 @@ export default function NotaSalidaDetalle() {
                 <div className="px-4 py-1 text-[11px] italic text-gray-600">
                   Nota.- Cuando no hay stock se envia una copia al area de Compras.
                 </div>
+                {pS.pie_texto && (
+                  <div className="px-4 pb-1 text-[10px] text-gray-500">{pS.pie_texto}</div>
+                )}
                 <div className="flex justify-between items-end px-4 pb-2 pt-1 text-[10px] text-gray-500 border-t border-gray-300">
                   <span>FT-GE-17 ED. - 01</span>
                   <span className="text-right">c.c. Almacen Materia Prima, Almacen {nota.detalle[0]?.almacen_nombre || '—'}<br />c.c. Compras</span>
@@ -823,7 +838,8 @@ export default function NotaSalidaDetalle() {
             )
           })}
         </div>
-      )}
+        )
+      })()}
 
       {/* Nota de Devolucion (Bloque 4): se imprime cuando ya hay lineas
           devueltas. Lista lo que volvio a Mesa, en que condicion y, si volvio

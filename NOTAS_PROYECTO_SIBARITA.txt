@@ -2230,7 +2230,49 @@ Rama fase-13-servicios-impresion (stack sobre fase-12-roles-destinos).
   "Servicios"; INTERNO -> etiqueta 9007 EN_ALMACEN; inventario NO tiene los
   servicios; servicio sin modo -> 400. Datos de prueba: guia TEST-F13-...
 
---- R1: impresion parametrizada + 2 lineas: PENDIENTE (pasos 13.5-13.8) ---
+--- R1: impresion parametrizada + 2 lineas (HECHO) ---
+- BD (setup.js + database.sql): tabla parametros_impresion (1 fila por
+  documento INGRESO/SALIDA/DEVOLUCION) con mostrar_precio / mostrar_ubicacion
+  / mostrar_motivo / mostrar_observaciones / mostrar_partidas /
+  lineas_por_pagina (4-12) / pie_texto. Seed de las 3 filas.
+- Backend: nuevo backend/src/routes/parametrosImpresion.js + registro en
+  server.js. GET /api/parametros-impresion (cualquier usuario, las
+  pantallas de impresion lo necesitan). PUT /api/parametros-impresion/
+  :documento (solo admin).
+- Frontend: nuevo utils/parametrosImpresion.js (cargarParamsImpresion +
+  PARAMS_IMPRESION_DEFAULT). Nueva pantalla Configuracion.jsx en
+  /configuracion (solo admin) + link "Config" en el navbar.
+- GuiaDetalle.jsx Nota de Ingreso: enPaginas usa lineas_por_pagina;
+  mostrar_precio oculta las columnas P.UNIT/TOTAL; mostrar_ubicacion /
+  mostrar_motivo / mostrar_observaciones / mostrar_partidas condicionan los
+  pedazos de la celda DETALLE y el bloque OBSERVACIONES; pie_texto se
+  imprime al pie. El nombre del producto va en <span line-clamp-2> (max 2
+  lineas).
+- NotaSalidaDetalle.jsx Nota de Salida: lineas_por_pagina + mostrar_precio
+  (columnas P.UNIT/TOTAL) + pie_texto.
+- Probado: GET devuelve las 3 filas; PUT INGRESO (mostrar_precio=false,
+  lineas_por_pagina=5, pie_texto) guarda OK.
+
+--- Extra pedido por el usuario (10/09): unidad de medida en SERVICIOS ---
+- guia_items.unidad_medida_id INTEGER REFERENCES unidades_medida(id) (para
+  lineas SERVICIO, que no tienen producto en el catalogo; y como override
+  opcional de una linea PRODUCTO). setup.js + database.sql.
+- guias.js: ambos INSERT de guia_items guardan unidad_medida_id; GET /:id
+  hace COALESCE(um.*, umgi.*) con LEFT JOIN a gi.unidad_medida_id. Idem
+  etiquetas.js (lista y detalle) y reportes.js kardex.
+- Guias.jsx: el selector "Unidad de medida" tambien se muestra para
+  SERVICIO (opcional); la columna Producto de un servicio pasa de col-8 a
+  col-6 para que entre. permiteDecimal (Fase 11) ya funciona en servicios
+  via it.unidad_medida_id.
+- El id_agrupador (Fase 11 R4): el usuario aclaro que es para agrupar
+  productos que son el mismo con distinto nombre (lejia = cloro =
+  blanqueador). El comportamiento actual (agrupa lineas con el mismo ID en
+  la impresion) ya sirve para eso; complementa "Posibles Duplicados".
+- Probado: guia con SERVICIO INTERNO x2.5 Metro + SERVICIO EXTERNO x1
+  Kilogramo -> unidades guardadas y devueltas en el detalle.
+- Datos de prueba: guia TEST-SU-...
+
+PENDIENTE 13.9: bump instalador 1.7.0 + merge (al final, con todo revisado).
 
 PENDIENTE NUEVO (10/09, de para giarse/):
 - Formato "NOTA DE INGRESO DE ACTIVOS - DESUSO" (para giarse/desuso.png,

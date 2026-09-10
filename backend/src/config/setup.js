@@ -490,9 +490,33 @@ async function setup() {
     ALTER TABLE guia_items DROP CONSTRAINT IF EXISTS guia_items_servicio_modo_check;
     ALTER TABLE guia_items ADD  CONSTRAINT guia_items_servicio_modo_check
       CHECK (servicio_modo IS NULL OR servicio_modo IN ('EXTERNO', 'INTERNO'));
+    -- Unidad de medida por linea: para lineas SERVICIO (no tienen producto en
+    -- el catalogo) y como override opcional de una linea PRODUCTO. Si esta
+    -- NULL en una linea PRODUCTO se usa la del catalogo (productos.unidad_medida_id).
+    ALTER TABLE guia_items ADD COLUMN IF NOT EXISTS unidad_medida_id INTEGER REFERENCES unidades_medida(id);
     -- Detalle de nota de salida SIN etiqueta: linea de servicio EXTERNO. La
     -- descripcion del servicio va aca (etiqueta_id ya es NULLABLE).
     ALTER TABLE notas_salida_detalle ADD COLUMN IF NOT EXISTS descripcion_servicio VARCHAR(200);
+
+    -- ==========================================================
+    -- FASE 13 (R1): impresion parametrizada
+    -- ==========================================================
+    -- Que mostrar en cada documento impreso (INGRESO / SALIDA / DEVOLUCION) y
+    -- cuantas lineas por hoja. Lo edita solo admin desde /configuracion.
+    CREATE TABLE IF NOT EXISTS parametros_impresion (
+      id SERIAL PRIMARY KEY,
+      documento VARCHAR(20) NOT NULL UNIQUE
+        CHECK (documento IN ('INGRESO', 'SALIDA', 'DEVOLUCION')),
+      mostrar_precio        BOOLEAN NOT NULL DEFAULT true,
+      mostrar_ubicacion     BOOLEAN NOT NULL DEFAULT true,
+      mostrar_motivo        BOOLEAN NOT NULL DEFAULT true,
+      mostrar_observaciones BOOLEAN NOT NULL DEFAULT true,
+      mostrar_partidas      BOOLEAN NOT NULL DEFAULT true,
+      lineas_por_pagina     SMALLINT NOT NULL DEFAULT 6 CHECK (lineas_por_pagina BETWEEN 4 AND 12),
+      pie_texto             VARCHAR(300)
+    );
+    INSERT INTO parametros_impresion (documento) VALUES ('INGRESO'), ('SALIDA'), ('DEVOLUCION')
+      ON CONFLICT (documento) DO NOTHING;
   `)
 
   const rolesExist = await pool.query('SELECT COUNT(*) FROM roles')

@@ -412,7 +412,7 @@ export default function Guias() {
                       )}
                     </div>
                     <div className="grid grid-cols-12 gap-3 items-start">
-                      <div className={esServicio ? 'col-span-8' : 'col-span-4'}>
+                      <div className={esServicio ? 'col-span-6' : 'col-span-4'}>
                         <label className="block text-xs font-medium text-gray-500 mb-1">{esServicio ? 'Servicio / descripcion' : 'Producto'}</label>
                         {esServicio ? (
                           <input
@@ -518,26 +518,26 @@ export default function Guias() {
                           )}
                         </div>
                       )}
-                      {!esServicio && (
-                        <div className="col-span-2">
-                          <label className="block text-xs font-medium text-gray-500 mb-1">Unidad de medida</label>
-                          {necesitaUnidad ? (
-                            <select
-                              required
-                              value={it.unidad_medida_id}
-                              onChange={e => actualizarLinea(i, 'unidad_medida_id', e.target.value)}
-                              className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            >
-                              <option value="">Definir...</option>
-                              {unidades.map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}
-                            </select>
-                          ) : (
-                            <div className="text-sm text-gray-500 px-2.5 py-2">
-                              {prod.unidad_medida_nombre || 'Sin definir'}
-                            </div>
-                          )}
-                        </div>
-                      )}
+                      <div className="col-span-2">
+                        <label className="block text-xs font-medium text-gray-500 mb-1">
+                          Unidad de medida{esServicio ? ' (opcional)' : ''}
+                        </label>
+                        {necesitaUnidad ? (
+                          <select
+                            required={!esServicio}
+                            value={it.unidad_medida_id}
+                            onChange={e => actualizarLinea(i, 'unidad_medida_id', e.target.value)}
+                            className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value="">Definir...</option>
+                            {unidades.map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}
+                          </select>
+                        ) : (
+                          <div className="text-sm text-gray-500 px-2.5 py-2">
+                            {prod.unidad_medida_nombre || 'Sin definir'}
+                          </div>
+                        )}
+                      </div>
                       <div className="col-span-1 flex items-end justify-center h-full pt-5">
                         {form.items.length > 1 && (
                           <button

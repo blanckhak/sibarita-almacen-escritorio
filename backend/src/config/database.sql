@@ -215,7 +215,11 @@ CREATE TABLE guia_items (
   -- genera su Nota de Salida automatica (sin etiqueta ni inventario). INTERNO
   -- = genera un codigo unico y queda retenido en almacen (tampoco mueve
   -- inventario).
-  servicio_modo VARCHAR(10) CHECK (servicio_modo IS NULL OR servicio_modo IN ('EXTERNO', 'INTERNO'))
+  servicio_modo VARCHAR(10) CHECK (servicio_modo IS NULL OR servicio_modo IN ('EXTERNO', 'INTERNO')),
+  -- Unidad de medida por linea: para SERVICIO (sin producto en el catalogo) y
+  -- como override opcional de una linea PRODUCTO. NULL en PRODUCTO = se usa la
+  -- del catalogo (productos.unidad_medida_id).
+  unidad_medida_id INTEGER REFERENCES unidades_medida(id)
 );
 
 -- Desglose de una linea de guia cuyo producto se maneja EN_PARTIDA
@@ -323,6 +327,23 @@ CREATE TABLE parametros_aprobacion (
   monto_minimo NUMERIC(12,2),
   activo BOOLEAN NOT NULL DEFAULT false
 );
+
+-- Fase 13 (R1): que mostrar en cada documento impreso y cuantas lineas por
+-- hoja. Una fila por documento; lo edita solo admin desde /configuracion.
+CREATE TABLE parametros_impresion (
+  id SERIAL PRIMARY KEY,
+  documento VARCHAR(20) NOT NULL UNIQUE
+    CHECK (documento IN ('INGRESO', 'SALIDA', 'DEVOLUCION')),
+  mostrar_precio        BOOLEAN NOT NULL DEFAULT true,
+  mostrar_ubicacion     BOOLEAN NOT NULL DEFAULT true,
+  mostrar_motivo        BOOLEAN NOT NULL DEFAULT true,
+  mostrar_observaciones BOOLEAN NOT NULL DEFAULT true,
+  mostrar_partidas      BOOLEAN NOT NULL DEFAULT true,
+  lineas_por_pagina     SMALLINT NOT NULL DEFAULT 6 CHECK (lineas_por_pagina BETWEEN 4 AND 12),
+  pie_texto             VARCHAR(300)
+);
+
+INSERT INTO parametros_impresion (documento) VALUES ('INGRESO'), ('SALIDA'), ('DEVOLUCION');
 
 -- Solicitud de Materiales (Fase B): registro independiente, no ligado a
 -- inventario/etiquetas porque las lineas son texto libre (muestras,
