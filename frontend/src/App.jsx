@@ -15,6 +15,8 @@ const Guias              = lazy(() => import('./pages/Guias'))
 const GuiaDetalle        = lazy(() => import('./pages/GuiaDetalle'))
 const NotasSalida        = lazy(() => import('./pages/NotasSalida'))
 const NotaSalidaDetalle  = lazy(() => import('./pages/NotaSalidaDetalle'))
+const NotasDesuso        = lazy(() => import('./pages/NotasDesuso'))
+const NotaDesusoDetalle  = lazy(() => import('./pages/NotaDesusoDetalle'))
 const SolicitudesMateriales = lazy(() => import('./pages/SolicitudesMateriales'))
 const SolicitudMaterialesDetalle = lazy(() => import('./pages/SolicitudMaterialesDetalle'))
 const ConsultaProductos  = lazy(() => import('./pages/ConsultaProductos'))
@@ -123,6 +125,18 @@ function AppContent() {
         <Route path="/notas-salida/:id" element={
           <RutaProtegida roles={['admin', 'almacen', 'almacenero3', 'mantenimiento', 'compras']}>
             <NotaSalidaDetalle />
+          </RutaProtegida>
+        } />
+
+        <Route path="/notas-desuso" element={
+          <RutaProtegida roles={['admin', 'almacen', 'almacenero3', 'mantenimiento', 'compras']}>
+            <NotasDesuso />
+          </RutaProtegida>
+        } />
+
+        <Route path="/notas-desuso/:id" element={
+          <RutaProtegida roles={['admin', 'almacen', 'almacenero3', 'mantenimiento', 'compras']}>
+            <NotaDesusoDetalle />
           </RutaProtegida>
         } />
 

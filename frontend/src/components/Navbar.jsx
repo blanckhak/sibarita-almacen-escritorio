@@ -23,6 +23,7 @@ const ENLACES_SECUNDARIOS = [
   { path: '/almacenes',            label: 'Almacenes',           roles: null },
   { path: '/productos',            label: 'Catalogo',            roles: ['admin','almacen','almacenero3','mantenimiento','compras'] },
   { path: '/solicitudes-materiales', label: 'Solicitud Materiales', roles: ['admin','almacen','almacenero3','mantenimiento','compras'] },
+  { path: '/notas-desuso',         label: 'Notas de Desuso',     roles: ['admin','almacen','almacenero3','mantenimiento','compras'] },
   { path: '/consulta-productos',   label: 'Consulta',            roles: ['admin','almacen','almacenero3','mantenimiento','compras'] },
   { path: '/movimientos',          label: 'Movimientos',         roles: ['admin','almacen','almacenero3'] },
   { path: '/reportes',             label: 'Reportes',            roles: ['admin','almacen','almacenero3','compras'] },

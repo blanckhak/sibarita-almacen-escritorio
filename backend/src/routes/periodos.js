@@ -220,13 +220,14 @@ router.post('/:id/reabrir', verificarToken, soloRoles('admin'),
         `SELECT
            (SELECT COUNT(*)::int FROM guias WHERE periodo_id = $1) AS guias,
            (SELECT COUNT(*)::int FROM notas_salida WHERE periodo_id = $1) AS notas,
+           (SELECT COUNT(*)::int FROM notas_desuso WHERE periodo_id = $1) AS notas_desuso,
            (SELECT COUNT(*)::int FROM etiquetas WHERE periodo_id = $1) AS etiquetas`,
         [s.id]
       )
       const m = mov.rows[0]
-      if (m.guias > 0 || m.notas > 0 || m.etiquetas > 0) {
+      if (m.guias > 0 || m.notas > 0 || m.notas_desuso > 0 || m.etiquetas > 0) {
         await client.query('ROLLBACK')
-        return res.status(409).json({ error: `El periodo siguiente "${s.nombre}" ya tiene movimiento (${m.guias} guias, ${m.notas} notas). No se puede reabrir.` })
+        return res.status(409).json({ error: `El periodo siguiente "${s.nombre}" ya tiene movimiento (${m.guias} guias, ${m.notas} notas, ${m.notas_desuso} notas de desuso). No se puede reabrir.` })
       }
       if (s.estado !== 'ACTIVO') {
         await client.query('ROLLBACK')

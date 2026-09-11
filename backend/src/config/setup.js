@@ -544,6 +544,43 @@ async function setup() {
     -- se llamaba "Periodo inicial"; se renombra a "Periodo 1" para que la
     -- secuencia sea uniforme (el cierre ya nombra el siguiente "Periodo N+1").
     UPDATE periodos SET nombre = 'Periodo 1' WHERE nombre = 'Periodo inicial';
+
+    -- ==========================================================
+    -- FASE 17: Nota de Ingreso de Activos - DESUSO (para giarse/desuso.png)
+    -- ==========================================================
+    -- Documento fisico NUEVO, aparte de notas_salida: registra material usado
+    -- que vuelve de un area (no siempre hay una nota de salida previa en el
+    -- sistema, por eso nota_salida_ref es texto libre y no una FK). No mueve
+    -- inventario ni etiquetas: es solo constancia en papel + auditoria.
+    CREATE SEQUENCE IF NOT EXISTS notas_desuso_numero_seq START 1;
+
+    CREATE TABLE IF NOT EXISTS notas_desuso (
+      id SERIAL PRIMARY KEY,
+      numero_nota VARCHAR(20) NOT NULL UNIQUE,
+      seccion VARCHAR(100),
+      persona_responsable VARCHAR(150) NOT NULL,
+      nota_salida_ref VARCHAR(20),
+      almacen_id INTEGER NOT NULL REFERENCES almacenes(id),
+      periodo_id INTEGER REFERENCES periodos(id),
+      usuario_id INTEGER REFERENCES usuarios(id),
+      fecha TIMESTAMP DEFAULT NOW(),
+      observaciones TEXT,
+      estado VARCHAR(10) NOT NULL DEFAULT 'VIGENTE' CHECK (estado IN ('VIGENTE', 'ANULADA')),
+      motivo_anulacion VARCHAR(200),
+      anulado_por INTEGER REFERENCES usuarios(id),
+      anulado_en TIMESTAMP
+    );
+
+    -- DESCRIPCION y AREA-MAQUINA son texto libre (activos, no siempre estan en
+    -- el catalogo de productos). UNIDAD reusa el catalogo unidades_medida.
+    CREATE TABLE IF NOT EXISTS notas_desuso_detalle (
+      id SERIAL PRIMARY KEY,
+      nota_desuso_id INTEGER NOT NULL REFERENCES notas_desuso(id),
+      descripcion VARCHAR(200) NOT NULL,
+      cantidad NUMERIC(12,3) NOT NULL,
+      unidad_medida_id INTEGER REFERENCES unidades_medida(id),
+      area_maquina VARCHAR(150)
+    );
   `)
 
   // Fase 14: backfill. Corre una sola vez (guarda: no hay periodos todavia).

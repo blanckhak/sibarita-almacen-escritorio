@@ -412,3 +412,36 @@ CREATE TABLE periodos_saldos (
 ALTER TABLE guias        ADD COLUMN periodo_id INTEGER REFERENCES periodos(id);
 ALTER TABLE notas_salida ADD COLUMN periodo_id INTEGER REFERENCES periodos(id);
 ALTER TABLE etiquetas    ADD COLUMN periodo_id INTEGER REFERENCES periodos(id);
+
+-- Fase 17: Nota de Ingreso de Activos - DESUSO (para giarse/desuso.png).
+-- Documento aparte de notas_salida: material usado que vuelve de un area. No
+-- mueve inventario ni etiquetas; nota_salida_ref es texto libre (no siempre
+-- hay una nota de salida previa registrada).
+CREATE SEQUENCE notas_desuso_numero_seq START 1;
+
+CREATE TABLE notas_desuso (
+  id SERIAL PRIMARY KEY,
+  numero_nota VARCHAR(20) NOT NULL UNIQUE,
+  seccion VARCHAR(100),
+  persona_responsable VARCHAR(150) NOT NULL,
+  nota_salida_ref VARCHAR(20),
+  almacen_id INTEGER NOT NULL REFERENCES almacenes(id),
+  periodo_id INTEGER REFERENCES periodos(id),
+  usuario_id INTEGER REFERENCES usuarios(id),
+  fecha TIMESTAMP DEFAULT NOW(),
+  observaciones TEXT,
+  estado VARCHAR(10) NOT NULL DEFAULT 'VIGENTE' CHECK (estado IN ('VIGENTE', 'ANULADA')),
+  motivo_anulacion VARCHAR(200),
+  anulado_por INTEGER REFERENCES usuarios(id),
+  anulado_en TIMESTAMP
+);
+
+-- DESCRIPCION y AREA-MAQUINA son texto libre; UNIDAD reusa unidades_medida.
+CREATE TABLE notas_desuso_detalle (
+  id SERIAL PRIMARY KEY,
+  nota_desuso_id INTEGER NOT NULL REFERENCES notas_desuso(id),
+  descripcion VARCHAR(200) NOT NULL,
+  cantidad NUMERIC(12,3) NOT NULL,
+  unidad_medida_id INTEGER REFERENCES unidades_medida(id),
+  area_maquina VARCHAR(150)
+);
