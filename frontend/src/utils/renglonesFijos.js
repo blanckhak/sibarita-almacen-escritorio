@@ -5,14 +5,17 @@
 // PARTIRSE en renglones de ancho fijo y ocupar los renglones de abajo,
 // dejando Cantidad/P.Unit/Total solo en el primero.
 //
-// PROVISORIO: estos dos numeros (cuantos caracteres entran por renglon)
-// estan puestos a ojo, NO medidos. Ajustar aca nomas cuando el usuario
-// mida el talonario fisico con regla (ver NOTAS_PROYECTO_SIBARITA.txt,
-// Fase 1 / Bloque 2 "6 lineas" -- item 30 del cierre del 11/09/2026).
-// CARACTERES_LINEA_1 es mas chico porque ese renglon comparte espacio con
-// el codigo de barra impreso (ej. "J9018") y el ITEM ("1 A1 ·").
-export const CARACTERES_LINEA_1 = 38
-export const CARACTERES_LINEA_SIGUIENTE = 48
+// Medido en el DOM real (no a ojo): ancho de la celda DETALLE del talonario
+// (~552px) / ancho promedio de un caracter con la fuente y tamaño que usa
+// esta tabla (text-xs, ui-sans-serif, ~6.56px/caracter), restando lo que ya
+// ocupan ITEM + codigo en la primera linea. Salida cruda: ~74 (linea 1) y
+// ~84 (siguientes); se deja un 10% de margen para no tocar el borde de
+// CANTIDAD. SIGUE SIENDO UNA APROXIMACION del ancho en PANTALLA, no del
+// papel fisico de la impresora matricial -- si al medir el talonario con
+// regla (Fase 1 / Bloque 2 "6 lineas", NOTAS_PROYECTO_SIBARITA.txt) da un
+// numero de caracteres distinto, se ajusta aca nomas.
+export const CARACTERES_LINEA_1 = 66
+export const CARACTERES_LINEA_SIGUIENTE = 75
 
 // Alto fijo de cada renglon de la tabla DETALLE, en el mismo lugar para
 // las 3 impresiones que lo usan (Nota de Ingreso, Nota de Salida, Nota de
