@@ -99,18 +99,68 @@ function partirNombreItem(it) {
   return { primera: corregidas[0], siguientes: corregidas.slice(1) }
 }
 
-// Expande una lista de items en "renglones fisicos": el primer renglon de
-// cada item lleva el item completo (para que el caller pinte codigo/
-// cantidad/p.unit/total); los siguientes son solo continuacion de texto
-// (`esContinuacion: true`, sin esos datos).
-export function expandirEnRenglones(items) {
-  const renglones = []
-  for (const it of items) {
-    const { primera, siguientes } = partirNombreItem(it)
-    renglones.push({ ...it, esContinuacion: false, textoLinea: primera })
-    for (const linea of siguientes) {
-      renglones.push({ ...it, esContinuacion: true, textoLinea: linea })
-    }
+// Expande UN item en sus renglones fisicos: el primero lleva el item
+// completo (para que el caller pinte codigo/cantidad/p.unit/total); los
+// siguientes son solo continuacion de texto (`esContinuacion: true`, sin
+// esos datos). Nunca se separan entre si -- son un bloque indivisible.
+function renglonesDeItem(it) {
+  const { primera, siguientes } = partirNombreItem(it)
+  const renglones = [{ ...it, esContinuacion: false, textoLinea: primera }]
+  for (const linea of siguientes) {
+    renglones.push({ ...it, esContinuacion: true, textoLinea: linea })
   }
   return renglones
+}
+
+// Expande una lista de items en renglones fisicos, todos seguidos (sin
+// paginar). Se mantiene para quien necesite la lista plana.
+export function expandirEnRenglones(items) {
+  return items.flatMap(renglonesDeItem)
+}
+
+// Pagina los renglones de una lista de items de a `porPagina` por hoja,
+// SIN partir un producto entre dos hojas si se puede evitar: si los
+// renglones de un item no entran en lo que queda de la hoja actual, ese
+// item pasa ENTERO a la siguiente (la hoja actual queda con renglones en
+// blanco al final, que ya se rellenan con null como en cualquier hoja
+// incompleta). Solo se corta un item a mitad de hoja cuando el item por
+// si solo ya supera la capacidad de una hoja completa -- ahi no hay forma
+// de evitarlo sin perder texto, asi que sigue en la hoja de abajo.
+export function paginarPorItem(items, porPagina) {
+  const paginas = []
+  let actual = []
+  for (const it of items) {
+    const grupo = renglonesDeItem(it)
+    if (grupo.length > porPagina) {
+      // no entra en ninguna hoja entera: se reparte, llenando cada hoja
+      let restante = grupo
+      while (restante.length > 0) {
+        const espacio = porPagina - actual.length
+        const tomar = restante.slice(0, espacio)
+        actual.push(...tomar)
+        restante = restante.slice(tomar.length)
+        if (actual.length >= porPagina) { paginas.push(actual); actual = [] }
+      }
+      continue
+    }
+    if (actual.length + grupo.length > porPagina) {
+      paginas.push(actual)
+      actual = []
+    }
+    actual.push(...grupo)
+  }
+  // Si el ultimo item lleno una hoja justo (rama de arriba ya la empujo y
+  // dejo `actual` vacio), no agregar una hoja extra en blanco.
+  if (actual.length > 0 || paginas.length === 0) paginas.push(actual)
+
+  // Relleno con null hasta completar el cuadro de CADA hoja (no solo la
+  // ultima): a diferencia de enPaginas() -- que corta un array plano en
+  // partes iguales y por eso solo la ultima puede quedar corta -- aca
+  // CUALQUIER hoja puede quedar incompleta a proposito (para no partir un
+  // item a la mitad), y el rayado fisico de esa hoja tiene que verse
+  // completo igual.
+  for (const pagina of paginas) {
+    while (pagina.length < porPagina) pagina.push(null)
+  }
+  return paginas
 }

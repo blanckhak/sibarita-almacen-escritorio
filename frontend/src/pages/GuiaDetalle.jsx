@@ -6,8 +6,7 @@ import CodigoBarras from '../components/CodigoBarras'
 import { extraerProveedoresConocidos } from '../utils/proveedores'
 import { colorEtiquetaEstado, labelEtiquetaEstado } from '../utils/etiquetaEstados'
 import { TIPOS_DOCUMENTO, tipoDocumentoLabel } from '../utils/tiposDocumento'
-import { enPaginas } from '../utils/paginarImpresion'
-import { expandirEnRenglones, ALTO_RENGLON_FIJO } from '../utils/renglonesFijos'
+import { paginarPorItem, ALTO_RENGLON_FIJO } from '../utils/renglonesFijos'
 import { fmtCantidad } from '../utils/fmt'
 import { cargarParamsImpresion, PARAMS_IMPRESION_DEFAULT } from '../utils/parametrosImpresion'
 import { claseCodigoAlmacen, estiloCodigoImpreso, codigoAlmacen } from '../utils/colorAlmacen'
@@ -932,7 +931,7 @@ export default function GuiaDetalle() {
         const pI = paramsImp?.INGRESO || PARAMS_IMPRESION_DEFAULT
         return (
         <div className={preview ? '' : 'hidden print:block'}>
-          {enPaginas(expandirEnRenglones(itemsImpresion), pI.lineas_por_pagina).map((filas, pi, todas) => {
+          {paginarPorItem(itemsImpresion, pI.lineas_por_pagina).map((filas, pi, todas) => {
             const ultima = pi === todas.length - 1
             const [yy, mm, dd] = String(guia.fecha).slice(0, 10).split('-')
             return (
