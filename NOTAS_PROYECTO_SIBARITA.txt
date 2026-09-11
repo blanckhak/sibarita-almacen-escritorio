@@ -2546,6 +2546,114 @@ COMO LEVANTAR PARA PROBAR:
    luego abrir http://localhost:3000
    admin@sibarita.com / admin123
 
+==================================================
+ESTADO AL CERRAR EL 11/09/2026 (sesion siguiente)
+==================================================
+Rama actual: master (arbol limpio). Fase 17 + cierre final YA HECHOS.
+
+28. FASE 17: Nota de Ingreso de Activos - DESUSO (11/09/2026) -- HECHA
+--------------------------------------------------
+Modulo propio (no solo formato de impresion, se opto por eso al
+preguntar): tabla notas_desuso + notas_desuso_detalle, numeracion
+propia (notas_desuso_numero_seq), sin tocar inventario ni etiquetas.
+nota_salida_ref es TEXTO LIBRE (no FK): a veces no hay nota de salida
+previa cargada. AREA-MAQUINA: texto libre por linea. UNIDAD: reusa el
+catalogo unidades_medida.
+- Backend: backend/src/routes/notasDesuso.js (GET/POST/PUT/anular).
+  server.js: app.use('/api/notas-desuso', ...). setup.js +
+  database.sql: tablas nuevas. periodos.js: notas_desuso sumado al
+  chequeo de movimiento en /reabrir (si no, tiraria un error crudo de
+  FK en vez del 409 lindo).
+- Frontend: paginas NotasDesuso.jsx (listado+alta) y
+  NotaDesusoDetalle.jsx (editar encabezado, anular, imprimir --
+  calca el talonario fisico de para giarse/desuso.png: SECCION /
+  PERSONA RESPONSABLE / NOTA DE SALIDA DE ACTIVO + tabla DESCRIPCION/
+  CANTIDAD/UNIDAD/AREA-MAQUINA + firmas). Link en menu "Mas" del
+  navbar (App.jsx + Navbar.jsx).
+- Probado de punta a punta por API y por UI real (crear, listar, ver,
+  imprimir, anular) sirviendo el build de produccion desde el backend
+  (frontend/dist copiado a backend/frontend-dist, que esta en
+  .gitignore).
+- Commit: e46fc4a.
+
+29. CIERRE FINAL Fases 12-17 (11/09/2026) -- HECHO
+--------------------------------------------------
+Se detecto que las ramas fase-12..fase-17 NO divergian: son una sola
+cadena lineal (cada fase se ramio de la punta de la anterior). Por
+eso mergear a master fue UN SOLO fast-forward (no 6 merges reales).
+El usuario eligio bump de version en un solo salto (no uno por fase,
+para no reescribir commits ya hechos):
+- package.json + package-lock.json: 1.6.0 -> 1.12.0 (commit 09eb378).
+- master fast-forwardeado a fase-17-desuso (commit 09eb378).
+- git push origin master: HECHO (56c053b..09eb378). Fue el primer
+  push de las Fases 12 a 17.
+Las ramas fase-12-roles-destinos .. fase-17-desuso se dejaron sin
+borrar (ya estan contenidas en master, quedan de referencia).
+
+30. FIXES post-cierre en Nota de Ingreso / Nota de Salida (11/09/2026)
+--------------------------------------------------
+Probando Fase 17 se armo a proposito una guia con nombre de producto
+MUY largo ("MANGUERA DE SILICONA REFORZADA TRANSPARENTE PARA LINEA DE
+ENVASADO ALTA TEMPERATURA", codigo J9018, JOPISA) + nota de salida con
+devolucion USADA de 0.1 metros (para probar decimales R6). Aparecieron
+2 bugs reales de impresion, corregidos y probados en el navegador:
+
+a) line-clamp-2 cortaba el nombre con "..." y PERDIA texto en el
+   papel si no entraba en 2 lineas (GuiaDetalle.jsx). Sacado: ahora
+   el nombre crece a las lineas que haga falta. Commit 33607bb.
+b) align-top estaba puesto en el <tr> de la fila de detalle (no tiene
+   efecto ahi -- vertical-align solo aplica a <td>/inline). Cantidad/
+   P.Unit/Total quedaban centrados en vez de pegados al primer
+   renglon cuando el nombre ocupaba varias lineas. Se movio align-top
+   a cada <td>. Corregido en GuiaDetalle.jsx (commit 33607bb, junto
+   con el fix de arriba) Y en NotaSalidaDetalle.jsx (commit a264478,
+   mismo bug ahi).
+Datos de prueba en la base (NO limpiados, quedan para seguir
+probando): guia G-TEST17 (JOPISA, id 9) con codigo J9018 (10 M) ->
+nota de salida 000005 (id 5) con devolucion usada 0.1 M -> codigo
+nuevo J9019.
+
+PENDIENTE NUEVO (11/09, bloqueado igual que antes):
+- El usuario pidio ademas "renglones fijos" para calzar en el
+  TALONARIO FISICO preimpreso: que el nombre largo NO estire la celda
+  sino que se parta en renglones de ANCHO FIJO (como una terminal de
+  N caracteres), que codigo/cantidad/unidad solo se impriman en el
+  PRIMER renglon del item, y que los renglones de continuacion sigan
+  el rayado ya impreso en el papel (paginado por RENGLON, no por
+  ITEM). Esto es lo mismo que la Fase 1 (Bloque 2 "6 lineas") que ya
+  estaba BLOQUEADA en este archivo esperando que el usuario mida el
+  talonario fisico con regla (ancho de la columna DETALLE + a cuantos
+  CPI esta la impresora matricial -> cuantos caracteres entran por
+  renglon).
+- Se le pregunto al usuario si ya tenia esa medicion. Respuesta:
+  TODAVIA NO LA MIDIO. Se acordo seguir con un VALOR PROVISORIO de
+  caracteres-por-linea, facil de cambiar despues en un solo lugar,
+  en vez de seguir bloqueado. FALTA IMPLEMENTAR (se corto por limite
+  de tokens de la sesion antes de escribir el codigo):
+  1. Una constante/config (ej. frontend/src/utils/paginarImpresion.js
+     o un archivo nuevo) con CARACTERES_POR_LINEA_DETALLE (provisorio,
+     a ajustar cuando el usuario mida el papel).
+  2. Funcion que parte producto_nombre (+ el codigo/prefijo del
+     primer renglon) en varias "lineas" de ese ancho fijo (wrap por
+     palabra, no por pixel).
+  3. Reemplazar el paginado actual de GuiaDetalle.jsx (enPaginas()
+     por ITEM, con celda que crece) por un paginado por RENGLON: cada
+     item se expande en 1+ "slots" (primer slot = codigo+cantidad+
+     unidad+nombre linea 1; slots siguientes = solo continuacion de
+     texto, celdas de Cantidad/P.Unit/Total en blanco), y se empaquetan
+     de a `lineas_por_pagina` slots por hoja (no items).
+  4. Mismo tratamiento aplicaria a NotaSalidaDetalle.jsx si el usuario
+     lo pide ahi tambien (ya paso con el fix de align-top: primero
+     solo en Guia, despues "corregilo ahi tambien").
+  OJO: esto cambia bastante el layout actual (celda fija en vez de
+  celda que crece) -- no romper el fix del punto 30a/30b de arriba
+  (no debe volver a cortar texto con "...", solo dejar de estirar el
+  ALTO de una celda y en cambio ocupar renglones de abajo).
+
+COMO RETOMAR: rama master, git status limpio, 1 commit sin pushear
+(a264478) si no se pusheo despues de este cierre -- revisar con
+`git log origin/master..master` antes de asumir que ya se subio.
+
 --------------------------------------------------
 FIN DE LA NOTA
 --------------------------------------------------
