@@ -981,8 +981,8 @@ export default function GuiaDetalle() {
                   </thead>
                   <tbody>
                     {filas.map((it, ri) => (
-                      <tr key={ri} className="border-b border-gray-400 align-top" style={{ minHeight: '1.75rem' }}>
-                        <td className="py-1 px-1" style={{ overflowWrap: 'anywhere', whiteSpace: 'normal' }}>
+                      <tr key={ri} className="border-b border-gray-400" style={{ minHeight: '1.75rem' }}>
+                        <td className="py-1 px-1 align-top" style={{ overflowWrap: 'anywhere', whiteSpace: 'normal' }}>
                           {it && (
                             <>
                               {it._itm && <span className="font-mono font-bold mr-1">{it._itm} ·</span>}
@@ -1010,10 +1010,10 @@ export default function GuiaDetalle() {
                             </>
                           )}
                         </td>
-                        <td className="py-1 text-center border-l border-gray-400">{it ? `${fmtCantidad(it.cantidad)}${it.unidad_medida_abreviatura ? ` ${it.unidad_medida_abreviatura}` : ''}` : ''}</td>
+                        <td className="py-1 text-center border-l border-gray-400 align-top">{it ? `${fmtCantidad(it.cantidad)}${it.unidad_medida_abreviatura ? ` ${it.unidad_medida_abreviatura}` : ''}` : ''}</td>
                         {pI.mostrar_precio && <>
-                          <td className="py-1 border-l border-gray-400">&nbsp;</td>
-                          <td className="py-1 border-l border-gray-400">&nbsp;</td>
+                          <td className="py-1 border-l border-gray-400 align-top">&nbsp;</td>
+                          <td className="py-1 border-l border-gray-400 align-top">&nbsp;</td>
                         </>}
                       </tr>
                     ))}

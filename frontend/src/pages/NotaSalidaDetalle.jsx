@@ -778,8 +778,8 @@ export default function NotaSalidaDetalle() {
                   </thead>
                   <tbody>
                     {filas.map((d, ri) => (
-                      <tr key={ri} className="border-b border-gray-400 h-7 align-top">
-                        <td className="py-1 px-1">
+                      <tr key={ri} className="border-b border-gray-400 h-7">
+                        <td className="py-1 px-1 align-top" style={{ overflowWrap: 'anywhere', whiteSpace: 'normal' }}>
                           {d ? (
                             <>
                               {d.etiqueta_codigo && <span className="font-mono font-bold px-1 mr-1 rounded" style={estiloCodigoImpreso(d.almacen_nombre)}>{codigoAlmacen(d.etiqueta_codigo, d.almacen_nombre)}</span>}
@@ -788,10 +788,10 @@ export default function NotaSalidaDetalle() {
                             </>
                           ) : ''}
                         </td>
-                        <td className="py-1 text-center border-l border-gray-400">{d ? fmtCantidad(d.cantidad) : ''}</td>
+                        <td className="py-1 text-center border-l border-gray-400 align-top">{d ? fmtCantidad(d.cantidad) : ''}</td>
                         {pS.mostrar_precio && <>
-                          <td className="py-1 text-right px-1 border-l border-gray-400">{d?.p_unitario ? Number(d.p_unitario).toFixed(2) : ''}</td>
-                          <td className="py-1 text-right px-1 border-l border-gray-400">{d?.total ? Number(d.total).toFixed(2) : ''}</td>
+                          <td className="py-1 text-right px-1 border-l border-gray-400 align-top">{d?.p_unitario ? Number(d.p_unitario).toFixed(2) : ''}</td>
+                          <td className="py-1 text-right px-1 border-l border-gray-400 align-top">{d?.total ? Number(d.total).toFixed(2) : ''}</td>
                         </>}
                       </tr>
                     ))}
