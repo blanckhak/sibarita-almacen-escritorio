@@ -991,7 +991,7 @@ export default function GuiaDetalle() {
                                   {it.codigo_impresion || codigoAlmacen(it.etiqueta_codigo, guia.almacen_nombre)}
                                 </span>
                               )}
-                              <span className="line-clamp-2 align-top">
+                              <span className="align-top">
                                 {it.producto_nombre}
                                 {it.tipo === 'SERVICIO' && <span className="text-[10px] text-gray-500"> (servicio{it.servicio_modo ? ` ${it.servicio_modo.toLowerCase()}` : ''})</span>}
                               </span>
