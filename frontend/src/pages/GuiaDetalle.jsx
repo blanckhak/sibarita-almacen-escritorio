@@ -7,6 +7,7 @@ import { extraerProveedoresConocidos } from '../utils/proveedores'
 import { colorEtiquetaEstado, labelEtiquetaEstado } from '../utils/etiquetaEstados'
 import { TIPOS_DOCUMENTO, tipoDocumentoLabel } from '../utils/tiposDocumento'
 import { enPaginas } from '../utils/paginarImpresion'
+import { expandirEnRenglones, ALTO_RENGLON_FIJO } from '../utils/renglonesFijos'
 import { fmtCantidad } from '../utils/fmt'
 import { cargarParamsImpresion, PARAMS_IMPRESION_DEFAULT } from '../utils/parametrosImpresion'
 import { claseCodigoAlmacen, estiloCodigoImpreso, codigoAlmacen } from '../utils/colorAlmacen'
@@ -931,7 +932,7 @@ export default function GuiaDetalle() {
         const pI = paramsImp?.INGRESO || PARAMS_IMPRESION_DEFAULT
         return (
         <div className={preview ? '' : 'hidden print:block'}>
-          {enPaginas(itemsImpresion, pI.lineas_por_pagina).map((filas, pi, todas) => {
+          {enPaginas(expandirEnRenglones(itemsImpresion), pI.lineas_por_pagina).map((filas, pi, todas) => {
             const ultima = pi === todas.length - 1
             const [yy, mm, dd] = String(guia.fecha).slice(0, 10).split('-')
             return (
@@ -980,37 +981,39 @@ export default function GuiaDetalle() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filas.map((it, ri) => (
-                      <tr key={ri} className="border-b border-gray-400" style={{ minHeight: '1.75rem' }}>
-                        <td className="py-1 px-1 align-top" style={{ overflowWrap: 'anywhere', whiteSpace: 'normal' }}>
-                          {it && (
+                    {/* Talonario preimpreso: la fila NO crece. Un nombre largo se
+                        parte en varios renglones (expandirEnRenglones) -- item/
+                        codigo/cantidad van solo en el primero, los siguientes son
+                        renglones "esContinuacion" con las celdas de al lado en
+                        blanco, para no correr el rayado ya impreso en el papel. */}
+                    {filas.map((r, ri) => (
+                      <tr key={ri} className="border-b border-gray-400" style={{ height: ALTO_RENGLON_FIJO }}>
+                        <td className="py-1 px-1 align-top overflow-hidden" style={{ height: ALTO_RENGLON_FIJO, maxHeight: ALTO_RENGLON_FIJO }}>
+                          {r && (
                             <>
-                              {it._itm && <span className="font-mono font-bold mr-1">{it._itm} ·</span>}
-                              {(it.codigo_impresion || it.etiqueta_codigo) && (
+                              {!r.esContinuacion && r._itm && <span className="font-mono font-bold mr-1">{r._itm} ·</span>}
+                              {!r.esContinuacion && (r.codigo_impresion || r.etiqueta_codigo) && (
                                 <span className="font-mono font-bold px-1 mr-1 rounded" style={estiloCodigoImpreso(guia.almacen_nombre)}>
-                                  {it.codigo_impresion || codigoAlmacen(it.etiqueta_codigo, guia.almacen_nombre)}
+                                  {r.codigo_impresion || codigoAlmacen(r.etiqueta_codigo, guia.almacen_nombre)}
                                 </span>
                               )}
-                              <span className="align-top">
-                                {it.producto_nombre}
-                                {it.tipo === 'SERVICIO' && <span className="text-[10px] text-gray-500"> (servicio{it.servicio_modo ? ` ${it.servicio_modo.toLowerCase()}` : ''})</span>}
-                              </span>
-                              {pI.mostrar_partidas && it.partidas?.length > 0 && (
+                              <span>{r.textoLinea}</span>
+                              {!r.esContinuacion && pI.mostrar_partidas && r.partidas?.length > 0 && (
                                 <span className="block text-[10px] text-gray-500">
-                                  {it.partidas.map(pt => `${fmtCantidad(pt.cantidad)}${pt.referencia ? ` (${pt.referencia})` : ''}`).join(' · ')}
+                                  {r.partidas.map(pt => `${fmtCantidad(pt.cantidad)}${pt.referencia ? ` (${pt.referencia})` : ''}`).join(' · ')}
                                 </span>
                               )}
-                              {((pI.mostrar_ubicacion && it.etiqueta_ubicacion) || (pI.mostrar_motivo && (it.destino_detalle || (it.destino && it.destino !== 'ALMACEN')))) && (
+                              {!r.esContinuacion && ((pI.mostrar_ubicacion && r.etiqueta_ubicacion) || (pI.mostrar_motivo && (r.destino_detalle || (r.destino && r.destino !== 'ALMACEN')))) && (
                                 <span className="block text-[10px] text-gray-500">
-                                  {pI.mostrar_ubicacion && it.etiqueta_ubicacion && <>Ubic.: {it.etiqueta_ubicacion}&nbsp;&nbsp;</>}
-                                  {pI.mostrar_motivo && (it.destino_detalle || (it.destino && it.destino !== 'ALMACEN')) && <>Motivo/Maq.: {it.destino_detalle || it.destino}</>}
+                                  {pI.mostrar_ubicacion && r.etiqueta_ubicacion && <>Ubic.: {r.etiqueta_ubicacion}&nbsp;&nbsp;</>}
+                                  {pI.mostrar_motivo && (r.destino_detalle || (r.destino && r.destino !== 'ALMACEN')) && <>Motivo/Maq.: {r.destino_detalle || r.destino}</>}
                                 </span>
                               )}
-                              {pI.mostrar_observaciones && it.observaciones && <span className="block text-[10px] text-gray-500 italic">{it.observaciones}</span>}
+                              {!r.esContinuacion && pI.mostrar_observaciones && r.observaciones && <span className="block text-[10px] text-gray-500 italic">{r.observaciones}</span>}
                             </>
                           )}
                         </td>
-                        <td className="py-1 text-center border-l border-gray-400 align-top">{it ? `${fmtCantidad(it.cantidad)}${it.unidad_medida_abreviatura ? ` ${it.unidad_medida_abreviatura}` : ''}` : ''}</td>
+                        <td className="py-1 text-center border-l border-gray-400 align-top">{r && !r.esContinuacion ? `${fmtCantidad(r.cantidad)}${r.unidad_medida_abreviatura ? ` ${r.unidad_medida_abreviatura}` : ''}` : ''}</td>
                         {pI.mostrar_precio && <>
                           <td className="py-1 border-l border-gray-400 align-top">&nbsp;</td>
                           <td className="py-1 border-l border-gray-400 align-top">&nbsp;</td>
