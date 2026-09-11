@@ -44,6 +44,32 @@ function partirEnLineas(texto, maxChars) {
   return lineas
 }
 
+// Con el wrap "greedy" de arriba, la UNICA linea que puede quedar corta
+// es la ultima (las anteriores ya se llenaron al maximo por construccion).
+// Si esa ultima linea es una sola palabra suelta, no vale la pena gastar
+// un renglon fisico entero para ella -- se le "presta" la ultima palabra
+// del renglon anterior, siempre y cuando siga entrando en el ancho de la
+// linea de destino (el ancho fisico manda: si no entra, se deja como
+// estaba en vez de desbordar la columna).
+function evitarPalabraHuerfana(lineas, maxCharsUltima) {
+  if (lineas.length < 2) return lineas
+  const idx = lineas.length - 1
+  const ultima = lineas[idx]
+  if (ultima.includes(' ')) return lineas // no es una sola palabra
+
+  const palabrasAnterior = lineas[idx - 1].split(' ')
+  if (palabrasAnterior.length < 2) return lineas // la anterior se quedaria vacia
+
+  const palabraQueBaja = palabrasAnterior[palabrasAnterior.length - 1]
+  const nuevaUltima = `${palabraQueBaja} ${ultima}`
+  if (nuevaUltima.length > maxCharsUltima) return lineas
+
+  const resultado = [...lineas]
+  resultado[idx - 1] = palabrasAnterior.slice(0, -1).join(' ')
+  resultado[idx] = nuevaUltima
+  return resultado
+}
+
 // Arma el texto completo de un item (nombre + sufijo de servicio) y lo
 // separa en { primera, siguientes[] }: `primera` usa el presupuesto mas
 // chico (comparte renglon con el codigo/ITEM), `siguientes` usan el
@@ -68,7 +94,9 @@ function partirNombreItem(it) {
   }
   const restante = palabras.slice(i).join(' ')
   const siguientes = restante ? partirEnLineas(restante, CARACTERES_LINEA_SIGUIENTE) : []
-  return { primera, siguientes }
+
+  const corregidas = evitarPalabraHuerfana([primera, ...siguientes], CARACTERES_LINEA_SIGUIENTE)
+  return { primera: corregidas[0], siguientes: corregidas.slice(1) }
 }
 
 // Expande una lista de items en "renglones fisicos": el primer renglon de
