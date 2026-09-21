@@ -1,8 +1,10 @@
 const express = require('express')
 const router = express.Router()
 const pool = require('../config/db')
+const { verificarToken, soloRoles } = require('../middlewares/authMiddleware')
+const log = require('../middlewares/logMiddleware')
 
-router.get('/', async (req, res) => {
+router.get('/', verificarToken, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT i.*, a.nombre as almacen_nombre, p.nombre as producto_nombre
@@ -17,7 +19,7 @@ router.get('/', async (req, res) => {
   }
 })
 
-router.get('/resumen', async (req, res) => {
+router.get('/resumen', verificarToken, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT
@@ -37,7 +39,7 @@ router.get('/resumen', async (req, res) => {
 })
 
 // Productos con stock disponible en un almacen (usado por el selector de origen en Movimientos)
-router.get('/disponible', async (req, res) => {
+router.get('/disponible', verificarToken, async (req, res) => {
   const { almacen_id } = req.query
   if (!almacen_id) {
     return res.status(400).json({ error: 'almacen_id es requerido' })
@@ -58,7 +60,14 @@ router.get('/disponible', async (req, res) => {
   }
 })
 
-router.post('/', async (req, res) => {
+// Ajuste manual de inventario: en el frontend (Inventario.jsx, puedeAgregar)
+// solo admin/almacen/almacenero3 ven el formulario, pero el backend no tenia
+// NINGUNA verificacion -- ni siquiera login. Cualquiera con acceso a la API
+// podia insertar stock arbitrario en cualquier almacen. Encontrado al
+// revisar todo el codigo buscando rutas de escritura sin verificarToken.
+router.post('/', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
+  log('AJUSTE_MANUAL_INVENTARIO', req => `Almacen ${req.body.almacen_id}, producto ${req.body.producto_id}, tipo ${req.body.tipo}, cantidad ${req.body.cantidad}`),
+  async (req, res) => {
   const { almacen_id, producto_id, tipo, cantidad, descripcion } = req.body
   if (!producto_id) {
     return res.status(400).json({ error: 'El producto es requerido' })

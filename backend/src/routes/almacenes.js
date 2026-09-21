@@ -2,10 +2,12 @@ const express = require('express')
 const router = express.Router()
 const pool = require('../config/db')
 const { validarLargos } = require('../utils/texto')
+const { verificarToken, soloRoles } = require('../middlewares/authMiddleware')
+const log = require('../middlewares/logMiddleware')
 
 const largosAlmacen = (b) => validarLargos({ 'nombre': [b.nombre, 100], 'ubicacion': [b.ubicacion, 200] })
 
-router.get('/', async (req, res) => {
+router.get('/', verificarToken, async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM almacenes ORDER BY nombre')
     res.json(result.rows)
@@ -14,7 +16,13 @@ router.get('/', async (req, res) => {
   }
 })
 
-router.post('/', async (req, res) => {
+// Crear/editar almacenes es admin-only en el frontend (Almacenes.jsx, esAdmin)
+// pero no tenia NINGUNA verificacion en el backend -- ni siquiera login. Se
+// cierra aca: encontrado al revisar todo el codigo buscando rutas de
+// escritura sin verificarToken.
+router.post('/', verificarToken, soloRoles('admin'),
+  log('CREAR_ALMACEN', req => `${req.body.nombre}`),
+  async (req, res) => {
   const { nombre, ubicacion } = req.body
   const errLargo = largosAlmacen(req.body)
   if (errLargo) return res.status(400).json({ error: errLargo })
@@ -29,7 +37,9 @@ router.post('/', async (req, res) => {
   }
 })
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', verificarToken, soloRoles('admin'),
+  log('EDITAR_ALMACEN', req => `Almacen id ${req.params.id}: ${req.body.nombre}`),
+  async (req, res) => {
   const { nombre, ubicacion } = req.body
   const errLargo = largosAlmacen(req.body)
   if (errLargo) return res.status(400).json({ error: errLargo })
