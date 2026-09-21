@@ -12,6 +12,10 @@ const colorEstado = {
   RECHAZADA: 'bg-red-100 text-red-700',
 }
 
+// Misma idea que en SolicitudesMateriales.jsx (alta): `otro` = el material
+// no esta en el catalogo y se escribe a mano.
+const LINEA_VACIA = () => ({ producto: '', cantidad: '', otro: false })
+
 export default function SolicitudMaterialesDetalle() {
   const { id } = useParams()
   const { usuario } = useAuth()
@@ -21,8 +25,15 @@ export default function SolicitudMaterialesDetalle() {
   const [motivoRechazo, setMotivoRechazo] = useState('')
   const [procesando, setProcesando] = useState(false)
   const [preview, setPreview] = useState(false)
+  const [productos, setProductos] = useState([])
+  const [editando, setEditando] = useState(false)
+  const [formEdit, setFormEdit] = useState(null)
+  const [guardandoEdicion, setGuardandoEdicion] = useState(false)
 
   const puedeGestionar = ['admin', 'almacen', 'almacenero3'].includes(usuario?.rol)
+  // Editar es cosa del que la pide (mismos roles que pueden dar de alta), y
+  // solo tiene sentido mientras nadie la atendio ni la rechazo todavia.
+  const puedeEditar = ['admin', 'mantenimiento'].includes(usuario?.rol) && solicitud?.estado === 'PENDIENTE'
 
   const cargar = () => {
     api.get(`/api/solicitudes-materiales/${id}`)
@@ -61,6 +72,72 @@ export default function SolicitudMaterialesDetalle() {
     }
   }
 
+  const abrirEdicion = async () => {
+    setMensaje(null)
+    let catalogo = productos
+    if (catalogo.length === 0) {
+      try {
+        const res = await api.get('/api/productos')
+        catalogo = res.data
+        setProductos(catalogo)
+      } catch (err) {
+        setMensaje({ tipo: 'error', texto: 'No se pudo cargar el catalogo de productos' })
+        setTimeout(() => setMensaje(null), 4000)
+        return
+      }
+    }
+    setFormEdit({
+      seccion: solicitud.seccion || '',
+      persona_responsable: solicitud.persona_responsable || '',
+      categoria: solicitud.categoria,
+      categoria_detalle: solicitud.categoria_detalle || '',
+      periodo: solicitud.periodo ? String(solicitud.periodo).slice(0, 10) : '',
+      observaciones: solicitud.observaciones || '',
+      lineas: solicitud.detalle.map(d => ({
+        producto: d.producto,
+        cantidad: String(d.cantidad),
+        otro: !catalogo.some(p => p.nombre === d.producto),
+      })),
+    })
+    setEditando(true)
+  }
+
+  const seleccionarMaterialEdit = (i, valor) => {
+    setFormEdit(f => {
+      const lineas = [...f.lineas]
+      if (valor === '__otro__') lineas[i] = { ...lineas[i], otro: true, producto: '' }
+      else lineas[i] = { ...lineas[i], otro: false, producto: valor }
+      return { ...f, lineas }
+    })
+  }
+
+  const actualizarLineaEdit = (i, campo, valor) => {
+    setFormEdit(f => {
+      const lineas = [...f.lineas]
+      lineas[i] = { ...lineas[i], [campo]: valor }
+      return { ...f, lineas }
+    })
+  }
+
+  const agregarLineaEdit = () => setFormEdit(f => ({ ...f, lineas: [...f.lineas, LINEA_VACIA()] }))
+  const quitarLineaEdit = (i) => setFormEdit(f => ({ ...f, lineas: f.lineas.filter((_, idx) => idx !== i) }))
+
+  const guardarEdicion = async (e) => {
+    e.preventDefault()
+    setGuardandoEdicion(true)
+    try {
+      await api.put(`/api/solicitudes-materiales/${id}`, formEdit)
+      setMensaje({ tipo: 'ok', texto: 'Solicitud actualizada correctamente' })
+      setEditando(false)
+      cargar()
+    } catch (err) {
+      setMensaje({ tipo: 'error', texto: err.response?.data?.error || 'Error al guardar los cambios' })
+    } finally {
+      setGuardandoEdicion(false)
+      setTimeout(() => setMensaje(null), 4000)
+    }
+  }
+
   if (cargando) return <div className="p-6 text-center py-12 text-gray-400">Cargando solicitud...</div>
   if (!solicitud) return <div className="p-6 text-center py-12 text-gray-400">Solicitud no encontrada</div>
 
@@ -78,6 +155,14 @@ export default function SolicitudMaterialesDetalle() {
           </div>
           <div className="flex items-center gap-3">
             <span className={`px-3 py-1.5 rounded-full text-xs font-bold ${colorEstado[solicitud.estado]}`}>{solicitud.estado}</span>
+            {puedeEditar && !editando && (
+              <button
+                onClick={abrirEdicion}
+                className="border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm px-4 py-2 rounded-lg font-medium transition"
+              >
+                Editar
+              </button>
+            )}
             <button
               onClick={() => setPreview(true)}
               className="bg-blue-700 hover:bg-blue-800 text-white text-sm px-4 py-2 rounded-lg font-medium transition"
@@ -97,6 +182,134 @@ export default function SolicitudMaterialesDetalle() {
           </div>
         )}
 
+        {editando ? (
+          <div className="bg-white rounded-xl shadow-md p-6 mb-6 border border-blue-100">
+            <h2 className="text-lg font-semibold text-gray-700 mb-4">Editar Solicitud N.° {solicitud.numero_solicitud}</h2>
+            <form onSubmit={guardarEdicion}>
+              <div className="grid grid-cols-3 gap-4 mb-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-1">Seccion</label>
+                  <input
+                    value={formEdit.seccion}
+                    onChange={e => setFormEdit({ ...formEdit, seccion: e.target.value })}
+                    placeholder="Ej: Mantenimiento, Produccion..."
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-1">Persona responsable</label>
+                  <input
+                    required
+                    value={formEdit.persona_responsable}
+                    onChange={e => setFormEdit({ ...formEdit, persona_responsable: e.target.value })}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-1">Periodo</label>
+                  <input
+                    type="date"
+                    value={formEdit.periodo}
+                    onChange={e => setFormEdit({ ...formEdit, periodo: e.target.value })}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div className={formEdit.categoria === 'OTROS' ? '' : 'col-span-2'}>
+                  <label className="block text-sm font-medium text-gray-600 mb-1">Categoria</label>
+                  <select
+                    value={formEdit.categoria}
+                    onChange={e => setFormEdit({ ...formEdit, categoria: e.target.value })}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {CATEGORIAS_MATERIALES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                  </select>
+                </div>
+                {formEdit.categoria === 'OTROS' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-1">Especificar</label>
+                    <input
+                      required
+                      value={formEdit.categoria_detalle}
+                      onChange={e => setFormEdit({ ...formEdit, categoria_detalle: e.target.value })}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                )}
+                <div className="col-span-3">
+                  <label className="block text-sm font-medium text-gray-600 mb-1">Observaciones</label>
+                  <input
+                    value={formEdit.observaciones}
+                    onChange={e => setFormEdit({ ...formEdit, observaciones: e.target.value })}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2 mb-4">
+                {formEdit.lineas.map((l, i) => (
+                  <div key={i} className="grid grid-cols-12 gap-3 items-end bg-gray-50 border border-gray-200 rounded-lg p-3">
+                    <div className="col-span-8">
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Material</label>
+                      <select
+                        required
+                        value={l.otro ? '__otro__' : l.producto}
+                        onChange={e => seleccionarMaterialEdit(i, e.target.value)}
+                        className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="">Seleccionar del catalogo...</option>
+                        {productos.map(p => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}
+                        <option value="__otro__">+ Escribir otro material</option>
+                      </select>
+                      {l.otro && (
+                        <input
+                          required
+                          value={l.producto}
+                          onChange={e => actualizarLineaEdit(i, 'producto', e.target.value)}
+                          placeholder="Nombre del material (no catalogado)..."
+                          className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm mt-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      )}
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Cantidad</label>
+                      <input
+                        required
+                        type="number" min="0.01" step="0.01"
+                        value={l.cantidad}
+                        onChange={e => actualizarLineaEdit(i, 'cantidad', e.target.value)}
+                        className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div className="col-span-2 flex justify-center">
+                      {formEdit.lineas.length > 1 && (
+                        <button type="button" onClick={() => quitarLineaEdit(i)} className="text-red-500 hover:text-red-700 text-sm">
+                          Quitar
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={agregarLineaEdit}
+                  className="text-sm border border-gray-300 rounded-lg px-3 py-2 text-gray-600 hover:bg-gray-50"
+                >
+                  + Agregar producto
+                </button>
+                <div className="flex gap-3">
+                  <button type="button" onClick={() => setEditando(false)} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">Cancelar</button>
+                  <button type="submit" disabled={guardandoEdicion} className="px-6 py-2 text-sm bg-blue-700 text-white rounded-lg hover:bg-blue-800 disabled:opacity-50">
+                    {guardandoEdicion ? 'Guardando...' : 'Guardar cambios'}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        ) : (
+        <>
         {solicitud.estado === 'PENDIENTE' && puedeGestionar && (
           <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-5 mb-6">
             <h2 className="text-sm font-bold text-yellow-800 mb-3">Pendiente de atencion</h2>
@@ -163,6 +376,8 @@ export default function SolicitudMaterialesDetalle() {
             </tbody>
           </table>
         </div>
+        </>
+        )}
       </div>
 
       {/* Vista de impresion: replica el formato fisico "Solicitud de Materiales"

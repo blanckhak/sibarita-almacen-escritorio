@@ -139,6 +139,96 @@ router.post('/', verificarToken, soloRoles('admin', 'mantenimiento'),
   }
 })
 
+// Editar una solicitud: solo mientras sigue PENDIENTE (una vez atendida o
+// rechazada, ya no tiene sentido corregirla). Mismas validaciones que el
+// alta; reemplaza el detalle entero (borra e inserta de nuevo) en vez de
+// diffear linea por linea, igual que hace el alta.
+router.put('/:id', verificarToken, soloRoles('admin', 'mantenimiento'),
+  log('EDITAR_SOLICITUD_MATERIALES', req => `Solicitud id ${req.params.id}: ${JSON.stringify(req.body)}`),
+  async (req, res) => {
+  const { seccion, persona_responsable, categoria, categoria_detalle, periodo, observaciones, lineas } = req.body
+
+  if (!persona_responsable || !persona_responsable.trim()) {
+    return res.status(400).json({ error: 'La persona responsable es requerida' })
+  }
+  if (!CATEGORIAS.includes(categoria)) {
+    return res.status(400).json({ error: 'Categoria invalida' })
+  }
+  if (categoria === 'OTROS' && (!categoria_detalle || !categoria_detalle.trim())) {
+    return res.status(400).json({ error: 'Debes especificar la categoria cuando eliges "Otros"' })
+  }
+  const errLargo = validarLargos({
+    'seccion': [seccion, 100],
+    'persona responsable': [persona_responsable, 150],
+    'detalle de categoria': [categoria_detalle, 200],
+  })
+  if (errLargo) return res.status(400).json({ error: errLargo })
+  if (!Array.isArray(lineas) || lineas.length === 0) {
+    return res.status(400).json({ error: 'La solicitud debe incluir al menos un producto' })
+  }
+  for (const l of lineas) {
+    const errLinea = validarLargos({ 'producto': [l.producto, 200] })
+    if (errLinea) return res.status(400).json({ error: errLinea })
+    if (typeof l.producto !== 'string' || !l.producto.trim()) {
+      return res.status(400).json({ error: 'Cada linea debe tener un producto' })
+    }
+    if (!Number(l.cantidad) || Number(l.cantidad) <= 0) {
+      return res.status(400).json({ error: 'La cantidad debe ser mayor a 0 en todas las lineas' })
+    }
+  }
+
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+
+    const actual = await client.query('SELECT * FROM solicitudes_materiales WHERE id = $1 FOR UPDATE', [req.params.id])
+    if (actual.rows.length === 0) {
+      await client.query('ROLLBACK')
+      return res.status(404).json({ error: 'Solicitud no encontrada' })
+    }
+    if (actual.rows[0].estado !== 'PENDIENTE') {
+      await client.query('ROLLBACK')
+      return res.status(400).json({ error: 'Esta solicitud ya fue procesada, no se puede editar' })
+    }
+
+    const actualizada = await client.query(
+      `UPDATE solicitudes_materiales
+       SET seccion = $1, persona_responsable = $2, categoria = $3, categoria_detalle = $4, periodo = $5, observaciones = $6
+       WHERE id = $7 RETURNING *`,
+      [
+        (seccion || '').trim() || null,
+        persona_responsable.trim(),
+        categoria,
+        (categoria_detalle || '').trim() || null,
+        periodo || null,
+        (observaciones || '').trim() || null,
+        req.params.id,
+      ]
+    )
+
+    await client.query('DELETE FROM solicitudes_materiales_detalle WHERE solicitud_id = $1', [req.params.id])
+    for (const l of lineas) {
+      await client.query(
+        'INSERT INTO solicitudes_materiales_detalle (solicitud_id, producto, cantidad) VALUES ($1, $2, $3)',
+        [req.params.id, l.producto.trim(), l.cantidad]
+      )
+    }
+
+    await client.query('COMMIT')
+
+    const detalle = await pool.query(
+      'SELECT * FROM solicitudes_materiales_detalle WHERE solicitud_id = $1 ORDER BY id',
+      [req.params.id]
+    )
+    res.json({ ...actualizada.rows[0], detalle: detalle.rows })
+  } catch (err) {
+    await client.query('ROLLBACK')
+    res.status(500).json({ error: err.message })
+  } finally {
+    client.release()
+  }
+})
+
 router.post('/:id/atender', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
   log('ATENDER_SOLICITUD_MATERIALES', req => `Solicitud id ${req.params.id}`),
   async (req, res) => {
