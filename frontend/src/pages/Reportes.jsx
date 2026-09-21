@@ -389,15 +389,49 @@ export default function Reportes() {
         {datosGraficaMotivo.length === 0 ? (
           <p className="text-center text-gray-400 py-10 text-sm">No hay salidas registradas en el rango seleccionado</p>
         ) : (
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={datosGraficaMotivo} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="motivo" />
-              <YAxis />
-              <Tooltip />
-              <Bar dataKey="Unidades" fill="#7c3aed" radius={[4,4,0,0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          <>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={datosGraficaMotivo} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="motivo" />
+                <YAxis />
+                <Tooltip />
+                <Bar dataKey="Unidades" fill="#7c3aed" radius={[4,4,0,0]} />
+              </BarChart>
+            </ResponsiveContainer>
+
+            {/* Detalle en pantalla (antes solo grafica + export): mismas columnas
+                que el Excel/PDF de arriba, motivo/almacen abierto en vez de
+                sumado como en la grafica. */}
+            <div className="mt-6 rounded-lg border border-gray-200 overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-800 text-white">
+                  <tr>
+                    <th className="px-4 py-2 text-left">Motivo</th>
+                    <th className="px-4 py-2 text-left">Almacen</th>
+                    <th className="px-4 py-2 text-right">Notas</th>
+                    <th className="px-4 py-2 text-right">Unidades</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {salidasMotivoFilas.map((r, i) => (
+                    <tr key={`${r.motivo}-${r.almacen}`} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                      <td className="px-4 py-2 text-gray-700">{r.motivo_label}</td>
+                      <td className="px-4 py-2 text-gray-700">{r.almacen}</td>
+                      <td className="px-4 py-2 text-right text-gray-600">{r.notas}</td>
+                      <td className="px-4 py-2 text-right font-medium text-gray-800">{Number(r.unidades).toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-gray-300 font-semibold">
+                    <td className="px-4 py-2 text-gray-700" colSpan={3}>Total</td>
+                    <td className="px-4 py-2 text-right text-gray-800">{totalUnidadesMotivo.toLocaleString()}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </>
         )}
       </div>
     </div>
