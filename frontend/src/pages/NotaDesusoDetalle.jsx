@@ -271,11 +271,11 @@ export default function NotaDesusoDetalle() {
                 </thead>
                 <tbody>
                   {filas.map((d, ri) => (
-                    <tr key={ri} className="border-b border-gray-400 h-7 align-top">
-                      <td className="py-1 px-1">{d ? d.descripcion : ''}</td>
-                      <td className="py-1 text-center border-l border-gray-400">{d ? fmtCantidad(d.cantidad) : ''}</td>
-                      <td className="py-1 text-center border-l border-gray-400">{d ? (d.unidad_medida_abreviatura || d.unidad_medida_nombre || '') : ''}</td>
-                      <td className="py-1 px-1 border-l border-gray-400">{d ? (d.area_maquina || '') : ''}</td>
+                    <tr key={ri} className="border-b border-gray-400 h-7">
+                      <td className="py-1 px-1 align-top">{d ? d.descripcion : ''}</td>
+                      <td className="py-1 text-center border-l border-gray-400 align-top">{d ? fmtCantidad(d.cantidad) : ''}</td>
+                      <td className="py-1 text-center border-l border-gray-400 align-top">{d ? (d.unidad_medida_abreviatura || d.unidad_medida_nombre || '') : ''}</td>
+                      <td className="py-1 px-1 border-l border-gray-400 align-top">{d ? (d.area_maquina || '') : ''}</td>
                     </tr>
                   ))}
                 </tbody>

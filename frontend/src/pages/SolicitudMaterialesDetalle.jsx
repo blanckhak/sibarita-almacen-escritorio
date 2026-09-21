@@ -212,9 +212,9 @@ export default function SolicitudMaterialesDetalle() {
                 </thead>
                 <tbody>
                   {filas.map((d, ri) => (
-                    <tr key={ri} className="border-b border-gray-400 h-8 align-top">
-                      <td className="py-1 px-2">{d ? d.producto : ''}</td>
-                      <td className="py-1 text-center border-l border-gray-400">{d ? Number(d.cantidad) : ''}</td>
+                    <tr key={ri} className="border-b border-gray-400 h-8">
+                      <td className="py-1 px-2 align-top">{d ? d.producto : ''}</td>
+                      <td className="py-1 text-center border-l border-gray-400 align-top">{d ? Number(d.cantidad) : ''}</td>
                     </tr>
                   ))}
                 </tbody>
