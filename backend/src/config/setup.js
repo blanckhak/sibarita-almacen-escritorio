@@ -101,6 +101,19 @@ async function setup() {
       creado_en TIMESTAMP DEFAULT NOW()
     );
 
+    -- Fix (concurrencia): ajustarInventario() hacia "SELECT si existe, sino
+    -- INSERT" sin ninguna restriccion que lo respalde -- dos requests
+    -- concurrentes para el mismo (almacen,producto,tipo) que todavia no
+    -- existia podian crear 2 filas duplicadas en vez de una sola que se
+    -- actualiza. Con este UNIQUE, ajustarInventario pasa a un INSERT ...
+    -- ON CONFLICT DO UPDATE atomico (util/inventario.js).
+    DO $mig$ BEGIN
+      CREATE UNIQUE INDEX IF NOT EXISTS inventario_almacen_producto_tipo_unique
+        ON inventario (almacen_id, producto_id, tipo);
+    EXCEPTION WHEN unique_violation THEN
+      RAISE NOTICE 'inventario_almacen_producto_tipo_unique no creado: hay filas duplicadas existentes';
+    END $mig$;
+
     CREATE TABLE IF NOT EXISTS movimientos (
       id SERIAL PRIMARY KEY,
       almacen_origen_id INTEGER REFERENCES almacenes(id),

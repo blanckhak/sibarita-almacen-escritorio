@@ -112,7 +112,10 @@ CREATE TABLE inventario (
   -- Fase 11 (R6): NUMERIC(12,3) para stock fraccionado por Kilo / Metro.
   cantidad NUMERIC(12,3) NOT NULL DEFAULT 0,
   descripcion TEXT,
-  creado_en TIMESTAMP DEFAULT NOW()
+  creado_en TIMESTAMP DEFAULT NOW(),
+  -- Respalda el upsert atomico de ajustarInventario() (util/inventario.js):
+  -- una sola fila por combinacion, nunca duplicados bajo concurrencia.
+  UNIQUE (almacen_id, producto_id, tipo)
 );
 
 INSERT INTO inventario (almacen_id, producto_id, tipo, cantidad) VALUES
