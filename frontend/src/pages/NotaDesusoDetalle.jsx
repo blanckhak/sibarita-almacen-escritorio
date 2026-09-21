@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import api from '../utils/api'
 import { useAuth } from '../context/AuthContext'
-import { enPaginas } from '../utils/paginarImpresion'
+import { paginarPorItem, ALTO_RENGLON_FIJO } from '../utils/renglonesFijos'
 import PreviewImpresion from '../components/PreviewImpresion'
 import { fmtCantidad } from '../utils/fmt'
 
@@ -231,7 +231,10 @@ export default function NotaDesusoDetalle() {
 
       <PreviewImpresion abierto={preview} onCerrar={() => setPreview(false)}>
         <div className={preview ? '' : 'hidden print:block'}>
-          {enPaginas(nota.detalle, FILAS_POR_PAGINA).map((filas, pi, todas) => (
+          {/* renglonesFijos.js espera `producto_nombre` (forma de Guia/Nota de
+              Salida) -- se alias aca nomas para reusar el mismo partidor de
+              texto, sin tocar el util compartido. */}
+          {paginarPorItem(nota.detalle.map(d => ({ ...d, producto_nombre: d.descripcion })), FILAS_POR_PAGINA).map((filas, pi, todas) => (
             <div key={pi} className="border-2 border-gray-800 rounded break-after-page last:break-after-auto">
               <div className="flex items-start justify-between px-4 pt-3">
                 <div>
@@ -270,12 +273,17 @@ export default function NotaDesusoDetalle() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filas.map((d, ri) => (
-                    <tr key={ri} className="border-b border-gray-400 h-7">
-                      <td className="py-1 px-1 align-top">{d ? d.descripcion : ''}</td>
-                      <td className="py-1 text-center border-l border-gray-400 align-top">{d ? fmtCantidad(d.cantidad) : ''}</td>
-                      <td className="py-1 text-center border-l border-gray-400 align-top">{d ? (d.unidad_medida_abreviatura || d.unidad_medida_nombre || '') : ''}</td>
-                      <td className="py-1 px-1 border-l border-gray-400 align-top">{d ? (d.area_maquina || '') : ''}</td>
+                  {/* Talonario preimpreso: la fila NO crece. Una descripcion larga
+                      se parte en varios renglones (paginarPorItem) -- cantidad/
+                      unidad/area van solo en el primero, los siguientes son
+                      renglones "esContinuacion" con las celdas de al lado en
+                      blanco, para no correr el rayado ya impreso en el papel. */}
+                  {filas.map((r, ri) => (
+                    <tr key={ri} className="border-b border-gray-400" style={{ height: ALTO_RENGLON_FIJO }}>
+                      <td className="py-1 px-1 align-top overflow-hidden" style={{ height: ALTO_RENGLON_FIJO, maxHeight: ALTO_RENGLON_FIJO }}>{r ? r.textoLinea : ''}</td>
+                      <td className="py-1 text-center border-l border-gray-400 align-top">{r && !r.esContinuacion ? fmtCantidad(r.cantidad) : ''}</td>
+                      <td className="py-1 text-center border-l border-gray-400 align-top">{r && !r.esContinuacion ? (r.unidad_medida_abreviatura || r.unidad_medida_nombre || '') : ''}</td>
+                      <td className="py-1 px-1 border-l border-gray-400 align-top">{r && !r.esContinuacion ? (r.area_maquina || '') : ''}</td>
                     </tr>
                   ))}
                 </tbody>

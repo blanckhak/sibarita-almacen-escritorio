@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import api from '../utils/api'
 import { useAuth } from '../context/AuthContext'
 import { CATEGORIAS_MATERIALES } from '../utils/categoriasMateriales'
-import { enPaginas } from '../utils/paginarImpresion'
+import { paginarPorItem, ALTO_RENGLON_FIJO } from '../utils/renglonesFijos'
 import PreviewImpresion from '../components/PreviewImpresion'
 
 const colorEstado = {
@@ -384,7 +384,12 @@ export default function SolicitudMaterialesDetalle() {
           (reverso del talonario FT-GE-17). 6 productos por hoja. */}
       <PreviewImpresion abierto={preview} onCerrar={() => setPreview(false)}>
       <div className={preview ? '' : 'hidden print:block'}>
-        {enPaginas(solicitud.detalle).map((filas, pi, todas) => {
+        {/* renglonesFijos.js espera `producto_nombre` (forma de Guia/Nota de
+            Salida) -- se alias aca nomas para reusar el mismo partidor de
+            texto, sin tocar el util compartido. 6 productos por hoja, igual
+            que antes (enPaginas() sin segundo argumento caia en ese mismo
+            default). */}
+        {paginarPorItem(solicitud.detalle.map(d => ({ ...d, producto_nombre: d.producto })), 6).map((filas, pi, todas) => {
           const [yy, mm, dd] = String(solicitud.fecha).slice(0, 10).split('-')
           const per = solicitud.periodo ? String(solicitud.periodo).slice(0, 10).split('-') : null
           return (
@@ -426,10 +431,15 @@ export default function SolicitudMaterialesDetalle() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filas.map((d, ri) => (
-                    <tr key={ri} className="border-b border-gray-400 h-8">
-                      <td className="py-1 px-2 align-top">{d ? d.producto : ''}</td>
-                      <td className="py-1 text-center border-l border-gray-400 align-top">{d ? Number(d.cantidad) : ''}</td>
+                  {/* Talonario preimpreso: la fila NO crece. Un nombre largo se
+                      parte en varios renglones (paginarPorItem) -- cantidad va
+                      solo en el primero, los siguientes son renglones
+                      "esContinuacion" con la celda de al lado en blanco, para
+                      no correr el rayado ya impreso en el papel. */}
+                  {filas.map((r, ri) => (
+                    <tr key={ri} className="border-b border-gray-400" style={{ height: ALTO_RENGLON_FIJO }}>
+                      <td className="py-1 px-2 align-top overflow-hidden" style={{ height: ALTO_RENGLON_FIJO, maxHeight: ALTO_RENGLON_FIJO }}>{r ? r.textoLinea : ''}</td>
+                      <td className="py-1 text-center border-l border-gray-400 align-top">{r && !r.esContinuacion ? Number(r.cantidad) : ''}</td>
                     </tr>
                   ))}
                 </tbody>
