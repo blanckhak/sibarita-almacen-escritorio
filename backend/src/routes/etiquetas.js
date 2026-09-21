@@ -4,7 +4,10 @@ const pool = require('../config/db')
 const { verificarToken, soloRoles } = require('../middlewares/authMiddleware')
 const { ajustarInventario } = require('../utils/inventario')
 const { validarLargos } = require('../utils/texto')
+const { periodoCerrado } = require('../utils/periodo')
 const log = require('../middlewares/logMiddleware')
+
+const ERR_PERIODO_CERRADO = 'El periodo de este codigo esta CERRADO; pedile a un admin que lo reabra para poder transferirlo.'
 
 // Busqueda de etiquetas, usada para armar la nota de salida (seccion 5.5)
 router.get('/', verificarToken, async (req, res) => {
@@ -220,6 +223,15 @@ router.post('/:id/transferir', verificarToken, soloRoles('admin', 'almacen', 'al
       return res.status(404).json({ error: 'Etiqueta no encontrada' })
     }
     const etiqueta = etiquetaResult.rows[0]
+    // Mismo candado que guias/notas de salida/notas de desuso (Fase 15):
+    // transferir mueve stock de verdad (ajustarInventario en origen y
+    // destino), asi que no puede quedar afuera del bloqueo de periodo
+    // cerrado. Encontrado al revisar todo el codigo buscando el mismo check
+    // en los demas endpoints que tocan inventario.
+    if (await periodoCerrado(client, etiqueta.periodo_id)) {
+      await client.query('ROLLBACK')
+      return res.status(409).json({ error: ERR_PERIODO_CERRADO })
+    }
     // Cantidad efectiva del codigo: su override propio (codigos USADO de una
     // devolucion parcial) o la del guia_item.
     const cantidad = etiqueta.cantidad != null ? etiqueta.cantidad : etiqueta.gi_cantidad
