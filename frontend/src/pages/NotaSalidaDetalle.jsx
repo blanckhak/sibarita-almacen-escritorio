@@ -4,7 +4,7 @@ import api from '../utils/api'
 import { useAuth } from '../context/AuthContext'
 import { colorEtiquetaEstado, labelEtiquetaEstado } from '../utils/etiquetaEstados'
 import { textoStock } from '../utils/stockResumen'
-import { enPaginas } from '../utils/paginarImpresion'
+import { paginarPorItem, ALTO_RENGLON_FIJO } from '../utils/renglonesFijos'
 import { cargarParamsImpresion, PARAMS_IMPRESION_DEFAULT } from '../utils/parametrosImpresion'
 import { claseCodigoAlmacen, estiloCodigoImpreso, codigoAlmacen, numeroCodigo } from '../utils/colorAlmacen'
 import { PRESENTACIONES, presentacionLabel } from '../utils/presentaciones'
@@ -733,7 +733,7 @@ export default function NotaSalidaDetalle() {
         const pS = paramsImp?.SALIDA || PARAMS_IMPRESION_DEFAULT
         return (
         <div className={preview ? '' : 'hidden print:block'}>
-          {enPaginas(nota.detalle, pS.lineas_por_pagina).map((filas, pi, todas) => {
+          {paginarPorItem(nota.detalle, pS.lineas_por_pagina).map((filas, pi, todas) => {
             const ultima = pi === todas.length - 1
             const [yy, mm, dd] = String(nota.fecha).slice(0, 10).split('-')
             return (
@@ -777,21 +777,26 @@ export default function NotaSalidaDetalle() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filas.map((d, ri) => (
-                      <tr key={ri} className="border-b border-gray-400 h-7">
-                        <td className="py-1 px-1 align-top" style={{ overflowWrap: 'anywhere', whiteSpace: 'normal' }}>
-                          {d ? (
+                    {/* Talonario preimpreso: la fila NO crece. Un nombre largo se
+                        parte en varios renglones (paginarPorItem) -- codigo/
+                        cantidad van solo en el primero, los siguientes son
+                        renglones "esContinuacion" con las celdas de al lado en
+                        blanco, para no correr el rayado ya impreso en el papel. */}
+                    {filas.map((r, ri) => (
+                      <tr key={ri} className="border-b border-gray-400" style={{ height: ALTO_RENGLON_FIJO }}>
+                        <td className="py-1 px-1 align-top overflow-hidden" style={{ height: ALTO_RENGLON_FIJO, maxHeight: ALTO_RENGLON_FIJO }}>
+                          {r && (
                             <>
-                              {d.etiqueta_codigo && <span className="font-mono font-bold px-1 mr-1 rounded" style={estiloCodigoImpreso(d.almacen_nombre)}>{codigoAlmacen(d.etiqueta_codigo, d.almacen_nombre)}</span>}
-                              {d.producto_nombre}
-                              {d.devuelto_condicion === 'USADO' && <span className="text-[10px] text-gray-500"> (devuelto usado)</span>}
+                              {!r.esContinuacion && r.etiqueta_codigo && <span className="font-mono font-bold px-1 mr-1 rounded" style={estiloCodigoImpreso(r.almacen_nombre)}>{codigoAlmacen(r.etiqueta_codigo, r.almacen_nombre)}</span>}
+                              <span>{r.textoLinea}</span>
+                              {!r.esContinuacion && r.devuelto_condicion === 'USADO' && <span className="text-[10px] text-gray-500"> (devuelto usado)</span>}
                             </>
-                          ) : ''}
+                          )}
                         </td>
-                        <td className="py-1 text-center border-l border-gray-400 align-top">{d ? fmtCantidad(d.cantidad) : ''}</td>
+                        <td className="py-1 text-center border-l border-gray-400 align-top">{r && !r.esContinuacion ? fmtCantidad(r.cantidad) : ''}</td>
                         {pS.mostrar_precio && <>
-                          <td className="py-1 text-right px-1 border-l border-gray-400 align-top">{d?.p_unitario ? Number(d.p_unitario).toFixed(2) : ''}</td>
-                          <td className="py-1 text-right px-1 border-l border-gray-400 align-top">{d?.total ? Number(d.total).toFixed(2) : ''}</td>
+                          <td className="py-1 text-right px-1 border-l border-gray-400 align-top">{r && !r.esContinuacion && r.p_unitario ? Number(r.p_unitario).toFixed(2) : ''}</td>
+                          <td className="py-1 text-right px-1 border-l border-gray-400 align-top">{r && !r.esContinuacion && r.total ? Number(r.total).toFixed(2) : ''}</td>
                         </>}
                       </tr>
                     ))}
