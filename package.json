@@ -1,6 +1,6 @@
 {
   "name": "sibarita-escritorio",
-  "version": "1.12.0",
+  "version": "1.13.0",
   "description": "Aplicacion de escritorio para Sibarita (Sistema de Gestion de Almacenes)",
   "main": "main.js",
   "author": "DRGATO",
@@ -39,8 +39,7 @@
       "icon.ico",
       "backend/**/*",
       "!backend/node_modules/**/*",
-      "!backend/frontend-dist/**/*.map",
-      "!backend/.env"
+      "!backend/frontend-dist/**/*.map"
     ],
     "directories": {
       "output": "dist"
