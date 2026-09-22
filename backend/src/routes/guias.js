@@ -168,6 +168,8 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
   const { numero_guia, almacen_id, fecha, items, proveedor, numero_oc, direccion, guia_remision, factura, observaciones } = req.body
   const TIPOS_DOC = ['GUIA', 'FACTURA', 'BOLETA', 'OTRO']
   const tipoDocumento = TIPOS_DOC.includes(req.body.tipo_documento) ? req.body.tipo_documento : 'GUIA'
+  const guiaRemisionTipo = TIPOS_DOC.includes(req.body.guia_remision_tipo) ? req.body.guia_remision_tipo : 'GUIA'
+  const facturaTipo = TIPOS_DOC.includes(req.body.factura_tipo) ? req.body.factura_tipo : 'FACTURA'
 
   if (!numero_guia || !numero_guia.trim()) {
     return res.status(400).json({ error: 'El numero de guia es requerido' })
@@ -308,15 +310,17 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
     const periodoActivoId = perAct.rows[0].id
 
     const guiaResult = await client.query(
-      `INSERT INTO guias (numero_guia, almacen_id, usuario_id, fecha, proveedor, numero_oc, direccion, guia_remision, factura, tipo_documento, observaciones, periodo_id)
-       VALUES ($1, $2, $3, COALESCE($4, CURRENT_DATE), $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
+      `INSERT INTO guias (numero_guia, almacen_id, usuario_id, fecha, proveedor, numero_oc, direccion, guia_remision, guia_remision_tipo, factura, factura_tipo, tipo_documento, observaciones, periodo_id)
+       VALUES ($1, $2, $3, COALESCE($4, CURRENT_DATE), $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING *`,
       [
         numero_guia.trim(), almacen_id, req.usuario.id, fecha || null,
         (proveedor || '').trim() || null,
         (numero_oc || '').trim() || null,
         (direccion || '').trim() || null,
         (guia_remision || '').trim() || null,
+        guiaRemisionTipo,
         (factura || '').trim() || null,
+        facturaTipo,
         tipoDocumento,
         (observaciones || '').trim() || null,
         periodoActivoId,
@@ -669,11 +673,17 @@ router.post('/:id/items/:itemId/retirar', verificarToken, soloRoles('admin', 'al
 router.put('/:id', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
   log('EDITAR_GUIA', req => `Guia ${req.params.id}: ${JSON.stringify(req.body)}`),
   async (req, res) => {
-  const { proveedor, numero_oc, direccion, estado, guia_remision, factura, tipo_documento, items, observaciones } = req.body
+  const { proveedor, numero_oc, direccion, estado, guia_remision, guia_remision_tipo, factura, factura_tipo, tipo_documento, items, observaciones } = req.body
   const ESTADOS = ['CARGADA', 'CERRADA']
   const TIPOS_DOC = ['GUIA', 'FACTURA', 'BOLETA', 'OTRO']
   if (tipo_documento !== undefined && !TIPOS_DOC.includes(tipo_documento)) {
     return res.status(400).json({ error: 'Tipo de documento invalido' })
+  }
+  if (guia_remision_tipo !== undefined && !TIPOS_DOC.includes(guia_remision_tipo)) {
+    return res.status(400).json({ error: 'Tipo de la 1a referencia invalido' })
+  }
+  if (factura_tipo !== undefined && !TIPOS_DOC.includes(factura_tipo)) {
+    return res.status(400).json({ error: 'Tipo de la 2a referencia invalido' })
   }
 
   if (estado !== undefined && !ESTADOS.includes(estado)) {
@@ -701,7 +711,7 @@ router.put('/:id', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
     if (errItem) return res.status(400).json({ error: errItem })
   }
 
-  const sinCabecera = [proveedor, numero_oc, direccion, estado, guia_remision, factura, tipo_documento, observaciones].every(v => v === undefined)
+  const sinCabecera = [proveedor, numero_oc, direccion, estado, guia_remision, guia_remision_tipo, factura, factura_tipo, tipo_documento, observaciones].every(v => v === undefined)
   if (sinCabecera && editItems.length === 0) {
     return res.status(400).json({ error: 'No se envio ningun campo para editar' })
   }
@@ -728,7 +738,7 @@ router.put('/:id', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
 
     // Guia CERRADA: solo cantidad de lineas + N de O.C. (y reabrir con estado).
     if (guiaActual.estado === 'CERRADA') {
-      const bloqueados = { proveedor, direccion, guia_remision, factura, tipo_documento }
+      const bloqueados = { proveedor, direccion, guia_remision, guia_remision_tipo, factura, factura_tipo, tipo_documento }
       for (const [campo, valor] of Object.entries(bloqueados)) {
         if (valor !== undefined) {
           await client.query('ROLLBACK')
@@ -746,7 +756,9 @@ router.put('/:id', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
     if (direccion !== undefined)     push('direccion', (direccion || '').trim() || null)
     if (estado !== undefined)        push('estado', estado)
     if (guia_remision !== undefined) push('guia_remision', (guia_remision || '').trim() || null)
+    if (guia_remision_tipo !== undefined) push('guia_remision_tipo', guia_remision_tipo)
     if (factura !== undefined)       push('factura', (factura || '').trim() || null)
+    if (factura_tipo !== undefined)  push('factura_tipo', factura_tipo)
     if (tipo_documento !== undefined) push('tipo_documento', tipo_documento)
     // Fase 11 (R4): observacion general de la guia. No afecta stock -> se admite
     // tambien en guias CERRADAS.

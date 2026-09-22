@@ -169,7 +169,13 @@ CREATE TABLE guias (
   -- remision o factura que trae el proveedor, y el formato fisico "Nota de
   -- Ingresos de Activos" los pide como campos separados.
   guia_remision VARCHAR(50),
+  -- Cada una de las 2 referencias puede ser Guia de Remision, Factura o
+  -- Boleta (una entrega puede venir con cualquier combinacion de las 2).
+  guia_remision_tipo VARCHAR(20) NOT NULL DEFAULT 'GUIA'
+    CHECK (guia_remision_tipo IN ('GUIA', 'FACTURA', 'BOLETA', 'OTRO')),
   factura VARCHAR(50),
+  factura_tipo VARCHAR(20) NOT NULL DEFAULT 'FACTURA'
+    CHECK (factura_tipo IN ('GUIA', 'FACTURA', 'BOLETA', 'OTRO')),
   -- Fase 11 (R4): observacion general de la guia (se imprime en la Nota de
   -- Ingreso; antes se referenciaba sin que la columna existiera).
   observaciones TEXT

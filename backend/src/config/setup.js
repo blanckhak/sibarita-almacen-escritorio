@@ -185,6 +185,20 @@ async function setup() {
     ALTER TABLE guias ADD COLUMN IF NOT EXISTS guia_remision VARCHAR(50);
     ALTER TABLE guias ADD COLUMN IF NOT EXISTS factura VARCHAR(50);
 
+    -- Cada una de las 2 referencias de arriba puede ser una Guia de Remision,
+    -- una Factura o una Boleta (antes solo se podia cargar Guia+Factura fijo;
+    -- una entrega con Boleta no tenia donde ir). El default preserva el
+    -- significado que ya tenian las columnas para las guias existentes.
+    ALTER TABLE guias ADD COLUMN IF NOT EXISTS guia_remision_tipo VARCHAR(20) NOT NULL DEFAULT 'GUIA';
+    ALTER TABLE guias DROP CONSTRAINT IF EXISTS guias_guia_remision_tipo_check;
+    ALTER TABLE guias ADD CONSTRAINT guias_guia_remision_tipo_check
+      CHECK (guia_remision_tipo IN ('GUIA', 'FACTURA', 'BOLETA', 'OTRO'));
+
+    ALTER TABLE guias ADD COLUMN IF NOT EXISTS factura_tipo VARCHAR(20) NOT NULL DEFAULT 'FACTURA';
+    ALTER TABLE guias DROP CONSTRAINT IF EXISTS guias_factura_tipo_check;
+    ALTER TABLE guias ADD CONSTRAINT guias_factura_tipo_check
+      CHECK (factura_tipo IN ('GUIA', 'FACTURA', 'BOLETA', 'OTRO'));
+
     CREATE TABLE IF NOT EXISTS guia_items (
       id SERIAL PRIMARY KEY,
       guia_id INTEGER REFERENCES guias(id),

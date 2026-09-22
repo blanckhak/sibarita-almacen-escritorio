@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import CodigoBarras from '../components/CodigoBarras'
 import { extraerProveedoresConocidos } from '../utils/proveedores'
 import { colorEtiquetaEstado, labelEtiquetaEstado } from '../utils/etiquetaEstados'
-import { TIPOS_DOCUMENTO, tipoDocumentoLabel } from '../utils/tiposDocumento'
+import { TIPOS_DOCUMENTO, tipoDocumentoLabel, tipoDocumentoRefLabel, tipoDocumentoRefLabelUI } from '../utils/tiposDocumento'
 import { paginarPorItem, ALTO_RENGLON_FIJO } from '../utils/renglonesFijos'
 import { fmtCantidad } from '../utils/fmt'
 import { cargarParamsImpresion, PARAMS_IMPRESION_DEFAULT } from '../utils/parametrosImpresion'
@@ -105,7 +105,9 @@ export default function GuiaDetalle() {
       direccion: guia.direccion || '',
       estado: guia.estado || 'CARGADA',
       guia_remision: guia.guia_remision || '',
+      guia_remision_tipo: guia.guia_remision_tipo || 'GUIA',
       factura: guia.factura || '',
+      factura_tipo: guia.factura_tipo || 'FACTURA',
       tipo_documento: guia.tipo_documento || 'GUIA',
       observaciones: guia.observaciones || '',
       // Fase 8: correccion de cantidad por linea. Una linea no se puede editar
@@ -227,7 +229,9 @@ export default function GuiaDetalle() {
             direccion: formEdicion.direccion,
             estado: formEdicion.estado,
             guia_remision: formEdicion.guia_remision,
+            guia_remision_tipo: formEdicion.guia_remision_tipo,
             factura: formEdicion.factura,
+            factura_tipo: formEdicion.factura_tipo,
             tipo_documento: formEdicion.tipo_documento,
             observaciones: formEdicion.observaciones,
             items: itemsCambiados,
@@ -435,11 +439,11 @@ export default function GuiaDetalle() {
             <div className="text-gray-800">{guia.direccion || '—'}</div>
           </div>
           <div className="bg-white rounded-lg border border-gray-200 px-4 py-3">
-            <div className="text-gray-400 text-xs font-medium mb-1">Guia de Remision</div>
+            <div className="text-gray-400 text-xs font-medium mb-1">{tipoDocumentoRefLabelUI(guia.guia_remision_tipo)}</div>
             <div className="text-gray-800">{guia.guia_remision || '—'}</div>
           </div>
           <div className="bg-white rounded-lg border border-gray-200 px-4 py-3">
-            <div className="text-gray-400 text-xs font-medium mb-1">Factura</div>
+            <div className="text-gray-400 text-xs font-medium mb-1">{tipoDocumentoRefLabelUI(guia.factura_tipo)}</div>
             <div className="text-gray-800">{guia.factura || '—'}</div>
           </div>
         </div>
@@ -511,22 +515,42 @@ export default function GuiaDetalle() {
                 )}
                 {!cerrada && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-600 mb-1">Guia de Remision</label>
-                    <input
-                      value={formEdicion.guia_remision}
-                      onChange={e => setFormEdicion(f => ({ ...f, guia_remision: e.target.value.toUpperCase() }))}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
+                    <label className="block text-sm font-medium text-gray-600 mb-1">Documento 1 (opcional)</label>
+                    <div className="flex gap-2">
+                      <select
+                        value={formEdicion.guia_remision_tipo}
+                        onChange={e => setFormEdicion(f => ({ ...f, guia_remision_tipo: e.target.value }))}
+                        className="border border-gray-300 rounded-lg px-2 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        {TIPOS_DOCUMENTO.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                      </select>
+                      <input
+                        value={formEdicion.guia_remision}
+                        onChange={e => setFormEdicion(f => ({ ...f, guia_remision: e.target.value.toUpperCase() }))}
+                        placeholder="N°..."
+                        className="flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
                   </div>
                 )}
                 {!cerrada && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-600 mb-1">Factura</label>
-                    <input
-                      value={formEdicion.factura}
-                      onChange={e => setFormEdicion(f => ({ ...f, factura: e.target.value.toUpperCase() }))}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
+                    <label className="block text-sm font-medium text-gray-600 mb-1">Documento 2 (opcional)</label>
+                    <div className="flex gap-2">
+                      <select
+                        value={formEdicion.factura_tipo}
+                        onChange={e => setFormEdicion(f => ({ ...f, factura_tipo: e.target.value }))}
+                        className="border border-gray-300 rounded-lg px-2 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        {TIPOS_DOCUMENTO.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                      </select>
+                      <input
+                        value={formEdicion.factura}
+                        onChange={e => setFormEdicion(f => ({ ...f, factura: e.target.value.toUpperCase() }))}
+                        placeholder="N°..."
+                        className="flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
                   </div>
                 )}
                 <div>
@@ -960,8 +984,8 @@ export default function GuiaDetalle() {
                 <div className="px-4 py-3 text-sm space-y-1">
                   <div className="flex"><b className="text-gray-600 w-40 shrink-0">PROVEEDOR:</b><span className="border-b border-gray-400 flex-1">{guia.proveedor || ''}</span></div>
                   <div className="flex"><b className="text-gray-600 w-40 shrink-0">ORDEN DE COMPRA:</b><span className="border-b border-gray-400 flex-1">{guia.numero_oc || ''}</span></div>
-                  <div className="flex"><b className="text-gray-600 w-40 shrink-0">GUIA DE REMISION:</b><span className="border-b border-gray-400 flex-1">{guia.guia_remision || ''}</span></div>
-                  <div className="flex"><b className="text-gray-600 w-40 shrink-0">FACTURA:</b><span className="border-b border-gray-400 flex-1">{guia.factura || ''}</span></div>
+                  <div className="flex"><b className="text-gray-600 w-40 shrink-0">{tipoDocumentoRefLabel(guia.guia_remision_tipo)}:</b><span className="border-b border-gray-400 flex-1">{guia.guia_remision || ''}</span></div>
+                  <div className="flex"><b className="text-gray-600 w-40 shrink-0">{tipoDocumentoRefLabel(guia.factura_tipo)}:</b><span className="border-b border-gray-400 flex-1">{guia.factura || ''}</span></div>
                 </div>
 
                 {/* Formato fisico "imgreso.png": 4 columnas (DETALLE | CANTIDAD |
@@ -1047,7 +1071,7 @@ export default function GuiaDetalle() {
                   y caracteristicas por Produccion y Dpto. de Compras.
                   <div className="mt-1">
                     Documento: {tipoDocumentoLabel(guia.tipo_documento)} N° {guia.numero_guia}
-                    &nbsp;&nbsp;Guia de Remision N° {guia.guia_remision || '.........'}
+                    &nbsp;&nbsp;{tipoDocumentoRefLabel(guia.guia_remision_tipo)} N° {guia.guia_remision || '.........'}
                     &nbsp;&nbsp;.......... CONFORME.
                   </div>
                 </div>
