@@ -5,17 +5,15 @@
 // PARTIRSE en renglones de ancho fijo y ocupar los renglones de abajo,
 // dejando Cantidad/P.Unit/Total solo en el primero.
 //
-// Medido en el DOM real (no a ojo): ancho de la celda DETALLE del talonario
-// (~552px) / ancho promedio de un caracter con la fuente y tamaño que usa
-// esta tabla (text-xs, ui-sans-serif, ~6.56px/caracter), restando lo que ya
-// ocupan ITEM + codigo en la primera linea. Salida cruda: ~74 (linea 1) y
-// ~84 (siguientes); se deja un 10% de margen para no tocar el borde de
-// CANTIDAD. SIGUE SIENDO UNA APROXIMACION del ancho en PANTALLA, no del
-// papel fisico de la impresora matricial -- si al medir el talonario con
-// regla (Fase 1 / Bloque 2 "6 lineas", NOTAS_PROYECTO_SIBARITA.txt) da un
-// numero de caracteres distinto, se ajusta aca nomas.
-export const CARACTERES_LINEA_1 = 66
-export const CARACTERES_LINEA_SIGUIENTE = 75
+// Calibrado sobre el TALONARIO FISICO real (no una aproximacion en pantalla):
+// se imprimio una regla de caracteres sin limite (CalibracionImpresion.jsx,
+// borrada despues de usarse una vez) en el mismo recuadro/tabla/fuente que
+// la Nota de Ingreso real, y se midio con regla donde el rayado ya impreso
+// del talonario corta la columna DETALLE. Si el talonario cambia (otro
+// modelo, otra impresora/fuente), se repite esa medicion y se ajusta aca
+// nomas -- es el unico lugar que hace falta tocar.
+export const CARACTERES_LINEA_1 = 68
+export const CARACTERES_LINEA_SIGUIENTE = 79
 
 // Alto fijo de cada renglon de la tabla DETALLE, en el mismo lugar para
 // las 3 impresiones que lo usan (Nota de Ingreso, Nota de Salida, Nota de
