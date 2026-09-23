@@ -57,4 +57,32 @@ NOTAS / COSAS A REVISAR ANTES DE USARLO CON GENTE REAL (no solo pruebas)
 - El puerto 5432 (Postgres) NO se abre a la red con estos scripts, y no
   deberia abrirse: solo el 3000 (la app) necesita ser visible en la LAN.
 
+---------------------------------------------------------------------------
+ACTUALIZACION 23/09/2026 (Fase 4 de PLAN_SEGUIMIENTO.md)
+---------------------------------------------------------------------------
+A) APP DE ESCRITORIO EN MODO CLIENTE (la "Opcion 2" de las ideas, YA HECHA)
+   Desde la version 1.16.0, en vez del navegador las otras PCs pueden usar
+   el mismo instalador de Sibarita:
+   1. Instalar Sibarita en la PC del usuario.
+   2. Abrirlo y presionar Ctrl+Shift+S (pantalla "Conexion de esta PC").
+   3. Elegir "Conectarse a la PC servidor" y escribir la IP del servidor
+      (la que muestra ver_ip_local.ps1, ej. 192.168.1.45).
+   4. "Probar conexion" -> "Guardar y reiniciar".
+   Esa PC ya no usa su propia base: trabaja sobre la del servidor. En la
+   PC servidor NO hay que cambiar nada (queda en "Esta PC es el servidor").
+   Si el servidor no responde, la app muestra Reintentar / Configurar
+   conexion, en vez de quedar en "Iniciando..." para siempre.
+
+B) RESPALDO AUTOMATICO DIARIO EN LA PC SERVIDOR
+   1. Crear %APPDATA%\postgresql\pgpass.conf con UNA linea:
+        localhost:5432:sibarita_db:postgres:<CONTRASENA-DE-POSTGRES>
+   2. Abrir PowerShell COMO ADMINISTRADOR en esta carpeta y correr:
+        .\programar_respaldo.ps1
+      (opcional: -Hora 13:30   -CopiaExterna "D:\RespaldoSibarita")
+   Deja los respaldos en C:\SibaritaRespaldos\backups (se guardan los
+   ultimos 30, y 90 en la copia externa), programa la tarea "Sibarita -
+   Respaldo diario" y corre un respaldo de prueba en el momento. Como
+   administrador, la tarea corre aunque nadie tenga la sesion iniciada.
+   El resultado de cada dia queda en C:\SibaritaRespaldos\backups\backup-log.txt.
+
 FIN

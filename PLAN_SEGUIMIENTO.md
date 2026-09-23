@@ -63,7 +63,9 @@ Base: `IDEAS_ARQUITECTURA_RED.txt` y `servidor_dedicado/`.
   - Solo las pantallas propias pueden cambiar la conexión; el sistema cargado desde la red, no.
   - Probado manejando la app real: cliente → servidor OK sin backend propio, dirección caída → pantalla de error, error → configurar → local (levanta su backend), cerrar la app cierra el backend.
   - ⚠️ La instalación cliente todavía lleva el `.env` con la contraseña de la base, aunque no la usa. Se puede evaluar un instalador cliente aparte en la Fase 7.
-- [ ] Respaldo automático (`scripts/backup-db.ps1`) programado en la PC servidor.
+- [x] Respaldo automático listo para la PC servidor (23/09): `servidor_dedicado/programar_respaldo.ps1` crea la tarea diaria, copia el script a `C:\SibaritaRespaldos` y corre un respaldo de prueba. `backup-db.ps1` es ahora portable (detecta la versión de PostgreSQL, carpeta y copia externa como parámetros, falla rápido sin contraseña). Probado en esta PC con una tarea de prueba, que después se borró. Pasos en `servidor_dedicado/LEEME.txt`.
+  - [ ] **(en la PC servidor)** Crear `pgpass.conf` y correr `programar_respaldo.ps1` como administrador.
+- [ ] **(usuario)** Cambiar el `JWT_SECRET` genérico de `backend/.env` por uno aleatorio antes de usar el sistema con gente real. Claude no puede escribir en ese archivo porque tiene secretos.
 - [ ] Prueba con 2 PCs a la vez: guías y salidas simultáneas sobre el mismo producto.
 
 **Terminada cuando:** 2 o más PCs trabajan sobre la misma base sin conflictos.
