@@ -6,7 +6,8 @@
 //              red (http://<IP>:3000), donde vive la unica base de datos.
 //
 // Se guarda en config.json dentro de la carpeta de datos del usuario
-// (%APPDATA%\Sibarita), no dentro de la instalacion: sobrevive a reinstalar
+// (%APPDATA%\sibarita-escritorio, por el "name" del package.json), no dentro
+// de la instalacion: sobrevive a reinstalar
 // o actualizar, y se cambia desde la pantalla de conexion sin reinstalar.
 const fs = require('fs');
 const path = require('path');

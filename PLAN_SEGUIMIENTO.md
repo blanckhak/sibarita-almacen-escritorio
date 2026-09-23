@@ -55,7 +55,7 @@
 **Objetivo:** que varias PCs compartan la misma base. Hoy cada instalación usa su propio Postgres local.
 Base: `IDEAS_ARQUITECTURA_RED.txt` y `servidor_dedicado/`.
 - [ ] En la PC servidor: Postgres + backend como servicio, puerto 3000 abierto en el firewall e IP fija.
-- [x] Modo **cliente** en la app de escritorio (23/09), sin reinstalar. Un solo instalador con dos modos, guardados en `%APPDATA%\Sibarita\config.json` (se conservan al reinstalar):
+- [x] Modo **cliente** en la app de escritorio (23/09), sin reinstalar. Un solo instalador con dos modos, guardados en `%APPDATA%\sibarita-escritorio\config.json` (se conservan al reinstalar):
   - **local** (default, como antes): levanta su propio backend.
   - **cliente**: no levanta backend y abre `http://<IP-servidor>:3000`.
   - Pantalla de conexión con `Ctrl+Shift+S`: "Probar conexión" comprueba que del otro lado haya un Sibarita y da mensajes claros (PC apagada, puerto cerrado, nombre inexistente). "Guardar y reiniciar".
@@ -96,3 +96,4 @@ Bloqueada hasta tener la respuesta de la Fase 3. Las tareas se definen con esa r
 | 22/09/2026 | (previo) | Calibración de renglones fijos con el talonario real, Boleta en la Nota de Ingreso, instalador 1.14.0 | `43a4037` |
 | 23/09/2026 | 1 | Instalador revisado, NOTAS al día, base de prueba vaciada (con respaldo), archivos sueltos subidos al repo | (este commit) |
 | 23/09/2026 | 2 | Decimales rotos desde 1.13 corregidos, ajuste manual y traslados arreglados, migración del índice robusta, instalador 1.15.0 | `039d264`, `f6cb509`, (bump) |
+| 23/09/2026 | 3–4 | Preguntas al cliente listas; modo cliente en la app; respaldo automático para la PC servidor; instalador 1.16.0 | `12e4459`, `ad474ba`, `29a6cfb`, (bump) |
