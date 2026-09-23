@@ -107,11 +107,34 @@ async function setup() {
     -- existia podian crear 2 filas duplicadas en vez de una sola que se
     -- actualiza. Con este UNIQUE, ajustarInventario pasa a un INSERT ...
     -- ON CONFLICT DO UPDATE atomico (util/inventario.js).
+    -- Una base que ya tenga filas duplicadas (justo lo que producia la
+    -- carrera vieja) no deja crear el UNIQUE. Antes eso se tragaba con un
+    -- RAISE NOTICE, y ajustarInventario fallaba despues en CADA llamada (el
+    -- ON CONFLICT exige ese indice): guias, notas y traslados en 500. Ahora,
+    -- solo si el indice falta, los duplicados se consolidan primero en una
+    -- sola fila (la mas vieja, con la suma de las cantidades) y el CREATE ya
+    -- no se envuelve: si igual fallara, el arranque lo muestra en vez de
+    -- seguir en silencio.
     DO $mig$ BEGIN
-      CREATE UNIQUE INDEX IF NOT EXISTS inventario_almacen_producto_tipo_unique
-        ON inventario (almacen_id, producto_id, tipo);
-    EXCEPTION WHEN unique_violation THEN
-      RAISE NOTICE 'inventario_almacen_producto_tipo_unique no creado: hay filas duplicadas existentes';
+      IF NOT EXISTS (SELECT 1 FROM pg_indexes
+                     WHERE indexname = 'inventario_almacen_producto_tipo_unique') THEN
+        WITH dup AS (
+          SELECT almacen_id, producto_id, tipo, MIN(id) AS keep_id, SUM(cantidad) AS total
+          FROM inventario
+          WHERE almacen_id IS NOT NULL AND producto_id IS NOT NULL AND tipo IS NOT NULL
+          GROUP BY almacen_id, producto_id, tipo
+          HAVING COUNT(*) > 1
+        )
+        UPDATE inventario i SET cantidad = dup.total FROM dup WHERE i.id = dup.keep_id;
+
+        DELETE FROM inventario i
+        USING inventario k
+        WHERE i.almacen_id = k.almacen_id AND i.producto_id = k.producto_id
+          AND i.tipo = k.tipo AND i.id > k.id;
+
+        CREATE UNIQUE INDEX inventario_almacen_producto_tipo_unique
+          ON inventario (almacen_id, producto_id, tipo);
+      END IF;
     END $mig$;
 
     CREATE TABLE IF NOT EXISTS movimientos (
