@@ -7,7 +7,7 @@
 | # | Fase | Estado | Depende de |
 |---|------|--------|------------|
 | 1 | Verificar v1.14.0 y ordenar el proyecto | 🟨 | — |
-| 2 | Pulido pendiente | ⬜ | — |
+| 2 | Pulido pendiente | ✅ | — |
 | 3 | Preguntas al cliente | ⬜ | — |
 | 4 | Despliegue en red (PC servidor) | ⬜ | 1 |
 | 5 | Trabajo sin conexión y sincronización | ⬜ | 4 |
@@ -30,10 +30,13 @@
 
 ## Fase 2 — Pulido pendiente
 **Objetivo:** cerrar lo que quedó a medias en fases anteriores.
-- [ ] En Inventario y Movimientos, los formularios de ajuste manual solo aceptan números enteros (desde la Fase 11). Revisar el backend y permitir decimales para las unidades que los admiten (KG, M, M2, L).
-- [ ] Revisar con `/code-review` los commits del 21 y 22/09.
-- [ ] Sacar `backend/server_log.txt` del instalador (agregar `!backend/*_log.txt` en `build.files` del `package.json`).
-- [ ] Nuevo instalador 1.15.0 si hubo cambios.
+- [x] Decimales en Inventario y Movimientos (`039d264`). Al revisar aparecieron 3 bugs reales, que se reprodujeron antes de corregirlos:
+  - **Desde 1.13.0, ninguna cantidad con decimales se podía guardar** (guías, devoluciones, traslados). El upsert de `ajustarInventario` no tenía el cast `::numeric`.
+  - El ajuste manual daba error 500 desde la segunda vez sobre el mismo producto (choque con el índice único del 21/09).
+  - Un traslado sin stock suficiente pasaba igual y creaba stock de la nada (las cantidades se concatenaban como texto).
+- [x] Sacar `backend/*_log.txt` del instalador (`package.json`).
+- [x] `/code-review` de los commits del 21 y 22/09: encontró 1 bug grave (`f6cb509`). Si una base ya tenía filas de inventario duplicadas, la migración del índice único fallaba en silencio y después **todas** las operaciones de stock daban 500. Ahora los duplicados se unen antes de crear el índice (probado con ROLLBACK). El resto de lo revisado quedó sin problemas.
+- [x] Instalador **1.15.0** (`dist/Sibarita Setup 1.15.0.exe`). Contenido verificado (`.env`, los arreglos, sin logs) y el `.exe` empaquetado probado: arranca, el login funciona y la API responde.
 
 **Terminada cuando:** se puede ajustar 2.5 KG a mano y el instalador nuevo está probado.
 
@@ -81,3 +84,4 @@ Bloqueada hasta tener la respuesta de la Fase 3. Las tareas se definen con esa r
 |-------|------|-------------|--------|
 | 22/09/2026 | (previo) | Calibración de renglones fijos con el talonario real, Boleta en la Nota de Ingreso, instalador 1.14.0 | `43a4037` |
 | 23/09/2026 | 1 | Instalador revisado, NOTAS al día, base de prueba vaciada (con respaldo), archivos sueltos subidos al repo | (este commit) |
+| 23/09/2026 | 2 | Decimales rotos desde 1.13 corregidos, ajuste manual y traslados arreglados, migración del índice robusta, instalador 1.15.0 | `039d264`, `f6cb509`, (bump) |
