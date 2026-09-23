@@ -8,7 +8,7 @@
 |---|------|--------|------------|
 | 1 | Verificar v1.14.0 y ordenar el proyecto | 🟨 | — |
 | 2 | Pulido pendiente | ✅ | — |
-| 3 | Preguntas al cliente | ⬜ | — |
+| 3 | Preguntas al cliente | 🟨 | — |
 | 4 | Despliegue en red (PC servidor) | ⬜ | 1 |
 | 5 | Trabajo sin conexión y sincronización | ⬜ | 4 |
 | 6 | Procesos en segundo plano | ⛔ | 3 |
@@ -47,7 +47,9 @@
 - [ ] **Red:** ¿cuántas PCs la van a usar, y cuál sería la PC servidor? (Sirve para la Fase 4.)
 - [ ] **Sin conexión:** ¿qué operaciones tienen que seguir funcionando si se corta la red? ¿Solo registrar, o también consultar el stock? (Define el alcance de la Fase 5.)
 
-**Terminada cuando:** cada pregunta tiene una respuesta anotada en este archivo.
+- [x] Mensaje para el cliente listo en `PREGUNTAS_CLIENTE.md` (23/09), con opciones cerradas. **Falta enviarlo y anotar las respuestas.**
+
+**Terminada cuando:** cada pregunta tiene su respuesta anotada en `PREGUNTAS_CLIENTE.md`.
 
 ## Fase 4 — Despliegue en red (PC servidor)
 **Objetivo:** que varias PCs compartan la misma base. Hoy cada instalación usa su propio Postgres local.
