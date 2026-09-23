@@ -3,6 +3,11 @@ const router = express.Router()
 const pool = require('../config/db')
 const { verificarToken, soloRoles } = require('../middlewares/authMiddleware')
 const log = require('../middlewares/logMiddleware')
+const { ajustarInventario } = require('../utils/inventario')
+const { esCantidadPositiva, unidadPermiteDecimal } = require('../utils/cantidad')
+const { mensajeConcurrencia } = require('../utils/dbErrores')
+
+const TIPOS = ['NUEVO', 'DEVOLUCION']
 
 router.get('/', verificarToken, async (req, res) => {
   try {
@@ -46,11 +51,13 @@ router.get('/disponible', verificarToken, async (req, res) => {
   }
   try {
     const result = await pool.query(`
-      SELECT p.id as producto_id, p.nombre as producto_nombre, SUM(i.cantidad) as cantidad
+      SELECT p.id as producto_id, p.nombre as producto_nombre, SUM(i.cantidad) as cantidad,
+             COALESCE(um.permite_decimal, false) as permite_decimal
       FROM inventario i
       JOIN productos p ON i.producto_id = p.id
+      LEFT JOIN unidades_medida um ON um.id = p.unidad_medida_id
       WHERE i.almacen_id = $1
-      GROUP BY p.id, p.nombre
+      GROUP BY p.id, p.nombre, um.permite_decimal
       HAVING SUM(i.cantidad) > 0
       ORDER BY p.nombre
     `, [almacen_id])
@@ -68,17 +75,41 @@ router.get('/disponible', verificarToken, async (req, res) => {
 router.post('/', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
   log('AJUSTE_MANUAL_INVENTARIO', req => `Almacen ${req.body.almacen_id}, producto ${req.body.producto_id}, tipo ${req.body.tipo}, cantidad ${req.body.cantidad}`),
   async (req, res) => {
-  const { almacen_id, producto_id, tipo, cantidad, descripcion } = req.body
+  const { almacen_id, producto_id, tipo = 'NUEVO', cantidad, descripcion } = req.body
+  if (!almacen_id) {
+    return res.status(400).json({ error: 'El almacen es requerido' })
+  }
   if (!producto_id) {
     return res.status(400).json({ error: 'El producto es requerido' })
   }
+  if (!TIPOS.includes(tipo)) {
+    return res.status(400).json({ error: 'Tipo invalido (NUEVO o DEVOLUCION)' })
+  }
+  if (!esCantidadPositiva(cantidad)) {
+    return res.status(400).json({ error: 'La cantidad debe ser mayor a 0 (hasta 3 decimales)' })
+  }
   try {
+    if (!Number.isInteger(Number(cantidad)) && !(await unidadPermiteDecimal(pool, producto_id))) {
+      return res.status(400).json({ error: 'La unidad de este producto no admite decimales' })
+    }
+    // Antes era un INSERT directo: desde el UNIQUE (almacen, producto, tipo)
+    // del fix de concurrencia 3cbc1ad, un segundo ajuste sobre un producto que
+    // ya tenia stock fallaba con "llave duplicada". El ajuste manual SUMA al
+    // stock existente con el mismo upsert que usan guias y notas de salida.
+    await ajustarInventario(null, {
+      almacenId: almacen_id, productoId: producto_id, delta: Number(cantidad), descripcion, tipo,
+    })
     const result = await pool.query(
-      'INSERT INTO inventario (almacen_id, producto_id, tipo, cantidad, descripcion) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-      [almacen_id, producto_id, tipo, cantidad, descripcion]
+      'SELECT * FROM inventario WHERE almacen_id = $1 AND producto_id = $2 AND tipo = $3',
+      [almacen_id, producto_id, tipo]
     )
     res.status(201).json(result.rows[0])
   } catch (err) {
+    if (err.code === '23503') {
+      return res.status(400).json({ error: 'El almacen o el producto no existe' })
+    }
+    const msg = mensajeConcurrencia(err)
+    if (msg) return res.status(409).json({ error: msg })
     res.status(500).json({ error: err.message })
   }
 })

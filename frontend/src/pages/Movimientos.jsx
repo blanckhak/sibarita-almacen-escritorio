@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import api from '../utils/api'
+import { fmtCantidad } from '../utils/fmt'
 
 const TIPOS = ['TRASLADO', 'ENTRADA', 'SALIDA', 'DEVOLUCION']
 
@@ -38,6 +39,8 @@ export default function Movimientos() {
   }, [form.almacen_origen_id])
 
   const productoSeleccionado = productosOrigen.find(p => p.producto_id === Number(form.producto_id))
+  // Fase 11 (R6): decimales solo si la unidad del producto lo permite (KG, M...).
+  const permiteDecimal = !!productoSeleccionado?.permite_decimal
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -47,7 +50,7 @@ export default function Movimientos() {
       return
     }
     if (productoSeleccionado && Number(form.cantidad) > Number(productoSeleccionado.cantidad)) {
-      setMensaje({ tipo: 'error', texto: `Stock insuficiente en el origen (disponible: ${productoSeleccionado.cantidad})` })
+      setMensaje({ tipo: 'error', texto: `Stock insuficiente en el origen (disponible: ${fmtCantidad(productoSeleccionado.cantidad)})` })
       setTimeout(() => setMensaje(null), 3000)
       return
     }
@@ -141,7 +144,7 @@ export default function Movimientos() {
                 </option>
                 {productosOrigen.map(p => (
                   <option key={p.producto_id} value={p.producto_id}>
-                    {p.producto_nombre} (disponible: {p.cantidad})
+                    {p.producto_nombre} (disponible: {fmtCantidad(p.cantidad)})
                   </option>
                 ))}
               </select>
@@ -164,7 +167,8 @@ export default function Movimientos() {
               <input
                 required
                 type="number"
-                min="1"
+                min={permiteDecimal ? '0.001' : '1'}
+                step={permiteDecimal ? '0.001' : '1'}
                 max={productoSeleccionado?.cantidad}
                 value={form.cantidad}
                 onChange={e => setForm({ ...form, cantidad: e.target.value })}

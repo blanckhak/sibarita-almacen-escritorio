@@ -14,11 +14,14 @@ async function ajustarInventario(client, { almacenId, productoId, delta, descrip
   // para el mismo (almacen,producto,tipo) que TODAVIA no existia podian
   // pasar los dos por "no existe" y terminar creando 2 filas duplicadas en
   // vez de una sola. Con ON CONFLICT, Postgres serializa la operacion sola.
+  // $4::numeric explicito: sin el cast, GREATEST($4, 0) hace que Postgres
+  // deduzca $4 como INTEGER (por el literal 0) y cualquier delta con decimales
+  // (Kilo / Metro, Fase 11) falla con "sintaxis no valida para tipo integer".
   await conexion.query(
     `INSERT INTO inventario (almacen_id, producto_id, tipo, cantidad, descripcion)
-     VALUES ($1, $2, $3, GREATEST($4, 0), $5)
+     VALUES ($1, $2, $3, GREATEST($4::numeric, 0), $5)
      ON CONFLICT (almacen_id, producto_id, tipo)
-     DO UPDATE SET cantidad = GREATEST(inventario.cantidad + $4, 0)`,
+     DO UPDATE SET cantidad = GREATEST(inventario.cantidad + $4::numeric, 0)`,
     [almacenId, productoId, tipo, delta, descripcion || null]
   )
 }

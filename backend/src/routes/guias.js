@@ -7,6 +7,7 @@ const { crearNotaSalidaAutomatica, crearNotaSalidaServicios } = require('../util
 const { validarLargos } = require('../utils/texto')
 const { mensajeConcurrencia } = require('../utils/dbErrores')
 const { periodoCerrado } = require('../utils/periodo')
+const { esCantidadPositiva } = require('../utils/cantidad')
 const log = require('../middlewares/logMiddleware')
 
 const ERR_PERIODO_CERRADO = 'El periodo de esta guia esta CERRADO; pedile a un admin que lo reabra para poder modificarla.'
@@ -19,17 +20,8 @@ const DESTINOS_SALIDA_AUTO = ['COMPRAS_DIARIAS']
 const DESTINO_LABEL = { COMPRAS_DIARIAS: 'Compras Diarias' }
 
 // Fase 11 (R6): guia_items.cantidad y guia_item_partidas.cantidad son
-// NUMERIC(12,3) -> se admiten fracciones por Kilo / Metro (1.2, 0.3, 3.5).
-// Se sigue rechazando aca con un 400 limpio: 0, negativos, NaN, Infinity y
-// mas de 3 decimales (antes de llegar al INSERT de Postgres).
-const MAX_DECIMALES = 3
-const esCantidadPositiva = (v) => {
-  const n = Number(v)
-  if (!Number.isFinite(n) || n <= 0) return false
-  const s = String(v).trim()
-  const dec = s.includes('.') ? (s.split('.')[1] || '').length : 0
-  return dec <= MAX_DECIMALES
-}
+// NUMERIC(12,3). La validacion (0, negativos, NaN, mas de 3 decimales) vive en
+// utils/cantidad.js, compartida con inventario y movimientos.
 
 // Consulta por almacen, producto o guia, de forma independiente o combinada (seccion 5.6, CU-04)
 router.get('/consulta/productos', verificarToken, async (req, res) => {

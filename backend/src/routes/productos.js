@@ -11,7 +11,8 @@ const largosProducto = (b) => validarLargos({
 })
 
 const SELECT_BASE = `
-  SELECT p.*, um.nombre as unidad_medida_nombre, um.abreviatura as unidad_medida_abreviatura
+  SELECT p.*, um.nombre as unidad_medida_nombre, um.abreviatura as unidad_medida_abreviatura,
+         COALESCE(um.permite_decimal, false) as permite_decimal
   FROM productos p
   LEFT JOIN unidades_medida um ON p.unidad_medida_id = um.id
 `

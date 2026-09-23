@@ -3,6 +3,11 @@ const router = express.Router()
 const pool = require('../config/db')
 const { verificarToken, soloRoles } = require('../middlewares/authMiddleware')
 const log = require('../middlewares/logMiddleware')
+const { ajustarInventario } = require('../utils/inventario')
+const { esCantidadPositiva, aMilesimas, unidadPermiteDecimal } = require('../utils/cantidad')
+const { mensajeConcurrencia } = require('../utils/dbErrores')
+
+const TIPOS = ['TRASLADO', 'ENTRADA', 'SALIDA', 'DEVOLUCION']
 
 router.get('/', verificarToken, async (req, res) => {
   try {
@@ -32,16 +37,32 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
   if (!producto_id) {
     return res.status(400).json({ error: 'El producto es requerido' })
   }
-  if (almacen_origen_id === almacen_destino_id) {
+  if (!almacen_origen_id || !almacen_destino_id) {
+    return res.status(400).json({ error: 'El almacen de origen y el de destino son requeridos' })
+  }
+  if (Number(almacen_origen_id) === Number(almacen_destino_id)) {
     return res.status(400).json({ error: 'El origen y destino no pueden ser el mismo almacen' })
   }
-  const cantidadNum = Number(cantidad)
-  if (!cantidadNum || cantidadNum <= 0) {
-    return res.status(400).json({ error: 'La cantidad debe ser mayor a 0' })
+  if (!TIPOS.includes(tipo)) {
+    return res.status(400).json({ error: 'Tipo de movimiento invalido' })
   }
+  if (!esCantidadPositiva(cantidad)) {
+    return res.status(400).json({ error: 'La cantidad debe ser mayor a 0 (hasta 3 decimales)' })
+  }
+  // Todo el calculo de stock va en milesimas enteras: pg devuelve NUMERIC como
+  // string ("5.000") y antes se sumaba con + -> "05.0003.000", el chequeo
+  // "disponible < cantidad" nunca se cumplia con 2 filas (NUEVO + DEVOLUCION)
+  // y el traslado sumaba en destino la cantidad PEDIDA aunque en origen no
+  // hubiera tanto (stock creado de la nada).
+  const pedido = aMilesimas(cantidad)
+  const cantidadNum = pedido / 1000
 
   const client = await pool.connect()
   try {
+    if (!Number.isInteger(cantidadNum) && !(await unidadPermiteDecimal(client, producto_id))) {
+      return res.status(400).json({ error: 'La unidad de este producto no admite decimales' })
+    }
+
     await client.query('BEGIN')
 
     const stockRows = await client.query(
@@ -52,33 +73,30 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
       [almacen_origen_id, producto_id]
     )
 
-    const disponible = stockRows.rows.reduce((s, r) => s + r.cantidad, 0)
-    if (disponible < cantidadNum) {
+    const disponible = stockRows.rows.reduce((s, r) => s + aMilesimas(r.cantidad), 0)
+    if (disponible < pedido) {
       await client.query('ROLLBACK')
-      return res.status(400).json({ error: `Stock insuficiente en el almacen origen (disponible: ${disponible})` })
+      return res.status(400).json({ error: `Stock insuficiente en el almacen origen (disponible: ${disponible / 1000})` })
     }
 
-    let restante = cantidadNum
+    let restante = pedido
     for (const row of stockRows.rows) {
       if (restante <= 0) break
-      const descuento = Math.min(row.cantidad, restante)
-      await client.query('UPDATE inventario SET cantidad = cantidad - $1 WHERE id = $2', [descuento, row.id])
+      const descuento = Math.min(aMilesimas(row.cantidad), restante)
+      if (descuento <= 0) continue
+      await client.query('UPDATE inventario SET cantidad = cantidad - $1 WHERE id = $2', [descuento / 1000, row.id])
       restante -= descuento
     }
 
-    const tipoDestino = tipo === 'DEVOLUCION' ? 'DEVOLUCION' : 'NUEVO'
-    const destinoExistente = await client.query(
-      `SELECT id FROM inventario WHERE almacen_id = $1 AND producto_id = $2 AND tipo = $3 LIMIT 1`,
-      [almacen_destino_id, producto_id, tipoDestino]
-    )
-    if (destinoExistente.rows.length > 0) {
-      await client.query('UPDATE inventario SET cantidad = cantidad + $1 WHERE id = $2', [cantidadNum, destinoExistente.rows[0].id])
-    } else {
-      await client.query(
-        `INSERT INTO inventario (almacen_id, producto_id, tipo, cantidad, descripcion) VALUES ($1,$2,$3,$4,$5)`,
-        [almacen_destino_id, producto_id, tipoDestino, cantidadNum, 'Recibido por movimiento']
-      )
-    }
+    // Destino con el mismo upsert atomico que guias/notas de salida (antes era
+    // SELECT + INSERT/UPDATE, la misma carrera que corrigio 3cbc1ad).
+    await ajustarInventario(client, {
+      almacenId: almacen_destino_id,
+      productoId: producto_id,
+      delta: cantidadNum,
+      descripcion: 'Recibido por movimiento',
+      tipo: tipo === 'DEVOLUCION' ? 'DEVOLUCION' : 'NUEVO',
+    })
 
     const result = await client.query(
       `INSERT INTO movimientos (almacen_origen_id, almacen_destino_id, producto_id, tipo, cantidad, descripcion, usuario_id)
@@ -89,7 +107,12 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
     await client.query('COMMIT')
     res.status(201).json(result.rows[0])
   } catch (err) {
-    await client.query('ROLLBACK')
+    await client.query('ROLLBACK').catch(() => {})
+    if (err.code === '23503') {
+      return res.status(400).json({ error: 'El almacen o el producto no existe' })
+    }
+    const msg = mensajeConcurrencia(err)
+    if (msg) return res.status(409).json({ error: msg })
     res.status(500).json({ error: err.message })
   } finally {
     client.release()

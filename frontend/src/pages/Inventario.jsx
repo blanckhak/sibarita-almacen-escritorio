@@ -62,12 +62,15 @@ export default function Inventario() {
     })
   }, [inventario, busqueda, filtroAlmacen, filtroTipo])
 
+  // Fase 11 (R6): decimales solo si la unidad del producto lo permite (KG, M...).
+  const permiteDecimal = !!productos.find(p => p.id === Number(form.producto_id))?.permite_decimal
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setGuardando(true)
     try {
       await api.post('/api/inventario', form)
-      setMensaje({ tipo: 'ok', texto: 'Item registrado correctamente' })
+      setMensaje({ tipo: 'ok', texto: 'Stock ajustado correctamente' })
       setForm({ almacen_id: '', producto_id: '', tipo: 'NUEVO', cantidad: '', descripcion: '' })
       setMostrarForm(false)
       cargarDatos()
@@ -221,7 +224,9 @@ export default function Inventario() {
             <div>
               <label className="block text-sm font-medium text-gray-600 mb-1">Cantidad</label>
               <input
-                type="number" required min="1"
+                type="number" required
+                min={permiteDecimal ? '0.001' : '1'}
+                step={permiteDecimal ? '0.001' : '1'}
                 value={form.cantidad}
                 onChange={e => setForm({ ...form, cantidad: e.target.value })}
                 placeholder="0"
