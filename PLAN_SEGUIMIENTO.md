@@ -9,7 +9,7 @@
 | 1 | Verificar v1.14.0 y ordenar el proyecto | 🟨 | — |
 | 2 | Pulido pendiente | ✅ | — |
 | 3 | Preguntas al cliente | 🟨 | — |
-| 4 | Despliegue en red (PC servidor) | ⬜ | 1 |
+| 4 | Despliegue en red (PC servidor) | 🟨 | 1 |
 | 5 | Trabajo sin conexión y sincronización | ⬜ | 4 |
 | 6 | Procesos en segundo plano | ⛔ | 3 |
 | 7 | Entrega final | ⬜ | 1–6 |
@@ -55,7 +55,14 @@
 **Objetivo:** que varias PCs compartan la misma base. Hoy cada instalación usa su propio Postgres local.
 Base: `IDEAS_ARQUITECTURA_RED.txt` y `servidor_dedicado/`.
 - [ ] En la PC servidor: Postgres + backend como servicio, puerto 3000 abierto en el firewall e IP fija.
-- [ ] En el instalador cliente: opción para indicar la dirección del servidor en lugar de `localhost`, sin reinstalar.
+- [x] Modo **cliente** en la app de escritorio (23/09), sin reinstalar. Un solo instalador con dos modos, guardados en `%APPDATA%\Sibarita\config.json` (se conservan al reinstalar):
+  - **local** (default, como antes): levanta su propio backend.
+  - **cliente**: no levanta backend y abre `http://<IP-servidor>:3000`.
+  - Pantalla de conexión con `Ctrl+Shift+S`: "Probar conexión" comprueba que del otro lado haya un Sibarita y da mensajes claros (PC apagada, puerto cerrado, nombre inexistente). "Guardar y reiniciar".
+  - Si el servidor no responde, pantalla de error con **Reintentar** / **Configurar conexión**, en vez de quedar en "Iniciando..." para siempre.
+  - Solo las pantallas propias pueden cambiar la conexión; el sistema cargado desde la red, no.
+  - Probado manejando la app real: cliente → servidor OK sin backend propio, dirección caída → pantalla de error, error → configurar → local (levanta su backend), cerrar la app cierra el backend.
+  - ⚠️ La instalación cliente todavía lleva el `.env` con la contraseña de la base, aunque no la usa. Se puede evaluar un instalador cliente aparte en la Fase 7.
 - [ ] Respaldo automático (`scripts/backup-db.ps1`) programado en la PC servidor.
 - [ ] Prueba con 2 PCs a la vez: guías y salidas simultáneas sobre el mismo producto.
 

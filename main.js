@@ -1,7 +1,9 @@
-const { app, BrowserWindow, shell } = require('electron');
+const { app, BrowserWindow, shell, ipcMain } = require('electron');
 const path = require('path');
 const http = require('http');
 const { spawn } = require('child_process');
+const { PUERTO_DEFAULT, leerConfig, guardarConfig, normalizarServidor, probarServidor } = require('./conexion');
+const { paginaCarga, paginaError, paginaConfig } = require('./paginas');
 
 // En algunas PCs el proceso GPU de Electron se cae al arrancar
 // ("GPU process exited unexpectedly: exit_code=34") y la ventana queda en
@@ -9,26 +11,14 @@ const { spawn } = require('child_process');
 // esta app es UI simple, no necesita GPU.
 app.disableHardwareAcceleration();
 
-const PORT = 3000;
-const APP_URL = `http://localhost:${PORT}`;
+const PORT = PUERTO_DEFAULT;
+const LOCAL_URL = `http://localhost:${PORT}`;
 const BACKEND_DIR = path.join(__dirname, 'backend');
-
-const LOADING_HTML = `data:text/html;charset=utf-8,${encodeURIComponent(`
-<!doctype html>
-<html><head><meta charset="utf-8"><title>Sibarita</title>
-<style>
-  body { margin:0; height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center;
-         background:#0f172a; color:#e2e8f0; font-family:system-ui,-apple-system,Segoe UI,Arial,sans-serif; }
-  .spinner { width:40px; height:40px; border:4px solid #334155; border-top-color:#3b82f6; border-radius:50%;
-             animation:spin 0.8s linear infinite; margin-bottom:16px; }
-  @keyframes spin { to { transform:rotate(360deg); } }
-  p { font-size:14px; color:#94a3b8; }
-</style></head>
-<body><div class="spinner"></div><p>Iniciando Sibarita...</p></body></html>
-`)}`;
 
 let backendProcess = null;
 let mainWindow = null;
+// Modo de conexion vigente (conexion.js): local o cliente de la PC servidor.
+let config = null;
 
 function waitForServer(url, timeoutMs, intervalMs) {
   const deadline = Date.now() + timeoutMs;
@@ -40,7 +30,7 @@ function waitForServer(url, timeoutMs, intervalMs) {
       });
       req.on('error', () => {
         if (Date.now() > deadline) {
-          reject(new Error('El servidor local no respondio a tiempo'));
+          reject(new Error('El servidor no respondio a tiempo'));
         } else {
           setTimeout(tryOnce, intervalMs);
         }
@@ -95,19 +85,91 @@ function createWindow() {
     return { action: 'deny' };
   });
 
+  // Ctrl+Shift+S abre la pantalla de conexion desde cualquier lado (la barra
+  // de menu esta oculta, no hay otro lugar donde ponerla).
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.type === 'keyDown' && input.control && input.shift && input.key.toLowerCase() === 's') {
+      event.preventDefault();
+      mainWindow.loadURL(paginaConfig());
+    }
+  });
+
   // Se muestra de inmediato con una pantalla de carga liviana, mientras el
-  // backend local termina de levantar en paralelo, en vez de dejar al
-  // usuario sin ninguna ventana durante ese tiempo.
-  mainWindow.loadURL(LOADING_HTML);
+  // backend (local o de la PC servidor) responde, en vez de dejar al usuario
+  // sin ninguna ventana durante ese tiempo.
+  mainWindow.loadURL(paginaCarga('Iniciando Sibarita...'));
+}
+
+function urlDestino() {
+  return config.modo === 'cliente' ? config.servidor : LOCAL_URL;
+}
+
+// Espera al servidor y carga el sistema. Si no responde, en vez de quedar
+// en "Iniciando..." para siempre (lo que pasaba antes), muestra una pantalla
+// de error con Reintentar / Configurar conexion.
+function conectar() {
+  const destino = urlDestino();
+  const esCliente = config.modo === 'cliente';
+  // Modo local: levantar el backend si todavia no corre o si se cayo (asi
+  // "Reintentar" sirve tambien despues de arreglar PostgreSQL). En modo
+  // cliente NO se levanta: la base vive en la PC servidor.
+  if (!esCliente && (!backendProcess || backendProcess.exitCode !== null)) startBackend();
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.loadURL(paginaCarga(esCliente ? `Conectando con ${destino}...` : 'Iniciando Sibarita...'));
+  }
+  waitForServer(destino, esCliente ? 8000 : 20000, 300)
+    .then(() => mainWindow && !mainWindow.isDestroyed() && mainWindow.loadURL(destino))
+    .catch((err) => {
+      console.error(err.message);
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      mainWindow.loadURL(paginaError({
+        titulo: esCliente ? 'No se pudo conectar con la PC servidor' : 'Sibarita no pudo iniciar',
+        detalle: esCliente
+          ? 'La PC servidor no respondio.'
+          : 'El servidor interno no respondio. Revisa que PostgreSQL este instalado y funcionando en esta PC.',
+        direccion: destino,
+      }));
+    });
+}
+
+// Solo las pantallas propias (data:) pueden cambiar la conexion; el sistema
+// cargado desde un servidor de la red no tiene acceso a esto.
+function desdePantallaPropia(event) {
+  return String(event.senderFrame?.url || '').startsWith('data:');
+}
+
+function registrarIpc() {
+  const soloPropias = (fn) => (event, ...args) => {
+    if (!desdePantallaPropia(event)) throw new Error('No permitido');
+    return fn(...args);
+  };
+  ipcMain.handle('conexion:obtener', soloPropias(() => config));
+  ipcMain.handle('conexion:probar', soloPropias(async (texto) => {
+    const servidor = normalizarServidor(texto);
+    if (!servidor) return { ok: false, error: 'Escribe una direccion valida (ej. 192.168.1.45)' };
+    return { ...(await probarServidor(servidor)), servidor };
+  }));
+  ipcMain.handle('conexion:guardar', soloPropias((cfg) => {
+    try {
+      guardarConfig(app, cfg);
+    } catch (err) {
+      return { ok: false, error: 'Escribe una direccion valida (ej. 192.168.1.45)' };
+    }
+    // Reiniciar la app entera: pasar de local a cliente (o al reves)
+    // cambia si hay que levantar el backend o no.
+    app.relaunch();
+    app.exit(0);
+    return { ok: true };
+  }));
+  ipcMain.handle('conexion:reintentar', soloPropias(() => conectar()));
+  ipcMain.handle('conexion:abrirConfig', soloPropias(() => mainWindow.loadURL(paginaConfig())));
 }
 
 app.whenReady().then(() => {
+  config = leerConfig(app);
+  registrarIpc();
   createWindow();
-  startBackend();
-
-  waitForServer(APP_URL, 20000, 300)
-    .then(() => mainWindow && !mainWindow.isDestroyed() && mainWindow.loadURL(APP_URL))
-    .catch((err) => console.error(err.message));
+  conectar();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

@@ -35,6 +35,8 @@
     "files": [
       "main.js",
       "preload.js",
+      "conexion.js",
+      "paginas.js",
       "package.json",
       "icon.ico",
       "backend/**/*",
