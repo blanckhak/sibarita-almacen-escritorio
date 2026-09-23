@@ -2650,9 +2650,59 @@ PENDIENTE NUEVO (11/09, bloqueado igual que antes):
   (no debe volver a cortar texto con "...", solo dejar de estirar el
   ALTO de una celda y en cambio ocupar renglones de abajo).
 
-COMO RETOMAR: rama master, git status limpio, 1 commit sin pushear
-(a264478) si no se pusheo despues de este cierre -- revisar con
-`git log origin/master..master` antes de asumir que ya se subio.
+(RESUELTO el 21-22/09 -- ver seccion 31: renglones fijos implementados
+en los 4 documentos y calibrados con el talonario real.)
+
+31. SESIONES 21-22/09/2026 + SEGUIMIENTO 23/09 -- HECHO
+--------------------------------------------------
+Todo en master y pusheado a origin (master...origin/master al dia).
+
+Renglones fijos (lo que estaba PENDIENTE arriba):
+- frontend/src/utils/renglonesFijos.js: el nombre largo se parte en
+  renglones de ancho fijo; codigo/cantidad/unidad solo en el primero.
+  Aplicado a Nota de Ingreso, Nota de Salida (7c85847), Nota de Desuso
+  y Solicitud de Materiales (aa33ee8). align-top tambien en Desuso y
+  Solicitud (309f39a).
+- CALIBRADO CON EL PAPEL REAL (9ba0cd2): pagina de calibracion de un
+  solo uso (ya borrada) + medicion con regla del usuario:
+  CARACTERES_LINEA_1 = 68, CARACTERES_LINEA_SIGUIENTE = 79.
+  -> La "Fase 1 BLOQUEADA por la medicion del talonario" queda CERRADA.
+
+Menores cerrados (de la lista "QUE QUEDA PENDIENTE" del 31/08):
+- Solicitud de Materiales: edicion mientras este PENDIENTE (4691b55).
+- Reportes: tabla en pantalla para Salidas por Motivo (5d8c30a).
+
+Fixes de revision de codigo (21/09):
+- Seguridad (8394690): POST/PUT /api/almacenes y POST /api/inventario
+  no pedian token. Ahora verificarToken + rol.
+- Periodo cerrado (fdfd4a9): POST /api/etiquetas/:id/transferir no
+  chequeaba periodoCerrado aunque mueve inventario en 2 almacenes.
+- Concurrencia (3cbc1ad): ajustarInventario() hacia SELECT y despues
+  INSERT/UPDATE sin restriccion unica -> podia duplicar filas de stock.
+  Ahora hay indice unico (almacen, producto, tipo) + upsert.
+
+Nota de Ingreso -- Boleta (01bba51): guias.guia_remision_tipo /
+factura_tipo (GUIA/FACTURA/BOLETA/OTRO). Cada uno de los 2 renglones de
+referencia se imprime con la etiqueta del tipo elegido.
+
+Instalador:
+- 1.13.0 (abe75a1): backend/.env real empaquetado (antes cada
+  instalacion quedaba en "Cargando..." sin DB_PASSWORD).
+- 1.14.0 (43a4037): incluye todo lo anterior.
+  Verificado 23/09 extrayendo el app.asar de dist/win-unpacked: trae
+  backend/.env, el bundle tiene 68/79 y los tipos Boleta.
+  Detalle menor: tambien empaqueta backend/server_log.txt (log de
+  arranque, sin datos sensibles) -- se puede excluir en "files".
+
+Seguimiento: desde el 23/09 las fases siguientes se llevan en
+PLAN_SEGUIMIENTO.md (Fase 1 verificar/ordenar ... Fase 7 entrega).
+
+Datos de prueba: TODA la base local sibarita_db es de prueba (10 guias
+TEST-*/G-TEST17/F-001-987/G-LARGO2, 5 notas de salida, 22 etiquetas,
+20 productos). Ver PLAN_SEGUIMIENTO.md Fase 1 para la limpieza.
+
+COMO RETOMAR: rama master, abrir PLAN_SEGUIMIENTO.md y seguir con la
+primera fase que no este en verde.
 
 --------------------------------------------------
 FIN DE LA NOTA

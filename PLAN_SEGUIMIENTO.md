@@ -1,0 +1,83 @@
+# Sibarita — Plan de seguimiento (desde v1.14.0)
+
+> Creado: 23/09/2026. Punto de partida: commit `43a4037`, instalador **1.14.0**, `master` sincronizado con `origin`.
+> Regla de trabajo: una fase a la vez, con aprobación del usuario antes de empezar y revisión al terminar.
+> Estados: ⬜ pendiente · 🟨 en curso · ✅ hecho · ⛔ bloqueado (esperando respuesta)
+
+| # | Fase | Estado | Depende de |
+|---|------|--------|------------|
+| 1 | Verificar v1.14.0 y ordenar el proyecto | 🟨 | — |
+| 2 | Pulido pendiente | ⬜ | — |
+| 3 | Preguntas al cliente | ⬜ | — |
+| 4 | Despliegue en red (PC servidor) | ⬜ | 1 |
+| 5 | Trabajo sin conexión y sincronización | ⬜ | 4 |
+| 6 | Procesos en segundo plano | ⛔ | 3 |
+| 7 | Entrega final | ⬜ | 1–6 |
+
+---
+
+## Fase 1 — Verificar v1.14.0 y ordenar el proyecto
+**Objetivo:** confirmar que lo último funciona sobre papel real y dejar la documentación al día.
+- [x] Revisar el contenido del instalador 1.14.0 (23/09): el `app.asar` trae `backend/.env`, las medidas 68/79 y la opción Boleta.
+- [ ] **(usuario)** Instalar `dist/Sibarita Setup 1.14.0.exe` en una PC limpia y verificar que arranca y se conecta a la base.
+- [ ] **(usuario)** Imprimir en la Epson FX-890 II, sobre el talonario, los 4 documentos: Nota de Ingreso, Nota de Salida, Nota de Desuso y Solicitud de Materiales. Revisar que un nombre largo siga el rayado (68/79 caracteres por renglón).
+- [x] Boleta como referencia: probada de punta a punta en el commit `01bba51` (API + impresión en el navegador). En papel real se revisa junto con el punto anterior.
+- [x] `NOTAS_PROYECTO_SIBARITA.txt` al día: se agregó la sección 31 (21–23/09) y se reemplazó el "COMO RETOMAR" que había quedado viejo.
+- [x] Datos de prueba borrados (23/09). Resultó que **toda** la base era de prueba, así que se vaciaron todos los movimientos: guías, notas, códigos, inventario, saldos e historial. Se conservaron el catálogo (20 productos), los usuarios, los almacenes, los parámetros y las unidades. Los códigos vuelven a empezar en 9001, las notas en 000001 y los 3 "Periodo 1" arrancan el 23/09. Respaldo previo: `backups/sibarita_db_20260923_093922.sql` (también en OneDrive). Después se probaron el login y los endpoints principales: todos responden 200.
+- [x] `INFORME_SIBARITA.txt` y el PDF de SUNAT de `para giarse/` subidos al repo (decisión del usuario).
+
+**Terminada cuando:** los 4 documentos se imprimen bien en el papel y la documentación coincide con el código.
+
+## Fase 2 — Pulido pendiente
+**Objetivo:** cerrar lo que quedó a medias en fases anteriores.
+- [ ] En Inventario y Movimientos, los formularios de ajuste manual solo aceptan números enteros (desde la Fase 11). Revisar el backend y permitir decimales para las unidades que los admiten (KG, M, M2, L).
+- [ ] Revisar con `/code-review` los commits del 21 y 22/09.
+- [ ] Sacar `backend/server_log.txt` del instalador (agregar `!backend/*_log.txt` en `build.files` del `package.json`).
+- [ ] Nuevo instalador 1.15.0 si hubo cambios.
+
+**Terminada cuando:** se puede ajustar 2.5 KG a mano y el instalador nuevo está probado.
+
+## Fase 3 — Preguntas al cliente
+**Objetivo:** cerrar las dudas que traban otras fases. No se programa nada en esta fase.
+- [ ] **Segundo plano:** ¿qué esperan concretamente de "Solicitud de materiales en la misma red → segundo plano" y de "Servicios de limpieza: al firmar la guía, procesar en segundo plano"? (Destraba la Fase 6.)
+- [ ] **Periodos:** ¿un periodo por almacén (así funciona hoy) o uno global para todos?
+- [ ] **Red:** ¿cuántas PCs la van a usar, y cuál sería la PC servidor? (Sirve para la Fase 4.)
+- [ ] **Sin conexión:** ¿qué operaciones tienen que seguir funcionando si se corta la red? ¿Solo registrar, o también consultar el stock? (Define el alcance de la Fase 5.)
+
+**Terminada cuando:** cada pregunta tiene una respuesta anotada en este archivo.
+
+## Fase 4 — Despliegue en red (PC servidor)
+**Objetivo:** que varias PCs compartan la misma base. Hoy cada instalación usa su propio Postgres local.
+Base: `IDEAS_ARQUITECTURA_RED.txt` y `servidor_dedicado/`.
+- [ ] En la PC servidor: Postgres + backend como servicio, puerto 3000 abierto en el firewall e IP fija.
+- [ ] En el instalador cliente: opción para indicar la dirección del servidor en lugar de `localhost`, sin reinstalar.
+- [ ] Respaldo automático (`scripts/backup-db.ps1`) programado en la PC servidor.
+- [ ] Prueba con 2 PCs a la vez: guías y salidas simultáneas sobre el mismo producto.
+
+**Terminada cuando:** 2 o más PCs trabajan sobre la misma base sin conflictos.
+
+## Fase 5 — Trabajo sin conexión y sincronización (Bloque 7 del cliente)
+**Objetivo:** si se corta la red a mitad de una operación, que no se pierda nada y se sincronice sola al volver.
+Es la fase más grande: conviene diseñarla (ADR) antes de programar.
+- [ ] Diseño: cola local de operaciones pendientes, qué se permite hacer sin red y cómo se resuelven los conflictos.
+- [ ] Aviso visible de "sin conexión" y de "N operaciones pendientes".
+- [ ] Sincronización automática al volver la red, con aviso si otro usuario ya usó el mismo código (control de duplicidad).
+- [ ] Pruebas cortando la red a mitad de guardar una guía y una salida.
+
+**Terminada cuando:** cortar el cable en plena operación no pierde ni duplica datos.
+
+## Fase 6 — Procesos en segundo plano ⛔
+Bloqueada hasta tener la respuesta de la Fase 3. Las tareas se definen con esa respuesta.
+
+## Fase 7 — Entrega final
+- [ ] Instalador final (servidor + cliente) probado de cero.
+- [ ] Manual corto de uso por rol (admin, almacén, almacenero3, mantenimiento, compras).
+- [ ] Capacitación y acta de entrega al cliente.
+
+---
+
+## Registro de avance
+| Fecha | Fase | Qué se hizo | Commit |
+|-------|------|-------------|--------|
+| 22/09/2026 | (previo) | Calibración de renglones fijos con el talonario real, Boleta en la Nota de Ingreso, instalador 1.14.0 | `43a4037` |
+| 23/09/2026 | 1 | Instalador revisado, NOTAS al día, base de prueba vaciada (con respaldo), archivos sueltos subidos al repo | (este commit) |

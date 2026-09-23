@@ -1,0 +1,221 @@
+==================================================
+INFORME SIBARITA -- APLICACION COMPLETA Y CAMBIOS
+Generado 11/09/2026
+==================================================
+
+Rama actual: master
+Ultimo commit: 42cea84
+Commits sin pushear: 6 (desde a264478 hasta 42cea84)
+
+==================================================
+PARTE 1 -- QUE ES SIBARITA HOY
+==================================================
+App de escritorio (Electron) que corre TODO local: backend Node/
+Express + PostgreSQL en la misma PC, sin depender de internet. Cubre
+el ciclo completo del almacen: ingreso por guia, salida con
+devolucion, periodos contables, y los formatos de impresion que
+calcan los talonarios fisicos de la empresa (MANUFACTURA DE ALIMENTOS
+S.A.).
+
+3 almacenes: MALSA, JOPISA, INDELPAS.
+5 roles: admin, almacen, almacenero3, mantenimiento, compras.
+
+MODULOS ACTIVOS (13):
+
+1. Dashboard
+   Resumen global y por almacen: stock nuevo/devolucion, guias,
+   codigos generados, productos que mas rotan.
+   Roles: todos.
+
+2. Guias (Ingreso)
+   Ingreso multi-producto con proveedor, O.C., Guia de Remision y
+   Factura. Genera codigos con letra de almacen (M/J/I) e imprime la
+   Nota de Ingreso.
+   Roles: admin, almacen, almacenero3, mantenimiento, compras.
+
+3. Notas de Salida
+   Salida multiple con control de devolucion (nueva o usada, con
+   cantidad/unidad reales), aprobacion por monto y cobro de lo
+   consumido.
+   Roles: admin, almacen, almacenero3, mantenimiento, compras.
+
+4. Notas de Desuso (NUEVO -- Fase 17, hoy)
+   Ingreso de activos usados que vuelven de un area, con referencia
+   libre a una nota de salida. Calca el talonario "Nota de Ingreso de
+   Activos - Desuso".
+   Roles: admin, almacen, almacenero3, mantenimiento, compras.
+
+5. Periodos
+   Un periodo activo por almacen ("Periodo 1, 2..."), cierre con
+   arrastre de saldo, reapertura, cierre general y purga de auditoria.
+   Roles: admin, almacen, almacenero3, compras.
+
+6. Inventario
+   Stock consolidado por producto (dedup por nombre canonico),
+   separado en bucket Nuevo / Devolucion.
+   Roles: admin, almacen, almacenero3, mantenimiento, compras.
+
+7. Catalogo / Productos
+   Catalogo maestro con unidad de medida, metrica ENTERO/EN_PARTIDA y
+   alta de producto nuevo al vuelo desde una guia.
+   Roles: admin, almacen, almacenero3, mantenimiento, compras.
+
+8. Solicitud de Materiales
+   Pedido de materiales del catalogo por Mantenimiento, atendido
+   desde Almacen.
+   Roles: admin, almacen, almacenero3, mantenimiento, compras.
+
+9. Etiquetas
+   Codigo individual por unidad fisica: historial completo, ubicacion
+   (estante/rack/pasillo), reimpresion con codigo de barras.
+   Roles: admin, almacen, almacenero3, mantenimiento, compras.
+
+10. Movimientos
+    Historial de ajustes de inventario por almacen/producto.
+    Roles: admin, almacen, almacenero3.
+
+11. Reportes
+    Salidas por motivo, alertas de stock sin movimiento, Kardex Excel
+    (una hoja por almacen), export PDF.
+    Roles: admin, almacen, almacenero3, compras.
+
+12. Historial / Auditoria
+    Log de acciones por usuario con IP, purgable por antiguedad desde
+    Periodos.
+    Roles: admin, almacen, almacenero3, compras.
+
+13. Usuarios & Configuracion
+    Altas/roles, parametros de aprobacion por monto, parametros de
+    impresion (que mostrar en cada documento).
+    Roles: admin.
+
+==================================================
+PARTE 2 -- LINEA DE TIEMPO DE FASES (17 fases)
+==================================================
+Detalle completo de cada una en NOTAS_PROYECTO_SIBARITA.txt.
+
+Fase B  -- Cimientos: formato de impresion de Guias y Notas de Salida
+           calcado de los talonarios fisicos; modulo Solicitud de
+           Materiales.
+Fase 5  -- Devoluciones "Usado": un codigo que vuelve usado se retira
+           y reingresa como stock de Devolucion bajo un codigo nuevo.
+Fase 6  -- Reportes: salidas por motivo y alerta de stock sin
+           movimiento.
+Fase 7  -- Partidas: metrica de producto ENTERO / EN_PARTIDA.
+Fase 8  -- Servicios: lineas de guia tipo SERVICIO.
+Fase 9  -- Concurrencia: stock visible al armar una salida + aviso si
+           otro usuario saco el mismo codigo primero.
+Fase 10 -- Compras Diarias: modulo nuevo (Bloque 5) -- ELIMINADO por
+           completo en la Fase 16.
+Fase 11 -- Decimales (R6): cantidades NUMERIC(12,3) para Kilo/Metro,
+           agrupador de lineas por ID, observaciones, codigo de
+           impresion editable, devolucion parcial cobra solo lo
+           consumido.
+Fase 12 -- Roles y destinos: rol Almacenero 3; destinos Oficina/
+           Laboratorio generan su propia Nota de Salida automatica.
+Fase 13 -- Servicios e impresion: Servicio EXTERNO/INTERNO;
+           parametros de impresion configurables por tipo de
+           documento.
+Fase 14 -- Periodos: un periodo activo por almacen; toda guia/nota/
+           etiqueta se graba con su periodo.
+Fase 15 -- Cierre de periodo: cerrar con arrastre de saldo, bloqueo de
+           edicion, reapertura controlada.
+Fase 16 -- Limpieza: se elimina Compras Diarias; selector de periodo
+           sale del navbar; "Periodo 1, 2..."; panel de cierre
+           general + purga.
+Fase 17 -- Nota de Desuso (HOY, 11/09/2026): modulo nuevo completo,
+           ver Parte 3.
+
+==================================================
+PARTE 3 -- SESION DE HOY (11/09/2026), PASO A PASO
+==================================================
+Todo commiteado en master. Los primeros 3 cambios ya estan pusheados
+a origin; el resto (6 commits) queda listo para subir cuando lo
+confirmes.
+
+--------------------------------------------------
+[NUEVO MODULO] Fase 17 -- Notas de Desuso     (commit e46fc4a)
+--------------------------------------------------
+Que es: documento nuevo para material usado que vuelve de un area.
+Tabla propia (notas_desuso), numeracion propia, sin tocar inventario
+ni etiquetas.
+Backend: backend/src/routes/notasDesuso.js (alta, listado, edicion,
+anulacion). Sumado al chequeo de reapertura de periodos.
+Frontend: NotasDesuso.jsx / NotaDesusoDetalle.jsx -- impresion
+calcada de desuso.png.
+Probado: de punta a punta por API y por UI real (alta, listado,
+detalle, impresion, anulacion).
+
+--------------------------------------------------
+[CIERRE] Bump 1.6.0 -> 1.12.0 + merge + push  (commit 09eb378)
+--------------------------------------------------
+Hallazgo: las ramas fase-12..fase-17 no divergian, es una sola cadena
+lineal. Mergear a master fue un solo fast-forward, no 6 merges reales.
+Decision: un salto unico de version (no uno por fase) para no
+reescribir commits ya hechos.
+Resultado: primer git push de las Fases 12 a 17 (11 commits,
+56c053b..09eb378).
+
+--------------------------------------------------
+[FIX] Nombre largo cortaba texto con "..."    (commit 33607bb)
+--------------------------------------------------
+Problema: line-clamp-2 en la Nota de Ingreso truncaba un nombre de
+producto que no entraba en 2 lineas -- se perdia texto en el papel
+impreso.
+Solucion: se saca el limite; el nombre crece a las lineas que haga
+falta.
+
+--------------------------------------------------
+[FIX] Cantidad/P.Unit/Total centrados en vez  (commits 33607bb,
+       de pegados arriba                       a264478)
+--------------------------------------------------
+Causa: align-top estaba puesto en el <tr> -- vertical-align no tiene
+efecto ahi, solo en <td>. Se corrigio en Nota de Ingreso y en Nota de
+Salida.
+
+--------------------------------------------------
+[REDISEÑO] Renglones fijos para el talonario  (commits 36e7aac,
+            preimpreso                         732f7b9, e01f11f,
+                                                42cea84)
+--------------------------------------------------
+Por que: el talonario es papel continuo con el rayado ya impreso; una
+celda que crece corre esas lineas. Un nombre largo ahora se parte en
+renglones de ancho fijo (frontend/src/utils/renglonesFijos.js), con
+Cantidad/P.Unit/Total solo en el primero.
+
+Medido, no adivinado: el ancho de linea (66 / 75 caracteres) sale de
+medir en el DOM real el ancho de la celda y el ancho promedio de
+caracter -- no de un numero puesto a ojo.
+
+Palabras huerfanas: si el ultimo renglon queda con 1 sola palabra, se
+le presta la ultima palabra del renglon anterior -- nunca se desborda
+el ancho fisico.
+
+Paginado: un producto ya no se parte entre hojas si se puede evitar:
+si no entra completo en la Hoja 1, pasa entero a la Hoja 2, con
+cabecera y firmas propias.
+
+NO IMPLEMENTADO (a proposito): se pidio ademas achicar la fuente y
+usar overflow:hidden para forzar 1 sola hoja (A4). Se rechazo: sobre
+un talonario continuo real eso recorta filas, totales o firmas SIN
+AVISO -- perdida de datos en un documento de respaldo. Confirmado con
+el usuario que el papel es continuo, no A4.
+
+==================================================
+PARTE 4 -- PENDIENTES / A TENER EN CUENTA
+==================================================
+- 6 commits sin pushear: desde a264478 hasta 42cea84. Esperando
+  confirmacion para subir a origin/master.
+- Calibracion fisica pendiente (Fase 1): los 66/75 caracteres por
+  renglon son una medicion EN PANTALLA, no del papel real. Falta medir
+  el talonario con regla para ajustar esos 2 numeros si hace falta.
+- Datos de prueba en la base (NO borrados, por si se sigue probando
+  impresion):
+    - Guia G-TEST17 (JOPISA, id 9) -- codigo J9018/J9019
+    - Guia F-001-987 (JOPISA, id 10, Factura) -- codigo J9020
+    - Guia G-LARGO2 (JOPISA, id 11) -- 3 productos largos,
+      codigos J9021/J9022/J9023
+
+--------------------------------------------------
+FIN DEL INFORME
+--------------------------------------------------
