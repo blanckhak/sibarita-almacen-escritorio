@@ -29,12 +29,12 @@ function emitirSesion(usuario, debeCambiar) {
   }
 }
 
-const buscarUsuario = (where, valor) => pool.query(
+const buscarUsuario = (where, valor, soloActivos = true) => pool.query(
   `SELECT u.*, r.nombre as rol, a.nombre as almacen
    FROM usuarios u
    JOIN roles r ON u.rol_id = r.id
    LEFT JOIN almacenes a ON u.almacen_id = a.id
-   WHERE ${where} AND u.activo = true`,
+   WHERE ${where}${soloActivos ? ' AND u.activo = true' : ''}`,
   [valor]
 )
 
@@ -45,7 +45,7 @@ const login = async (req, res) => {
     return res.status(400).json({ error: 'Email y password son requeridos' })
 
   try {
-    const result = await buscarUsuario('u.email = $1', email)
+    const result = await buscarUsuario('u.email = $1', email, false)
 
     if (result.rows.length === 0)
       return res.status(401).json({ error: 'Credenciales incorrectas' })
@@ -55,6 +55,11 @@ const login = async (req, res) => {
 
     if (!passwordValido)
       return res.status(401).json({ error: 'Credenciales incorrectas' })
+
+    // Con la contrasena correcta si se puede decir por que no entra (antes
+    // decia "Credenciales incorrectas" y parecia un error de contrasena).
+    if (!usuario.activo)
+      return res.status(401).json({ error: 'Este usuario esta desactivado. Pida al administrador que lo active en Usuarios.' })
 
     // En produccion, una cuenta de prueba con su contrasena conocida no
     // entra. El admin si (si no, nadie podria entrar a un sistema recien
