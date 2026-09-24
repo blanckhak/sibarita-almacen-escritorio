@@ -85,4 +85,29 @@ B) RESPALDO AUTOMATICO DIARIO EN LA PC SERVIDOR
    administrador, la tarea corre aunque nadie tenga la sesion iniciada.
    El resultado de cada dia queda en C:\SibaritaRespaldos\backups\backup-log.txt.
 
+---------------------------------------------------------------------------
+ACTUALIZACION 24/09/2026 -- BACKEND COMO SERVICIO (arranca con Windows)
+---------------------------------------------------------------------------
+Reemplaza el paso 2 de arriba ("dejar la app abierta") para el uso real.
+1. Instalar Sibarita en la PC servidor (el mismo instalador de siempre).
+2. Cerrar la app Sibarita si esta abierta.
+3. PowerShell COMO ADMINISTRADOR en esta carpeta:
+     .\instalar_servicio.ps1
+   Crea la tarea "Sibarita - Servidor" (al iniciar Windows, como SYSTEM,
+   aunque nadie inicie sesion) y la arranca. Si el backend se cae, se
+   relanza solo a los 10 segundos. Log: C:\SibaritaServidor\servidor-log.txt
+4. La app de escritorio en esa misma PC se puede seguir abriendo en modo
+   "Esta PC es el servidor": usa el backend del servicio.
+
+PARA ACTUALIZAR SIBARITA EN LA PC SERVIDOR (si no, el instalador dice que
+Sibarita esta en uso):
+     .\instalar_servicio.ps1 -Detener
+     (instalar la version nueva)
+     .\instalar_servicio.ps1 -Iniciar
+Para sacarlo del todo: .\instalar_servicio.ps1 -Quitar
+
+ORDEN RECOMENDADO EN LA PC SERVIDOR: PostgreSQL (inicio Automatico) ->
+Sibarita -> instalar_servicio.ps1 -> abrir_firewall_puerto_3000.ps1 ->
+ver_ip_local.ps1 (y fijar esa IP en el router) -> programar_respaldo.ps1.
+
 FIN

@@ -6,7 +6,7 @@
 
 | # | Fase | Estado | Depende de |
 |---|------|--------|------------|
-| 1 | Verificar v1.14.0 y ordenar el proyecto | 🟨 | — |
+| 1 | Verificar v1.14.0 y ordenar el proyecto | 🟨 (resto al lanzar en producción) | — |
 | 2 | Pulido pendiente | ✅ | — |
 | 3 | Preguntas al cliente | 🟨 | — |
 | 4 | Despliegue en red (PC servidor) | 🟨 | 1 |
@@ -27,6 +27,7 @@
 - [x] `INFORME_SIBARITA.txt` y el PDF de SUNAT de `para giarse/` subidos al repo (decisión del usuario).
 
 **Terminada cuando:** los 4 documentos se imprimen bien en el papel y la documentación coincide con el código.
+> 24/09: por decisión del usuario, los 2 puntos **(usuario)** que quedan se verifican al lanzar la aplicación en producción.
 
 ## Fase 2 — Pulido pendiente
 **Objetivo:** cerrar lo que quedó a medias en fases anteriores.
@@ -54,7 +55,8 @@
 ## Fase 4 — Despliegue en red (PC servidor)
 **Objetivo:** que varias PCs compartan la misma base. Hoy cada instalación usa su propio Postgres local.
 Base: `IDEAS_ARQUITECTURA_RED.txt` y `servidor_dedicado/`.
-- [ ] En la PC servidor: Postgres + backend como servicio, puerto 3000 abierto en el firewall e IP fija.
+- [x] Backend como servicio (24/09): `servidor_dedicado/instalar_servicio.ps1` crea la tarea "Sibarita - Servidor" (al iniciar Windows, como SYSTEM, sin sesión iniciada). Usa el backend que viene en el instalador y lo relanza solo a los 10 s si se cae. `-Detener` / `-Iniciar` para actualizar Sibarita, `-Quitar` para borrarlo. Probado con `dist/win-unpacked` en el puerto 3100: arranca (401 en `/api/auth/perfil`), se relanza solo después de matarlo y `-Detener` libera el puerto. Falta la tarea programada real, que necesita administrador.
+  - [ ] **(en la PC servidor)** Postgres en inicio automático, `instalar_servicio.ps1`, `abrir_firewall_puerto_3000.ps1` e IP fija (reserva DHCP en el router). El orden está en `servidor_dedicado/LEEME.txt`.
 - [x] Modo **cliente** en la app de escritorio (23/09), sin reinstalar. Un solo instalador con dos modos, guardados en `%APPDATA%\sibarita-escritorio\config.json` (se conservan al reinstalar):
   - **local** (default, como antes): levanta su propio backend.
   - **cliente**: no levanta backend y abre `http://<IP-servidor>:3000`.
@@ -97,3 +99,4 @@ Bloqueada hasta tener la respuesta de la Fase 3. Las tareas se definen con esa r
 | 23/09/2026 | 1 | Instalador revisado, NOTAS al día, base de prueba vaciada (con respaldo), archivos sueltos subidos al repo | (este commit) |
 | 23/09/2026 | 2 | Decimales rotos desde 1.13 corregidos, ajuste manual y traslados arreglados, migración del índice robusta, instalador 1.15.0 | `039d264`, `f6cb509`, (bump) |
 | 23/09/2026 | 3–4 | Preguntas al cliente listas; modo cliente en la app; respaldo automático para la PC servidor; instalador 1.16.0 | `12e4459`, `ad474ba`, `29a6cfb`, (bump) |
+| 24/09/2026 | 1, 4 | Fase 1: lo que falta se verifica en producción. Fase 4: backend como servicio de Windows en la PC servidor | (este commit) |
