@@ -15,6 +15,10 @@ const PORT = PUERTO_DEFAULT;
 const LOCAL_URL = `http://localhost:${PORT}`;
 const BACKEND_DIR = path.join(__dirname, 'backend');
 
+// Para medir el arranque (se ve en la consola de npm start).
+const T0 = Date.now();
+const ms = () => `${Date.now() - T0} ms`;
+
 let backendProcess = null;
 let mainWindow = null;
 // Modo de conexion vigente (conexion.js): local o cliente de la PC servidor.
@@ -124,8 +128,13 @@ function conectar() {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.loadURL(paginaCarga(esCliente ? `Conectando con ${destino}...` : 'Iniciando Sibarita...'));
   }
-  waitForServer(destino, esCliente ? 8000 : 20000, 300)
-    .then(() => mainWindow && !mainWindow.isDestroyed() && mainWindow.loadURL(destino))
+  waitForServer(destino, esCliente ? 8000 : 20000, 100)
+    .then(() => {
+      console.log(`[inicio] servidor respondio: ${ms()}`);
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      mainWindow.webContents.once('did-finish-load', () => console.log(`[inicio] sistema cargado: ${ms()}`));
+      mainWindow.loadURL(destino);
+    })
     .catch((err) => {
       console.error(err.message);
       if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -172,8 +181,13 @@ function registrarIpc() {
   ipcMain.handle('conexion:abrirConfig', soloPropias(() => mainWindow.loadURL(paginaConfig())));
 }
 
+// El backend tarda ~1 s en levantar: se lanza ya, en paralelo con el
+// arranque de Electron, en vez de esperar a que la ventana este lista.
+config = leerConfig(app);
+if (config.modo !== 'cliente') startBackend();
+
 app.whenReady().then(() => {
-  config = leerConfig(app);
+  console.log(`[inicio] electron listo: ${ms()}`);
   registrarIpc();
   createWindow();
   conectar();

@@ -732,7 +732,12 @@ async function setup() {
     { emailViejo: 'auditor@sibarita.com',    nombre: 'Compras MALSA',       email: 'compras@sibarita.com',       pass: 'compras123' },
     { emailViejo: 'transporte@sibarita.com', nombre: 'Mantenimiento MALSA', email: 'mantenimiento@sibarita.com', pass: 'mant123' },
   ]
+  // bcrypt.hash tarda ~0,1 s: solo se calcula si hay algo que migrar o
+  // crear (antes se hacia siempre y sumaba ~0,7 s a cada arranque).
+  const existe = async (email) =>
+    (await pool.query('SELECT 1 FROM usuarios WHERE email = $1', [email])).rowCount > 0
   for (const r of renombresDemo) {
+    if (!(await existe(r.emailViejo))) continue
     const hash = await bcrypt.hash(r.pass, 10)
     await pool.query(
       `UPDATE usuarios SET nombre = $1, email = $2, password = $3 WHERE email = $4`,
@@ -811,6 +816,7 @@ async function setup() {
     { nombre: 'Almacenero 2', email: 'almacenero2@sibarita.com', pass: 'almacenero2' },
   ]
   for (const u of almaceneroDemo) {
+    if (await existe(u.email)) continue
     const hash = await bcrypt.hash(u.pass, 10)
     await pool.query(
       `INSERT INTO usuarios (nombre,email,password,rol_id,almacen_id)
@@ -824,7 +830,7 @@ async function setup() {
   // (SERIAL), asi que se resuelve por nombre. Corre siempre, igual que el
   // bloque de arriba, para instalaciones existentes y el login de prueba.
   // Tambien solo en desarrollo.
-  if (!esProduccion) {
+  if (!esProduccion && !(await existe('almacenero3@sibarita.com'))) {
     const hash = await bcrypt.hash('almacenero3', 10)
     await pool.query(
       `INSERT INTO usuarios (nombre,email,password,rol_id,almacen_id)
