@@ -52,6 +52,15 @@ async function setup() {
       valor TEXT NOT NULL
     );
 
+    -- Alertas de la campanita que cada usuario borro (24/09). Las alertas se
+    -- calculan al vuelo; aca solo se recuerda cuales ocultar a ese usuario.
+    CREATE TABLE IF NOT EXISTS alertas_descartadas (
+      usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+      clave VARCHAR(300) NOT NULL,
+      descartada_en TIMESTAMP NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (usuario_id, clave)
+    );
+
     CREATE TABLE IF NOT EXISTS unidades_medida (
       id SERIAL PRIMARY KEY,
       nombre VARCHAR(50) NOT NULL UNIQUE,

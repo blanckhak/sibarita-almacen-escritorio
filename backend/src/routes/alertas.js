@@ -28,6 +28,7 @@ router.get('/', verificarToken, async (req, res) => {
 
     const alertasStock = stockResult.rows.map(r => ({
       categoria: 'STOCK_BAJO',
+      clave:    `STOCK_BAJO|${r.almacen}|${r.tipo}|${r.total < 200 ? 'critico' : 'advertencia'}`,
       almacen:  r.almacen,
       tipo:     r.tipo,
       total:    Number(r.total),
@@ -52,6 +53,7 @@ router.get('/', verificarToken, async (req, res) => {
 
     const alertasDevolucion = devolucionResult.rows.map(r => ({
       categoria: 'DEVOLUCION_VENCIDA',
+      clave: `DEVOLUCION_VENCIDA|${r.numero_nota}|${r.dias_habiles_pendiente >= DIAS_HABILES_LIMITE_DEVOLUCION * 2 ? 'critico' : 'advertencia'}`,
       numero_nota: r.numero_nota,
       persona_responsable: r.persona_responsable,
       dias_habiles_pendiente: r.dias_habiles_pendiente,
@@ -85,6 +87,7 @@ router.get('/', verificarToken, async (req, res) => {
 
     const alertasSinMovimiento = sinMovimientoResult.rows.map(r => ({
       categoria: 'STOCK_SIN_MOVIMIENTO',
+      clave: `STOCK_SIN_MOVIMIENTO|${r.producto}|${r.almacen}|${Number(r.dias_max) >= DIAS_SIN_MOVIMIENTO * 3 ? 'critico' : 'advertencia'}`,
       producto: r.producto,
       almacen: r.almacen,
       codigos: r.codigos,
@@ -93,12 +96,41 @@ router.get('/', verificarToken, async (req, res) => {
       nivel: Number(r.dias_max) >= DIAS_SIN_MOVIMIENTO * 3 ? 'critico' : 'advertencia',
     }))
 
+    // Alertas borradas por este usuario (cualquier perfil). La clave incluye
+    // el nivel: si una advertencia pasa a critica vuelve a aparecer. Los
+    // descartes de alertas que ya no existen se limpian, asi si el problema
+    // se resuelve y despues vuelve a pasar, la alerta aparece de nuevo.
+    const todas = [...alertasStock, ...alertasDevolucion, ...alertasSinMovimiento]
+    await pool.query(
+      'DELETE FROM alertas_descartadas WHERE usuario_id = $1 AND NOT (clave = ANY($2::text[]))',
+      [req.usuario.id, todas.map(a => a.clave)]
+    )
+    const descartadas = await pool.query('SELECT clave FROM alertas_descartadas WHERE usuario_id = $1', [req.usuario.id])
+    const ocultas = new Set(descartadas.rows.map(r => r.clave))
+
     res.json({
-      alertas: [...alertasStock, ...alertasDevolucion, ...alertasSinMovimiento],
+      alertas: todas.filter(a => !ocultas.has(a.clave)),
       umbral: UMBRAL_BAJO,
       dias_habiles_limite_devolucion: DIAS_HABILES_LIMITE_DEVOLUCION,
       dias_sin_movimiento: DIAS_SIN_MOVIMIENTO,
     })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Borra (oculta para este usuario) una o varias alertas: { claves: [...] }.
+router.post('/descartar', verificarToken, async (req, res) => {
+  const claves = Array.isArray(req.body.claves) ? req.body.claves.filter(c => typeof c === 'string' && c.length <= 300) : []
+  if (claves.length === 0) return res.status(400).json({ error: 'No se indico ninguna alerta' })
+  try {
+    await pool.query(
+      `INSERT INTO alertas_descartadas (usuario_id, clave)
+       SELECT $1, unnest($2::text[])
+       ON CONFLICT (usuario_id, clave) DO NOTHING`,
+      [req.usuario.id, claves]
+    )
+    res.json({ ok: true, descartadas: claves.length })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

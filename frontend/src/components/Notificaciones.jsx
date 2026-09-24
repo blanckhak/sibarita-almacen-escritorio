@@ -13,6 +13,32 @@ export default function Notificaciones() {
       .catch(() => setCargando(false))
   }, [])
 
+  // Cualquier perfil puede borrar sus alertas (24/09). Se ocultan solo para
+  // este usuario; vuelven si la situacion empeora o se repite (ver backend).
+  const descartar = async (claves) => {
+    if (claves.length === 0) return
+    const antes = alertas
+    setAlertas(a => a.filter(x => !claves.includes(x.clave)))
+    try {
+      await api.post('/api/alertas/descartar', { claves })
+    } catch {
+      setAlertas(antes)
+    }
+  }
+
+  // Boton para borrar una alerta, en la esquina de su tarjeta.
+  const BotonBorrar = ({ alerta }) => (
+    <button
+      type="button"
+      onClick={() => descartar([alerta.clave])}
+      title="Borrar esta alerta"
+      aria-label="Borrar esta alerta"
+      className="absolute top-1 right-1 w-5 h-5 rounded text-gray-400 hover:text-gray-700 hover:bg-white/70 text-xs leading-none"
+    >
+      ✕
+    </button>
+  )
+
   useEffect(() => {
     const cerrar = (e) => { if (ref.current && !ref.current.contains(e.target)) setAbierto(false) }
     document.addEventListener('mousedown', cerrar)
@@ -48,10 +74,21 @@ export default function Notificaciones() {
       </button>
 
       {abierto && (
-        <div className="absolute right-0 top-10 w-80 bg-white rounded-xl shadow-2xl border border-gray-100 z-50 overflow-hidden">
+        <div className="absolute right-0 top-10 w-80 max-h-[75vh] overflow-y-auto bg-white rounded-xl shadow-2xl border border-gray-100 z-50">
           <div className="px-4 py-3 bg-gray-800 text-white flex items-center justify-between">
-            <span className="font-semibold text-sm">Alertas de Stock</span>
-            <span className="text-xs text-gray-300">{total} alertas</span>
+            <span className="font-semibold text-sm">Alertas</span>
+            <span className="flex items-center gap-3">
+              <span className="text-xs text-gray-300">{total} alertas</span>
+              {total > 0 && (
+                <button
+                  type="button"
+                  onClick={() => descartar(alertas.map(a => a.clave))}
+                  className="text-xs text-white/90 hover:text-white underline underline-offset-2"
+                >
+                  Borrar todas
+                </button>
+              )}
+            </span>
           </div>
 
           {cargando && <p className="text-center text-gray-400 py-4 text-sm">Cargando...</p>}
@@ -59,7 +96,7 @@ export default function Notificaciones() {
           {!cargando && total === 0 && (
             <div className="px-4 py-6 text-center">
               <p className="text-2xl mb-1">✅</p>
-              <p className="text-sm text-gray-500">Todo el stock esta en orden</p>
+              <p className="text-sm text-gray-500">No hay alertas pendientes</p>
             </div>
           )}
 
@@ -67,7 +104,8 @@ export default function Notificaciones() {
             <div>
               <p className="px-4 pt-3 pb-1 text-xs font-bold text-red-600 uppercase tracking-wide">Critico</p>
               {criticas.map((a, i) => (
-                <div key={i} className="px-4 py-2.5 border-l-4 border-red-500 bg-red-50 mx-3 mb-2 rounded-r-lg">
+                <div key={a.clave || i} className="relative px-4 py-2.5 pr-7 border-l-4 border-red-500 bg-red-50 mx-3 mb-2 rounded-r-lg">
+                  <BotonBorrar alerta={a} />
                   <p className="text-xs font-semibold text-red-700">{a.almacen} — {a.tipo}</p>
                   <p className="text-xs text-red-500 mt-0.5">Solo {a.total} items disponibles</p>
                 </div>
@@ -79,7 +117,8 @@ export default function Notificaciones() {
             <div>
               <p className="px-4 pt-3 pb-1 text-xs font-bold text-yellow-600 uppercase tracking-wide">Advertencia</p>
               {advertencias.map((a, i) => (
-                <div key={i} className="px-4 py-2.5 border-l-4 border-yellow-400 bg-yellow-50 mx-3 mb-2 rounded-r-lg">
+                <div key={a.clave || i} className="relative px-4 py-2.5 pr-7 border-l-4 border-yellow-400 bg-yellow-50 mx-3 mb-2 rounded-r-lg">
+                  <BotonBorrar alerta={a} />
                   <p className="text-xs font-semibold text-yellow-700">{a.almacen} — {a.tipo}</p>
                   <p className="text-xs text-yellow-600 mt-0.5">{a.total} items (umbral: 500)</p>
                 </div>
@@ -91,7 +130,8 @@ export default function Notificaciones() {
             <div>
               <p className="px-4 pt-3 pb-1 text-xs font-bold text-orange-600 uppercase tracking-wide">Devolucion vencida</p>
               {devoluciones.map((a, i) => (
-                <div key={i} className={`px-4 py-2.5 border-l-4 mx-3 mb-2 rounded-r-lg ${a.nivel === 'critico' ? 'border-red-500 bg-red-50' : 'border-orange-400 bg-orange-50'}`}>
+                <div key={a.clave || i} className={`relative px-4 py-2.5 pr-7 border-l-4 mx-3 mb-2 rounded-r-lg ${a.nivel === 'critico' ? 'border-red-500 bg-red-50' : 'border-orange-400 bg-orange-50'}`}>
+                  <BotonBorrar alerta={a} />
                   <p className={`text-xs font-semibold ${a.nivel === 'critico' ? 'text-red-700' : 'text-orange-700'}`}>Nota {a.numero_nota}</p>
                   <p className={`text-xs mt-0.5 ${a.nivel === 'critico' ? 'text-red-500' : 'text-orange-600'}`}>
                     {a.persona_responsable} — {a.dias_habiles_pendiente} dias habiles pendiente
@@ -105,7 +145,8 @@ export default function Notificaciones() {
             <div>
               <p className="px-4 pt-3 pb-1 text-xs font-bold text-slate-600 uppercase tracking-wide">Stock sin movimiento</p>
               {sinMovimiento.map((a, i) => (
-                <div key={i} className={`px-4 py-2.5 border-l-4 mx-3 mb-2 rounded-r-lg ${a.nivel === 'critico' ? 'border-red-500 bg-red-50' : 'border-slate-400 bg-slate-50'}`}>
+                <div key={a.clave || i} className={`relative px-4 py-2.5 pr-7 border-l-4 mx-3 mb-2 rounded-r-lg ${a.nivel === 'critico' ? 'border-red-500 bg-red-50' : 'border-slate-400 bg-slate-50'}`}>
+                  <BotonBorrar alerta={a} />
                   <p className={`text-xs font-semibold ${a.nivel === 'critico' ? 'text-red-700' : 'text-slate-700'}`}>{a.producto} — {a.almacen}</p>
                   <p className={`text-xs mt-0.5 ${a.nivel === 'critico' ? 'text-red-500' : 'text-slate-500'}`}>
                     {a.codigos} codigo(s), {a.dias_max}+ dias sin movimiento
