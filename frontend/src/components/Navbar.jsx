@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import Notificaciones from './Notificaciones'
+import { ROLES_PERIODOS } from '../utils/permisos'
 
 const colorRol = {
   admin:         'bg-purple-600',
@@ -17,7 +18,7 @@ const ENLACES_PRIMARIOS = [
   { path: '/inventario',    label: 'Inventario',      roles: ['admin','almacen','almacenero','mantenimiento','compras'] },
   { path: '/guias',         label: 'Guias',           roles: ['admin','almacen','almacenero','mantenimiento','compras'] },
   { path: '/notas-salida',  label: 'Notas de Salida', roles: ['admin','almacen','almacenero','mantenimiento','compras'] },
-  { path: '/periodos',      label: 'Periodos',        roles: ['admin','almacen'] },
+  { path: '/periodos',      label: 'Periodos',        roles: ROLES_PERIODOS },
 ]
 const ENLACES_SECUNDARIOS = [
   { path: '/almacenes',            label: 'Almacenes',           roles: null },

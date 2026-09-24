@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './context/AuthContext'
 import { PeriodoProvider } from './context/PeriodoContext'
 import Navbar from './components/Navbar'
 import Login from './pages/Login'
+import { ROLES_PERIODOS } from './utils/permisos'
 
 // Carga diferida: cada pagina (y sus librerias pesadas, ej. recharts en
 // Dashboard o jspdf/html2canvas en Reportes) solo se descarga cuando se
@@ -192,7 +193,7 @@ function AppContent() {
         } />
 
         <Route path="/periodos" element={
-          <RutaProtegida roles={['admin', 'almacen']}>
+          <RutaProtegida roles={ROLES_PERIODOS}>
             <Periodos />
           </RutaProtegida>
         } />

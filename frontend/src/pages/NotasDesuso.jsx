@@ -4,6 +4,7 @@ import api from '../utils/api'
 import { useAuth } from '../context/AuthContext'
 import { usePeriodo } from '../context/PeriodoContext'
 import PeriodoFiltro from '../components/PeriodoFiltro'
+import { puedeVerPeriodos } from '../utils/permisos'
 
 const colorEstado = {
   VIGENTE: 'bg-green-100 text-green-700',
@@ -102,10 +103,13 @@ export default function NotasDesuso() {
         )}
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 px-4 py-3 mb-6">
-        <PeriodoFiltro />
-        <p className="text-xs text-gray-400 mt-1.5">La lista de abajo muestra las notas de este periodo. El alta nueva entra en el almacen elegido arriba.</p>
-      </div>
+      {/* Filtro de periodo: solo admin y almacen (ver utils/permisos.js). */}
+      {puedeVerPeriodos(usuario) && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 px-4 py-3 mb-6">
+          <PeriodoFiltro />
+          <p className="text-xs text-gray-400 mt-1.5">La lista de abajo muestra las notas de este periodo. El alta nueva entra en el almacen elegido arriba.</p>
+        </div>
+      )}
 
       {mensaje && (
         <div className={`mb-4 px-4 py-3 rounded-lg text-sm font-medium ${
@@ -121,7 +125,7 @@ export default function NotasDesuso() {
         <div className="bg-white rounded-xl shadow-md p-6 mb-6 border border-blue-100">
           <h2 className="text-lg font-semibold text-gray-700 mb-1">Nueva Nota de Desuso</h2>
           <p className="text-sm text-gray-500 mb-4">
-            Almacen: <b>{almacenes.find(a => String(a.id) === String(almacenSel))?.nombre || '—'}</b> (cambialo arriba en "Periodo" si no es el correcto)
+            Almacen: <b>{almacenes.find(a => String(a.id) === String(almacenSel))?.nombre || '—'}</b> {puedeVerPeriodos(usuario) && '(cambialo arriba en "Periodo" si no es el correcto)'}
           </p>
           <form onSubmit={handleSubmit}>
             <div className="grid grid-cols-2 gap-4 mb-4">

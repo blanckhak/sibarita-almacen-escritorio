@@ -4,6 +4,7 @@ import api from '../utils/api'
 import { useAuth } from '../context/AuthContext'
 import { usePeriodo } from '../context/PeriodoContext'
 import PeriodoFiltro from '../components/PeriodoFiltro'
+import { puedeVerPeriodos } from '../utils/permisos'
 import { MOTIVOS } from '../utils/motivos'
 import { textoStock } from '../utils/stockResumen'
 import { codigoAlmacen, numeroCodigo } from '../utils/colorAlmacen'
@@ -216,10 +217,13 @@ export default function NotasSalida() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 px-4 py-3 mb-6">
-        <PeriodoFiltro />
-        <p className="text-xs text-gray-400 mt-1.5">La lista de abajo muestra las notas de este periodo.</p>
-      </div>
+      {/* Filtro de periodo: solo admin y almacen (ver utils/permisos.js). */}
+      {puedeVerPeriodos(usuario) && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 px-4 py-3 mb-6">
+          <PeriodoFiltro />
+          <p className="text-xs text-gray-400 mt-1.5">La lista de abajo muestra las notas de este periodo.</p>
+        </div>
+      )}
 
       {mostrarConfig && esAdmin && (
         <div className="bg-white rounded-xl shadow-md p-6 mb-6 border border-yellow-100">

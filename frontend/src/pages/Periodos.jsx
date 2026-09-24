@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { usePeriodo } from '../context/PeriodoContext'
 import { fmtCantidad } from '../utils/fmt'
 import { exportarProductosPeriodo } from '../utils/periodoExcel'
+import { puedeVerPeriodos } from '../utils/permisos'
 
 // Fase 14 (R7-a) + Fase 15 (R7-b): listado de periodos por almacen. Abrir el
 // primer periodo, cerrar (con arrastre de saldo), reabrir (admin), ver
@@ -27,7 +28,7 @@ export default function Periodos() {
   const [purgaDias, setPurgaDias] = useState(365)
   const [purgaPrevia, setPurgaPrevia] = useState(null) // { a_borrar } del dry_run
 
-  const puedeAbrir  = ['admin', 'almacen'].includes(usuario?.rol)
+  const puedeAbrir  = puedeVerPeriodos(usuario)
   const puedeCerrar = puedeAbrir
   const esAdmin     = usuario?.rol === 'admin'
 

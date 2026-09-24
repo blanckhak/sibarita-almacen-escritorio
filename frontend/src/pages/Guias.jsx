@@ -4,6 +4,7 @@ import api from '../utils/api'
 import { useAuth } from '../context/AuthContext'
 import { usePeriodo } from '../context/PeriodoContext'
 import PeriodoFiltro from '../components/PeriodoFiltro'
+import { puedeVerPeriodos } from '../utils/permisos'
 import { extraerProveedoresConocidos } from '../utils/proveedores'
 import { hoyLocal as hoy } from '../utils/fecha'
 import { TIPOS_DOCUMENTO, tipoDocumentoLabel } from '../utils/tiposDocumento'
@@ -265,10 +266,13 @@ export default function Guias() {
         )}
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 px-4 py-3 mb-6">
-        <PeriodoFiltro />
-        <p className="text-xs text-gray-400 mt-1.5">La lista de abajo muestra las guias de este periodo. El alta siempre entra en el periodo activo del almacen.</p>
-      </div>
+      {/* Filtro de periodo: solo admin y almacen (ver utils/permisos.js). */}
+      {puedeVerPeriodos(usuario) && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 px-4 py-3 mb-6">
+          <PeriodoFiltro />
+          <p className="text-xs text-gray-400 mt-1.5">La lista de abajo muestra las guias de este periodo. El alta siempre entra en el periodo activo del almacen.</p>
+        </div>
+      )}
 
       {mensaje && (
         <div className={`mb-4 px-4 py-3 rounded-lg text-sm font-medium ${
