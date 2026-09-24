@@ -9,6 +9,7 @@ const { mensajeConcurrencia } = require('../utils/dbErrores')
 const { periodoCerrado } = require('../utils/periodo')
 const { esCantidadPositiva } = require('../utils/cantidad')
 const log = require('../middlewares/logMiddleware')
+const { perfilSql } = require('../utils/perfil')
 
 const ERR_PERIODO_CERRADO = 'El periodo de esta guia esta CERRADO; pedile a un admin que lo reabra para poder modificarla.'
 
@@ -81,16 +82,17 @@ router.get('/', verificarToken, async (req, res) => {
     const result = await pool.query(`
       SELECT g.id, g.numero_guia, g.fecha, g.creado_en,
              g.proveedor, g.numero_oc, g.direccion, g.estado, g.tipo_documento, g.periodo_id,
-             a.nombre as almacen_nombre, u.nombre as usuario_nombre,
+             a.nombre as almacen_nombre, ${perfilSql('u', 'ru')} as usuario_nombre,
              COUNT(gi.id)::int as total_items,
              COUNT(e.id)::int as total_etiquetas
       FROM guias g
       JOIN almacenes a ON g.almacen_id = a.id
       LEFT JOIN usuarios u ON g.usuario_id = u.id
+      LEFT JOIN roles ru ON ru.id = u.rol_id
       LEFT JOIN guia_items gi ON gi.guia_id = g.id
       LEFT JOIN etiquetas e ON e.guia_item_id = gi.id
       ${where}
-      GROUP BY g.id, a.nombre, u.nombre
+      GROUP BY g.id, a.nombre, u.nombre, ru.nombre
       ORDER BY g.creado_en DESC
     `, val)
     res.json(result.rows)
@@ -102,12 +104,13 @@ router.get('/', verificarToken, async (req, res) => {
 router.get('/:id', verificarToken, async (req, res) => {
   try {
     const guia = await pool.query(`
-      SELECT g.*, a.nombre as almacen_nombre, u.nombre as usuario_nombre,
+      SELECT g.*, a.nombre as almacen_nombre, ${perfilSql('u', 'ru')} as usuario_nombre,
              ua.nombre as anulada_por_nombre,
              pe.estado as periodo_estado, pe.nombre as periodo_nombre
       FROM guias g
       JOIN almacenes a ON g.almacen_id = a.id
       LEFT JOIN usuarios u ON g.usuario_id = u.id
+      LEFT JOIN roles ru ON ru.id = u.rol_id
       LEFT JOIN usuarios ua ON g.anulada_por = ua.id
       LEFT JOIN periodos pe ON g.periodo_id = pe.id
       WHERE g.id = $1

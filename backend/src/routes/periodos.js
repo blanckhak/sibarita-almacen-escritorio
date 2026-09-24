@@ -4,6 +4,7 @@ const pool = require('../config/db')
 const { verificarToken, soloRoles } = require('../middlewares/authMiddleware')
 const { validarLargos } = require('../utils/texto')
 const log = require('../middlewares/logMiddleware')
+const { perfilSql } = require('../utils/perfil')
 
 // Fase 14 (R7-a): periodos por almacen. Un periodo ACTIVO por almacen; toda
 // guia / nota de salida / etiqueta nueva se graba con ese periodo_id. El
@@ -20,13 +21,15 @@ router.get('/', verificarToken, async (req, res) => {
   try {
     const r = await pool.query(`
       SELECT p.*, a.nombre AS almacen_nombre,
-             u.nombre AS usuario_nombre, uc.nombre AS cerrado_por_nombre,
+             ${perfilSql('u', 'ru')} AS usuario_nombre, ${perfilSql('uc', 'ruc')} AS cerrado_por_nombre,
              (SELECT COUNT(*)::int FROM guias g        WHERE g.periodo_id = p.id) AS total_guias,
              (SELECT COUNT(*)::int FROM notas_salida n WHERE n.periodo_id = p.id) AS total_notas
       FROM periodos p
       JOIN almacenes a ON p.almacen_id = a.id
       LEFT JOIN usuarios u  ON p.usuario_id = u.id
+      LEFT JOIN roles ru ON ru.id = u.rol_id
       LEFT JOIN usuarios uc ON p.cerrado_por = uc.id
+      LEFT JOIN roles ruc ON ruc.id = uc.rol_id
       ${where}
       ORDER BY p.almacen_id, p.fecha_inicio DESC, p.id DESC
     `, val)
@@ -57,10 +60,12 @@ router.get('/activo', verificarToken, async (req, res) => {
 router.get('/:id', verificarToken, async (req, res) => {
   try {
     const r = await pool.query(`
-      SELECT p.*, a.nombre AS almacen_nombre, u.nombre AS usuario_nombre, uc.nombre AS cerrado_por_nombre
+      SELECT p.*, a.nombre AS almacen_nombre, ${perfilSql('u', 'ru')} AS usuario_nombre, ${perfilSql('uc', 'ruc')} AS cerrado_por_nombre
       FROM periodos p JOIN almacenes a ON p.almacen_id = a.id
       LEFT JOIN usuarios u  ON p.usuario_id = u.id
+      LEFT JOIN roles ru ON ru.id = u.rol_id
       LEFT JOIN usuarios uc ON p.cerrado_por = uc.id
+      LEFT JOIN roles ruc ON ruc.id = uc.rol_id
       WHERE p.id = $1
     `, [req.params.id])
     if (r.rows.length === 0) return res.status(404).json({ error: 'Periodo no encontrado' })

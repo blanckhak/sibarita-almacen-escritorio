@@ -4,6 +4,7 @@ const pool = require('../config/db')
 const { verificarToken, soloRoles } = require('../middlewares/authMiddleware')
 const { validarLargos } = require('../utils/texto')
 const log = require('../middlewares/logMiddleware')
+const { perfilSql } = require('../utils/perfil')
 
 const CATEGORIAS = ['MUESTRAS', 'INSUMOS', 'MATERIA_PRIMA', 'REPUESTOS', 'HERRAMIENTAS', 'OTROS']
 
@@ -22,14 +23,15 @@ router.get('/', verificarToken, async (req, res) => {
     const result = await pool.query(`
       SELECT s.id, s.numero_solicitud, s.seccion, s.persona_responsable, s.categoria,
              s.periodo, s.fecha, s.estado, a.nombre as almacen_nombre,
-             u.nombre as usuario_nombre,
+             ${perfilSql('u', 'ru')} as usuario_nombre,
              COUNT(d.id)::int as total_lineas
       FROM solicitudes_materiales s
       JOIN almacenes a ON s.almacen_id = a.id
       LEFT JOIN usuarios u ON s.usuario_id = u.id
+      LEFT JOIN roles ru ON ru.id = u.rol_id
       LEFT JOIN solicitudes_materiales_detalle d ON d.solicitud_id = s.id
       ${where}
-      GROUP BY s.id, a.nombre, u.nombre
+      GROUP BY s.id, a.nombre, u.nombre, ru.nombre
       ORDER BY s.fecha DESC
     `, valores)
     res.json(result.rows)
@@ -41,10 +43,11 @@ router.get('/', verificarToken, async (req, res) => {
 router.get('/:id', verificarToken, async (req, res) => {
   try {
     const solicitud = await pool.query(`
-      SELECT s.*, a.nombre as almacen_nombre, u.nombre as usuario_nombre
+      SELECT s.*, a.nombre as almacen_nombre, ${perfilSql('u', 'ru')} as usuario_nombre
       FROM solicitudes_materiales s
       JOIN almacenes a ON s.almacen_id = a.id
       LEFT JOIN usuarios u ON s.usuario_id = u.id
+      LEFT JOIN roles ru ON ru.id = u.rol_id
       WHERE s.id = $1
     `, [req.params.id])
     if (solicitud.rows.length === 0) {

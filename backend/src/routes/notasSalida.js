@@ -9,6 +9,7 @@ const { validarLargos } = require('../utils/texto')
 const { mensajeConcurrencia } = require('../utils/dbErrores')
 const { periodoCerrado } = require('../utils/periodo')
 const log = require('../middlewares/logMiddleware')
+const { perfilSql } = require('../utils/perfil')
 
 const ERR_PERIODO_CERRADO = 'El periodo de esta nota esta CERRADO; pedile a un admin que lo reabra para poder modificarla.'
 const MOTIVOS = ['USO_INTERNO', 'PRESTAMO', 'REPARACION', 'DESECHO', 'OTRO']
@@ -37,14 +38,15 @@ router.get('/', verificarToken, async (req, res) => {
     const result = await pool.query(`
       SELECT n.id, n.numero_nota, n.seccion, n.persona_responsable, n.motivo,
              n.fecha, n.estado, n.periodo_id, g.numero_guia,
-             u.nombre as usuario_nombre,
+             ${perfilSql('u', 'ru')} as usuario_nombre,
              COUNT(d.id)::int as total_lineas
       FROM notas_salida n
       LEFT JOIN guias g ON n.guia_id = g.id
       LEFT JOIN usuarios u ON n.usuario_id = u.id
+      LEFT JOIN roles ru ON ru.id = u.rol_id
       LEFT JOIN notas_salida_detalle d ON d.nota_salida_id = n.id
       ${where}
-      GROUP BY n.id, g.numero_guia, u.nombre
+      GROUP BY n.id, g.numero_guia, u.nombre, ru.nombre
       ORDER BY n.fecha DESC
     `, valores)
     res.json(result.rows)
@@ -56,11 +58,12 @@ router.get('/', verificarToken, async (req, res) => {
 router.get('/:id', verificarToken, async (req, res) => {
   try {
     const nota = await pool.query(`
-      SELECT n.*, g.numero_guia, u.nombre as usuario_nombre,
+      SELECT n.*, g.numero_guia, ${perfilSql('u', 'ru')} as usuario_nombre,
              pe.estado as periodo_estado, pe.nombre as periodo_nombre
       FROM notas_salida n
       LEFT JOIN guias g ON n.guia_id = g.id
       LEFT JOIN usuarios u ON n.usuario_id = u.id
+      LEFT JOIN roles ru ON ru.id = u.rol_id
       LEFT JOIN periodos pe ON n.periodo_id = pe.id
       WHERE n.id = $1
     `, [req.params.id])

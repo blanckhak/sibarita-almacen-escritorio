@@ -7,6 +7,7 @@ const { validarLargos } = require('../utils/texto')
 const { periodoCerrado } = require('../utils/periodo')
 const { lineasAfuera } = require('../utils/salida')
 const log = require('../middlewares/logMiddleware')
+const { perfilSql } = require('../utils/perfil')
 
 const ERR_PERIODO_CERRADO = 'El periodo de este codigo esta CERRADO; pedile a un admin que lo reabra para poder transferirlo.'
 
@@ -86,12 +87,13 @@ router.get('/reportes/reimpresiones', verificarToken, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT h.id, h.fecha, e.codigo as etiqueta_codigo, p.nombre as producto_nombre,
-             a.nombre as almacen_nombre, u.nombre as usuario_nombre
+             a.nombre as almacen_nombre, ${perfilSql('u', 'ru')} as usuario_nombre
       FROM etiqueta_historial h
       JOIN etiquetas e ON h.etiqueta_id = e.id
       JOIN productos p ON e.producto_id = p.id
       JOIN almacenes a ON e.almacen_id = a.id
       LEFT JOIN usuarios u ON h.usuario_id = u.id
+      LEFT JOIN roles ru ON ru.id = u.rol_id
       WHERE h.evento = 'REIMPRESA'
       ORDER BY h.fecha DESC
     `)
@@ -185,10 +187,11 @@ router.get('/:id/historial', verificarToken, async (req, res) => {
       return res.status(404).json({ error: 'Etiqueta no encontrada' })
     }
     const result = await pool.query(`
-      SELECT h.*, u.nombre as usuario_nombre,
+      SELECT h.*, ${perfilSql('u', 'ru')} as usuario_nombre,
              ao.nombre as almacen_origen_nombre, ad.nombre as almacen_destino_nombre
       FROM etiqueta_historial h
       LEFT JOIN usuarios u ON h.usuario_id = u.id
+      LEFT JOIN roles ru ON ru.id = u.rol_id
       LEFT JOIN almacenes ao ON h.almacen_origen_id = ao.id
       LEFT JOIN almacenes ad ON h.almacen_destino_id = ad.id
       WHERE h.etiqueta_id = $1
