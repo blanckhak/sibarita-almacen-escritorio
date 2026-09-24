@@ -1,6 +1,6 @@
 {
   "name": "sibarita-escritorio",
-  "version": "1.17.1",
+  "version": "1.17.2",
   "description": "Aplicacion de escritorio para Sibarita (Sistema de Gestion de Almacenes)",
   "main": "main.js",
   "author": "DRGATO",
