@@ -4,6 +4,7 @@ import api from '../utils/api'
 const colorRol = {
   admin:         'bg-purple-100 text-purple-700',
   almacen:       'bg-blue-100 text-blue-700',
+  almacenero3:   'bg-sky-100 text-sky-700',
   mantenimiento: 'bg-green-100 text-green-700',
   compras:       'bg-yellow-100 text-yellow-700',
 }
@@ -17,6 +18,9 @@ export default function Usuarios() {
   const [guardando, setGuardando]     = useState(false)
   const [mensaje, setMensaje]         = useState(null)
   const [form, setForm] = useState({ nombre: '', email: '', password: '', rol_id: '', almacen_id: '' })
+  // Resetear contrasena: id del usuario con el campo abierto y la temporal.
+  const [reseteando, setReseteando]   = useState(null)
+  const [temporal, setTemporal]       = useState('')
 
   const cargarDatos = async () => {
     const [usr, alm, rol] = await Promise.all([
@@ -49,9 +53,29 @@ export default function Usuarios() {
     }
   }
 
+  const avisar = (tipo, texto) => {
+    setMensaje({ tipo, texto })
+    setTimeout(() => setMensaje(null), 4000)
+  }
+
   const toggleEstado = async (id, activo) => {
-    await api.put(`/api/usuarios/${id}/estado`, { activo: !activo })
-    cargarDatos()
+    try {
+      await api.put(`/api/usuarios/${id}/estado`, { activo: !activo })
+      cargarDatos()
+    } catch (err) {
+      avisar('error', err.response?.data?.error || 'No se pudo cambiar el estado')
+    }
+  }
+
+  const resetearPassword = async (u) => {
+    try {
+      await api.put(`/api/usuarios/${u.id}/password`, { password: temporal })
+      avisar('ok', `Contrasena de ${u.nombre} reseteada. Al ingresar con ella se le va a pedir que la cambie.`)
+      setReseteando(null)
+      setTemporal('')
+    } catch (err) {
+      avisar('error', err.response?.data?.error || 'No se pudo resetear la contrasena')
+    }
   }
 
   return (
@@ -109,6 +133,7 @@ export default function Usuarios() {
               <label className="block text-sm font-medium text-gray-600 mb-1">Contrasena</label>
               <input
                 required
+                minLength={6}
                 type="password"
                 value={form.password}
                 onChange={e => setForm({ ...form, password: e.target.value })}
@@ -197,7 +222,30 @@ export default function Usuarios() {
                       {u.activo ? 'Activo' : 'Inactivo'}
                     </span>
                   </td>
-                  <td className="px-6 py-3 text-center">
+                  <td className="px-6 py-3 text-center whitespace-nowrap">
+                    {reseteando === u.id ? (
+                      <span className="inline-flex items-center gap-1">
+                        <input
+                          type="text"
+                          autoFocus
+                          value={temporal}
+                          onChange={e => setTemporal(e.target.value)}
+                          placeholder="Contrasena temporal"
+                          className="border border-gray-300 rounded px-2 py-1 text-xs w-36"
+                        />
+                        <button onClick={() => resetearPassword(u)} disabled={temporal.length < 6}
+                          className="text-xs px-2 py-1 rounded bg-blue-700 text-white disabled:opacity-40">Guardar</button>
+                        <button onClick={() => { setReseteando(null); setTemporal('') }}
+                          className="text-xs px-2 py-1 rounded text-gray-500 hover:bg-gray-100">x</button>
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => { setReseteando(u.id); setTemporal('') }}
+                        className="text-xs px-3 py-1 rounded-lg font-medium transition bg-blue-50 text-blue-700 hover:bg-blue-100 mr-2"
+                      >
+                        Resetear contrasena
+                      </button>
+                    )}
                     <button
                       onClick={() => toggleEstado(u.id, u.activo)}
                       className={`text-xs px-3 py-1 rounded-lg font-medium transition ${

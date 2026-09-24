@@ -1,5 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
+import api from '../utils/api'
+import CampoPassword from '../components/CampoPassword'
 
 export default function Login({ onLogin }) {
   const { login } = useAuth()
@@ -7,6 +9,14 @@ export default function Login({ onLogin }) {
   const [password, setPassword] = useState('')
   const [error, setError]       = useState('')
   const [cargando, setCargando] = useState(false)
+  // Las cuentas de prueba solo se listan en modo desarrollo.
+  const [desarrollo, setDesarrollo] = useState(false)
+
+  useEffect(() => {
+    api.get('/api/auth/modo')
+      .then(r => setDesarrollo(r.data.modo === 'desarrollo'))
+      .catch(() => {})
+  }, [])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -28,7 +38,7 @@ export default function Login({ onLogin }) {
 
         {/* Logo */}
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-black text-blue-800 tracking-wide">MALSA</h1>
+          <h1 className="text-4xl font-black text-blue-800 tracking-wide">SIBARITA</h1>
           <p className="text-gray-400 text-sm mt-1">Sistema de Gestion de Almacenes</p>
         </div>
 
@@ -52,8 +62,7 @@ export default function Login({ onLogin }) {
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Contrasena
             </label>
-            <input
-              type="password"
+            <CampoPassword
               value={password}
               onChange={e => setPassword(e.target.value)}
               placeholder="••••••••"
@@ -77,7 +86,8 @@ export default function Login({ onLogin }) {
           </button>
         </form>
 
-        {/* Usuarios de prueba */}
+        {/* Usuarios de prueba (solo modo desarrollo) */}
+        {desarrollo && (
         <div className="mt-8 border-t pt-5">
           <p className="text-xs text-gray-400 text-center mb-3 font-medium uppercase tracking-wide">
             Usuarios de prueba
@@ -104,6 +114,7 @@ export default function Login({ onLogin }) {
             ))}
           </div>
         </div>
+        )}
       </div>
     </div>
   )

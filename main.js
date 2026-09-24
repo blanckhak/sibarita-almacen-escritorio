@@ -50,7 +50,14 @@ function startBackend() {
 
   backendProcess = spawn(process.execPath, [serverScript], {
     cwd: realCwd,
-    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', PORT: String(PORT) },
+    env: {
+      ...process.env,
+      ELECTRON_RUN_AS_NODE: '1',
+      PORT: String(PORT),
+      // Modo desarrollador marcado en Ctrl+Shift+S; si no, el backend decide
+      // (instalado = produccion, codigo fuente = desarrollo).
+      ...(config.desarrollador ? { SIBARITA_MODO: 'desarrollo' } : {}),
+    },
     stdio: 'pipe'
   });
 

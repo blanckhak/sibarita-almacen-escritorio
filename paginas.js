@@ -68,7 +68,9 @@ function paginaConfig() {
 
   <label class="opcion"><input type="radio" name="modo" value="local">
     <span><b>Esta PC es el servidor</b> (o trabaja sola)
-      <small>Usa la base de datos instalada en esta misma computadora.</small></span></label>
+      <small>Usa la base de datos instalada en esta misma computadora.</small>
+      <small><label><input type="checkbox" id="desarrollador"> Modo desarrollador: crea y muestra en el login las cuentas de prueba.
+        Dejar desmarcado en la PC de produccion.</label></small></span></label>
 
   <label class="opcion"><input type="radio" name="modo" value="cliente">
     <span style="flex:1"><b>Conectarse a la PC servidor</b>
@@ -87,7 +89,10 @@ function paginaConfig() {
   const radios = [...document.querySelectorAll('input[name=modo]')];
   const modo = () => radios.find(r => r.checked)?.value || 'local';
   const estado = (texto, clase) => { $('estado').textContent = texto; $('estado').className = 'estado ' + (clase || ''); };
-  const refrescar = () => { $('servidor').disabled = modo() !== 'cliente'; $('probar').disabled = modo() !== 'cliente'; };
+  const refrescar = () => {
+    $('servidor').disabled = modo() !== 'cliente'; $('probar').disabled = modo() !== 'cliente';
+    $('desarrollador').disabled = modo() !== 'local';
+  };
   radios.forEach(r => r.addEventListener('change', () => { refrescar(); estado(''); }));
   $('servidor').addEventListener('focus', () => { radios[1].checked = true; refrescar(); });
 
@@ -104,7 +109,7 @@ function paginaConfig() {
   };
   $('guardar').onclick = async () => {
     $('guardar').disabled = true;
-    const r = await window.sibarita.guardar({ modo: modo(), servidor: $('servidor').value });
+    const r = await window.sibarita.guardar({ modo: modo(), servidor: $('servidor').value, desarrollador: $('desarrollador').checked });
     if (!r.ok) { estado(r.error, 'error'); $('guardar').disabled = false; }
   };
   $('cancelar').onclick = () => window.sibarita.reintentar();

@@ -29,6 +29,7 @@ const Reportes           = lazy(() => import('./pages/Reportes'))
 const Historial          = lazy(() => import('./pages/Historial'))
 const Configuracion      = lazy(() => import('./pages/Configuracion'))
 const Periodos           = lazy(() => import('./pages/Periodos'))
+const CambiarPassword    = lazy(() => import('./pages/CambiarPassword'))
 
 function CargandoPagina() {
   return <div className="p-6 text-center py-12 text-gray-400">Cargando...</div>
@@ -46,6 +47,8 @@ function Layout({ children }) {
 function RutaProtegida({ children, roles }) {
   const { usuario } = useAuth()
   if (!usuario) return <Navigate to="/login" />
+  // Contrasena pendiente de cambio: no se puede usar nada mas hasta cambiarla.
+  if (usuario.debe_cambiar) return <Layout><CambiarPassword /></Layout>
   if (roles && !roles.includes(usuario.rol)) return <Navigate to="/" />
   return <Layout>{children}</Layout>
 }
@@ -191,6 +194,12 @@ function AppContent() {
         <Route path="/periodos" element={
           <RutaProtegida roles={['admin', 'almacen', 'almacenero3', 'compras']}>
             <Periodos />
+          </RutaProtegida>
+        } />
+
+        <Route path="/cambiar-password" element={
+          <RutaProtegida>
+            <CambiarPassword />
           </RutaProtegida>
         } />
 

@@ -5,6 +5,10 @@
 //   cliente -> NO levanta backend: abre la direccion de la PC servidor en la
 //              red (http://<IP>:3000), donde vive la unica base de datos.
 //
+// En modo local, "desarrollador" hace que el backend arranque en modo
+// desarrollo (cuentas de prueba, ver backend/src/config/modo.js). Sin marcar,
+// el instalado queda en produccion.
+//
 // Se guarda en config.json dentro de la carpeta de datos del usuario
 // (%APPDATA%\sibarita-escritorio, por el "name" del package.json), no dentro
 // de la instalacion: sobrevive a reinstalar
@@ -14,7 +18,7 @@ const path = require('path');
 const http = require('http');
 
 const PUERTO_DEFAULT = 3000;
-const CONFIG_DEFAULT = { modo: 'local', servidor: '' };
+const CONFIG_DEFAULT = { modo: 'local', servidor: '', desarrollador: false };
 
 function rutaConfig(app) {
   return path.join(app.getPath('userData'), 'config.json');
@@ -24,8 +28,9 @@ function leerConfig(app) {
   try {
     const cfg = JSON.parse(fs.readFileSync(rutaConfig(app), 'utf8'));
     if (cfg.modo === 'cliente' && normalizarServidor(cfg.servidor)) {
-      return { modo: 'cliente', servidor: normalizarServidor(cfg.servidor) };
+      return { modo: 'cliente', servidor: normalizarServidor(cfg.servidor), desarrollador: false };
     }
+    return { ...CONFIG_DEFAULT, desarrollador: cfg.desarrollador === true };
   } catch (_) {
     // Sin archivo (primera vez) o archivo roto: se sigue en modo local.
   }
@@ -34,8 +39,8 @@ function leerConfig(app) {
 
 function guardarConfig(app, cfg) {
   const limpio = cfg.modo === 'cliente'
-    ? { modo: 'cliente', servidor: normalizarServidor(cfg.servidor) }
-    : { ...CONFIG_DEFAULT };
+    ? { modo: 'cliente', servidor: normalizarServidor(cfg.servidor), desarrollador: false }
+    : { ...CONFIG_DEFAULT, desarrollador: cfg.desarrollador === true };
   if (limpio.modo === 'cliente' && !limpio.servidor) {
     throw new Error('Direccion del servidor invalida');
   }

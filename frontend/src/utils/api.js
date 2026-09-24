@@ -8,9 +8,25 @@ const api = axios.create({
 })
 
 api.interceptors.request.use(config => {
-  const token = localStorage.getItem('token')
+  const token = sessionStorage.getItem('token')
   if (token) config.headers.Authorization = `Bearer ${token}`
   return config
 })
+
+// Sesion vencida, usuario desactivado o contrasena cambiada en otro lado ->
+// volver al login en vez de dejar la pantalla llena de errores. El login
+// mismo (credenciales incorrectas) no cuenta.
+api.interceptors.response.use(
+  res => res,
+  err => {
+    const url = err.config?.url || ''
+    if (err.response?.status === 401 && !url.includes('/api/auth/login') && sessionStorage.getItem('token')) {
+      sessionStorage.removeItem('token')
+      sessionStorage.removeItem('usuario')
+      window.location.assign('/login')
+    }
+    return Promise.reject(err)
+  }
+)
 
 export default api

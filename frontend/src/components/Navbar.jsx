@@ -58,7 +58,7 @@ export default function Navbar() {
   return (
     <nav className="print:hidden bg-blue-900 text-white px-5 py-0 flex items-center justify-between shadow-lg h-14">
       <div className="flex items-center gap-5 h-full">
-        <span className="text-xl font-black tracking-wide">MALSA</span>
+        <span className="text-xl font-black tracking-wide">SIBARITA</span>
         <div className="flex items-center gap-4 h-full text-sm">
           {primarios.map(e => (
             <Link key={e.path} to={e.path} className={`h-full flex items-center ${activo(e.path)}`}>
@@ -99,10 +99,10 @@ export default function Navbar() {
       {usuario && (
         <div className="flex items-center gap-3">
           <Notificaciones />
-          <div className="text-right hidden md:block">
+          <Link to="/cambiar-password" title="Cambiar mi contrasena" className="text-right hidden md:block hover:opacity-80">
             <p className="text-sm font-semibold leading-tight">{usuario.nombre}</p>
             <p className="text-xs text-blue-300 leading-tight">{usuario.almacen || 'Global'}</p>
-          </div>
+          </Link>
           <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${colorRol[usuario.rol] || 'bg-gray-600'}`}>
             {usuario.rol.toUpperCase()}
           </span>

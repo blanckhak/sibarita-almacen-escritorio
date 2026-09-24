@@ -126,6 +126,7 @@ $log = Join-Path $Carpeta "servidor-log.txt"
 rem Generado por instalar_servicio.ps1 -- no editar, volver a correr el script.
 set ELECTRON_RUN_AS_NODE=1
 set PORT=$Puerto
+set SIBARITA_MODO=produccion
 cd /d "$dirSibarita"
 :inicio
 echo [%date% %time%] Iniciando backend de Sibarita >> "$log"

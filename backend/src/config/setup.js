@@ -1,8 +1,10 @@
 const pool = require('./db')
 const bcrypt = require('bcryptjs')
+const { MODO, esProduccion } = require('./modo')
+const { cargarSecreto } = require('./secreto')
 
 async function setup() {
-  console.log('Iniciando configuracion de base de datos...')
+  console.log(`Iniciando configuracion de base de datos (modo ${MODO})...`)
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS roles (
@@ -35,6 +37,19 @@ async function setup() {
       almacen_id INTEGER REFERENCES almacenes(id),
       activo BOOLEAN DEFAULT true,
       creado_en TIMESTAMP DEFAULT NOW()
+    );
+
+    -- Cambio de contrasena: debe_cambiar_password obliga a cambiarla al
+    -- ingresar (usuario nuevo o contrasena reseteada por el admin);
+    -- sesion_version sube con cada cambio y deja sin efecto las sesiones
+    -- abiertas antes (el token lleva la version con la que se emitio).
+    ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS debe_cambiar_password BOOLEAN NOT NULL DEFAULT false;
+    ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS sesion_version INTEGER NOT NULL DEFAULT 0;
+
+    -- Valores propios de cada instalacion (ej. la clave de las sesiones).
+    CREATE TABLE IF NOT EXISTS sistema_config (
+      clave VARCHAR(50) PRIMARY KEY,
+      valor TEXT NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS unidades_medida (
@@ -766,17 +781,19 @@ async function setup() {
 
   const usuariosExist = await pool.query('SELECT COUNT(*) FROM usuarios')
   if (parseInt(usuariosExist.rows[0].count) === 0) {
+    // En produccion solo el administrador, que tiene que cambiar la
+    // contrasena al primer ingreso.
     const usuarios = [
       { nombre: 'Administrador',        email: 'admin@sibarita.com',         pass: 'admin123',  rol: 1, almacen: null },
       { nombre: 'Almacen MALSA',        email: 'almacen@sibarita.com',       pass: 'almac123',  rol: 2, almacen: 1   },
       { nombre: 'Mantenimiento MALSA',  email: 'mantenimiento@sibarita.com', pass: 'mant123',   rol: 3, almacen: 1   },
       { nombre: 'Compras MALSA',        email: 'compras@sibarita.com',       pass: 'compras123', rol: 4, almacen: null },
-    ]
+    ].slice(0, esProduccion ? 1 : undefined)
     for (const u of usuarios) {
       const hash = await bcrypt.hash(u.pass, 10)
       await pool.query(
-        'INSERT INTO usuarios (nombre,email,password,rol_id,almacen_id) VALUES ($1,$2,$3,$4,$5)',
-        [u.nombre, u.email, hash, u.rol, u.almacen]
+        'INSERT INTO usuarios (nombre,email,password,rol_id,almacen_id,debe_cambiar_password) VALUES ($1,$2,$3,$4,$5,$6)',
+        [u.nombre, u.email, hash, u.rol, u.almacen, esProduccion]
       )
     }
     console.log('Usuarios creados')
@@ -788,7 +805,8 @@ async function setup() {
   // siempre -- no solo en tabla vacia -- porque instalaciones existentes
   // (instalador 1.4.0 sobre una BD ya usada) nunca pasan por ese bloque, y
   // los botones de "Usuarios de prueba" del login los necesitan igual.
-  const almaceneroDemo = [
+  // Solo en desarrollo: en produccion no se crean cuentas de prueba.
+  const almaceneroDemo = esProduccion ? [] : [
     { nombre: 'Almacenero 1', email: 'almacenero1@sibarita.com', pass: 'almacenero1' },
     { nombre: 'Almacenero 2', email: 'almacenero2@sibarita.com', pass: 'almacenero2' },
   ]
@@ -805,7 +823,8 @@ async function setup() {
   // Almacenero 3 (Fase 12, R5): nuevo perfil 'almacenero3'. rol_id no es fijo
   // (SERIAL), asi que se resuelve por nombre. Corre siempre, igual que el
   // bloque de arriba, para instalaciones existentes y el login de prueba.
-  {
+  // Tambien solo en desarrollo.
+  if (!esProduccion) {
     const hash = await bcrypt.hash('almacenero3', 10)
     await pool.query(
       `INSERT INTO usuarios (nombre,email,password,rol_id,almacen_id)
@@ -815,6 +834,8 @@ async function setup() {
       [hash]
     )
   }
+
+  await cargarSecreto()
 
   console.log('Base de datos lista.')
 }

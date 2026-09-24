@@ -21,7 +21,7 @@ export function exportarPDF(datos, columnas, titulo, nombreArchivo) {
 
   doc.setFontSize(18)
   doc.setTextColor(30, 58, 138)
-  doc.text('MALSA', 14, 16)
+  doc.text('SIBARITA', 14, 16)
 
   doc.setFontSize(11)
   doc.setTextColor(100)

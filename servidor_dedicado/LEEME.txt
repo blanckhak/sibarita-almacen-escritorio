@@ -49,8 +49,8 @@ NOTAS / COSAS A REVISAR ANTES DE USARLO CON GENTE REAL (no solo pruebas)
   * Que tu PC no se suspenda / apague durante el horario de uso.
   * Idealmente, IP fija o reserva DHCP (si la IP cambia, hay que avisar
     la nueva a todos).
-  * Cambiar JWT_SECRET en backend/.env (hoy es un valor generico) antes de
-    que gente real inicie sesion con datos reales.
+  * (Ya no hace falta cambiar JWT_SECRET: desde 1.17.0 cada base genera
+    su propia clave de sesion.)
   * Considerar correr el backend como servicio de Windows (no depender de
     que tu sesion de Windows quede abierta) - no incluido en esta carpeta,
     es un paso aparte si se llega a esa etapa.
@@ -105,6 +105,13 @@ Sibarita esta en uso):
      (instalar la version nueva)
      .\instalar_servicio.ps1 -Iniciar
 Para sacarlo del todo: .\instalar_servicio.ps1 -Quitar
+
+PRIMER INGRESO (desde 1.17.0 el servidor queda en MODO PRODUCCION):
+  - No hay cuentas de prueba. Entrar con admin@sibarita.com / admin123: el
+    sistema obliga a cambiar esa contrasena antes de hacer cualquier cosa.
+  - Crear en Usuarios una cuenta por persona. Cada uno cambia su contrasena
+    al primer ingreso. Si alguien la olvida: Usuarios -> Resetear contrasena.
+  - NO marcar "Modo desarrollador" (Ctrl+Shift+S) en esta PC.
 
 ORDEN RECOMENDADO EN LA PC SERVIDOR: PostgreSQL (inicio Automatico) ->
 Sibarita -> instalar_servicio.ps1 -> abrir_firewall_puerto_3000.ps1 ->
