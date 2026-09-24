@@ -75,7 +75,7 @@ router.get('/:id', verificarToken, async (req, res) => {
 // periodos siguientes los crea el cierre (Fase 15), no este endpoint.
 // Fase 16: nombre y fecha_inicio son opcionales. Sin nombre -> "Periodo N"
 // (N = cantidad de periodos del almacen + 1). Sin fecha -> hoy.
-router.post('/', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
+router.post('/', verificarToken, soloRoles('admin', 'almacen'),
   log('CREAR_PERIODO', req => `Almacen ${req.body.almacen_id}`),
   async (req, res) => {
   const { almacen_id, nombre, fecha_inicio } = req.body
@@ -145,7 +145,7 @@ async function guardarSnapshot(client, periodoId, tipo, almacenId) {
 // POST /api/periodos/:id/cerrar  { fecha_fin?, nombre_siguiente? }
 // Congela la foto de CIERRE, cierra el periodo y abre el siguiente con
 // APERTURA = ese CIERRE (arrastre de saldo).
-router.post('/:id/cerrar', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
+router.post('/:id/cerrar', verificarToken, soloRoles('admin', 'almacen'),
   log('CERRAR_PERIODO', req => `Periodo id ${req.params.id}`),
   async (req, res) => {
   const client = await pool.connect()

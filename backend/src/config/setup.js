@@ -517,7 +517,15 @@ async function setup() {
     -- ==========================================================
     -- Nuevo perfil 'almacenero3' (mismos permisos que 'almacen', ver soloRoles
     -- en las rutas). El usuario de demo se siembra mas abajo.
-    INSERT INTO roles (nombre) VALUES ('almacenero3') ON CONFLICT (nombre) DO NOTHING;
+    -- 24/09/2026: renombrado a 'almacenero' (generico) para Almacenero 1, 2 y 3.
+    -- Mismos permisos que 'almacen' salvo Periodos (solo admin y almacen).
+    UPDATE roles SET nombre = 'almacenero'
+      WHERE nombre = 'almacenero3' AND NOT EXISTS (SELECT 1 FROM roles WHERE nombre = 'almacenero');
+    INSERT INTO roles (nombre) VALUES ('almacenero') ON CONFLICT (nombre) DO NOTHING;
+    -- Las cuentas demo Almacenero 1 y 2 tenian el rol 'almacen' (el mismo que
+    -- la cuenta Almacen) y no se podian separar.
+    UPDATE usuarios SET rol_id = (SELECT id FROM roles WHERE nombre = 'almacenero')
+      WHERE email IN ('almacenero1@sibarita.com', 'almacenero2@sibarita.com');
 
     -- La migracion de datos y el CHECK de guia_items.destino
     -- (OFICINA/LABORATORIO -> COMPRAS_DIARIAS) estan mas arriba, junto al
@@ -820,7 +828,7 @@ async function setup() {
     const hash = await bcrypt.hash(u.pass, 10)
     await pool.query(
       `INSERT INTO usuarios (nombre,email,password,rol_id,almacen_id)
-       VALUES ($1,$2,$3,2,1)
+       VALUES ($1,$2,$3,(SELECT id FROM roles WHERE nombre = 'almacenero'),1)
        ON CONFLICT (email) DO NOTHING`,
       [u.nombre, u.email, hash]
     )
@@ -835,7 +843,7 @@ async function setup() {
     await pool.query(
       `INSERT INTO usuarios (nombre,email,password,rol_id,almacen_id)
        VALUES ('Almacenero 3','almacenero3@sibarita.com',$1,
-               (SELECT id FROM roles WHERE nombre = 'almacenero3'),1)
+               (SELECT id FROM roles WHERE nombre = 'almacenero'),1)
        ON CONFLICT (email) DO NOTHING`,
       [hash]
     )

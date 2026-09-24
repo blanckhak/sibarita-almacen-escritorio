@@ -2721,6 +2721,14 @@ primera fase que no este en verde.
   interceptor 401 -> /login, pagina CambiarPassword, CampoPassword (ojo),
   marca SIBARITA (el almacen MALSA sigue igual).
 - Servicio de Windows para la PC servidor: servidor_dedicado/instalar_servicio.ps1.
+- ROLES (24/09): el rol 'almacenero3' se renombro a 'almacenero' y ahora lo
+  tienen Almacenero 1, 2 y 3 (antes 1 y 2 tenian 'almacen', igual que la
+  cuenta Almacen). 'almacenero' = mismos permisos que 'almacen' SALVO
+  Periodos: la pagina y abrir/cerrar periodo son solo admin + almacen
+  (compras tampoco la ve). Leer el periodo activo sigue abierto a todos
+  (lo usan guias/notas para grabar periodo_id).
+- Arranque ~1 s: setup.js solo hace bcrypt si falta crear/migrar una
+  cuenta demo; main.js lanza el backend en paralelo con Electron.
 
 --------------------------------------------------
 FIN DE LA NOTA

@@ -32,7 +32,7 @@ export default function Guias() {
   const [proveedorOtro, setProveedorOtro] = useState(false)
   const [mostrarCerradas, setMostrarCerradas] = useState(false)
 
-  const puedeRegistrar = ['admin', 'almacen', 'almacenero3'].includes(usuario?.rol)
+  const puedeRegistrar = ['admin', 'almacen', 'almacenero'].includes(usuario?.rol)
   const proveedoresConocidos = useMemo(() => extraerProveedoresConocidos(guias), [guias])
   // Por defecto solo se ven las guias CARGADA (las que todavia se estan
   // trabajando); las CERRADA y ANULADA quedan disponibles con el toggle de

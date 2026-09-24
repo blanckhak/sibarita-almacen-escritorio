@@ -4,7 +4,7 @@ import api from '../utils/api'
 const colorRol = {
   admin:         'bg-purple-100 text-purple-700',
   almacen:       'bg-blue-100 text-blue-700',
-  almacenero3:   'bg-sky-100 text-sky-700',
+  almacenero:    'bg-sky-100 text-sky-700',
   mantenimiento: 'bg-green-100 text-green-700',
   compras:       'bg-yellow-100 text-yellow-700',
 }

@@ -27,7 +27,7 @@ export default function Periodos() {
   const [purgaDias, setPurgaDias] = useState(365)
   const [purgaPrevia, setPurgaPrevia] = useState(null) // { a_borrar } del dry_run
 
-  const puedeAbrir  = ['admin', 'almacen', 'almacenero3'].includes(usuario?.rol)
+  const puedeAbrir  = ['admin', 'almacen'].includes(usuario?.rol)
   const puedeCerrar = puedeAbrir
   const esAdmin     = usuario?.rol === 'admin'
 

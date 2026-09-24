@@ -88,8 +88,8 @@ export default function NotaSalidaDetalle() {
 
   // Fase 15 (R7-b): una nota de un periodo CERRADO queda de solo lectura.
   const periodoCerrado = nota?.periodo_estado === 'CERRADO'
-  const puedeGestionar = ['admin', 'almacen', 'almacenero3'].includes(usuario?.rol) && !periodoCerrado
-  const puedeAprobar    = ['admin', 'almacen', 'almacenero3'].includes(usuario?.rol) && !periodoCerrado
+  const puedeGestionar = ['admin', 'almacen', 'almacenero'].includes(usuario?.rol) && !periodoCerrado
+  const puedeAprobar    = ['admin', 'almacen', 'almacenero'].includes(usuario?.rol) && !periodoCerrado
 
   const cargar = () => {
     api.get(`/api/notas-salida/${id}`)

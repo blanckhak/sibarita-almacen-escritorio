@@ -51,8 +51,8 @@ export default function GuiaDetalle() {
   // Fase 13 (R1): que mostrar en la Nota de Ingreso impresa.
   const [paramsImp, setParamsImp] = useState(null)
 
-  const puedeImprimir = ['admin', 'almacen', 'almacenero3'].includes(usuario?.rol)
-  const puedeEditar = ['admin', 'almacen', 'almacenero3'].includes(usuario?.rol)
+  const puedeImprimir = ['admin', 'almacen', 'almacenero'].includes(usuario?.rol)
+  const puedeEditar = ['admin', 'almacen', 'almacenero'].includes(usuario?.rol)
 
   const cargar = () => {
     api.get(`/api/guias/${id}`)

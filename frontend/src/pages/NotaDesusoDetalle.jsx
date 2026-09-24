@@ -34,7 +34,7 @@ export default function NotaDesusoDetalle() {
   const [motivoAnulacion, setMotivoAnulacion] = useState('')
 
   const periodoCerrado = nota?.periodo_estado === 'CERRADO'
-  const puedeGestionar = ['admin', 'almacen', 'almacenero3'].includes(usuario?.rol) && !periodoCerrado
+  const puedeGestionar = ['admin', 'almacen', 'almacenero'].includes(usuario?.rol) && !periodoCerrado
 
   const cargar = () => {
     api.get(`/api/notas-desuso/${id}`)

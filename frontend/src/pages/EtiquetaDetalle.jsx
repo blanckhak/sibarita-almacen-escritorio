@@ -31,7 +31,7 @@ export default function EtiquetaDetalle() {
   const [guardandoUbic, setGuardandoUbic]   = useState(false)
   const [preview, setPreview]               = useState(false)
 
-  const puedeGestionar = ['admin', 'almacen', 'almacenero3'].includes(usuario?.rol)
+  const puedeGestionar = ['admin', 'almacen', 'almacenero'].includes(usuario?.rol)
 
   const cargar = () => {
     Promise.all([

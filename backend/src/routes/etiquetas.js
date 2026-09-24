@@ -130,7 +130,7 @@ router.get('/:id', verificarToken, async (req, res) => {
 
 // Ubicacion fisica del codigo dentro del almacen (estante/rack/pasillo). Se
 // completa despues del ingreso; texto libre; vaciarla la deja en NULL.
-router.put('/:id/ubicacion', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
+router.put('/:id/ubicacion', verificarToken, soloRoles('admin', 'almacen', 'almacenero'),
   log('EDITAR_UBICACION', req => `Codigo id ${req.params.id} -> "${(req.body.ubicacion || '').trim()}"`),
   async (req, res) => {
   const errLargo = validarLargos({ 'ubicacion': [req.body.ubicacion, 100] })
@@ -152,7 +152,7 @@ router.put('/:id/ubicacion', verificarToken, soloRoles('admin', 'almacen', 'alma
 
 // Registra la impresion de una etiqueta: la primera vez queda como IMPRESA,
 // las siguientes como REIMPRESA (seccion 5.2 y seccion 14 punto 3-4)
-router.post('/:id/imprimir', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'), async (req, res) => {
+router.post('/:id/imprimir', verificarToken, soloRoles('admin', 'almacen', 'almacenero'), async (req, res) => {
   try {
     const etiqueta = await pool.query('SELECT id FROM etiquetas WHERE id = $1', [req.params.id])
     if (etiqueta.rows.length === 0) {
@@ -199,7 +199,7 @@ router.get('/:id/historial', verificarToken, async (req, res) => {
 })
 
 // Transferencia de un codigo entre almacenes, sin perder su identidad ni su historial (seccion 14 punto 7)
-router.post('/:id/transferir', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
+router.post('/:id/transferir', verificarToken, soloRoles('admin', 'almacen', 'almacenero'),
   log('TRANSFERIR_ETIQUETA', req => `Codigo id ${req.params.id} a almacen ${req.body.almacen_destino_id}`),
   async (req, res) => {
   const { almacen_destino_id } = req.body

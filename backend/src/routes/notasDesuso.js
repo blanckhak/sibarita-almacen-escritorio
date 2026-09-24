@@ -84,7 +84,7 @@ router.get('/:id', verificarToken, async (req, res) => {
   }
 })
 
-router.post('/', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
+router.post('/', verificarToken, soloRoles('admin', 'almacen', 'almacenero'),
   log('CREAR_NOTA_DESUSO', req => `Responsable ${req.body.persona_responsable}, ${Array.isArray(req.body.lineas) ? req.body.lineas.length : 0} linea(s)`),
   async (req, res) => {
   const { seccion, persona_responsable, nota_salida_ref, almacen_id, observaciones, lineas } = req.body
@@ -173,7 +173,7 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
   }
 })
 
-router.put('/:id', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
+router.put('/:id', verificarToken, soloRoles('admin', 'almacen', 'almacenero'),
   log('EDITAR_NOTA_DESUSO', req => `Nota de desuso id ${req.params.id}, responsable ${req.body.persona_responsable}`),
   async (req, res) => {
   const persona_responsable = (req.body.persona_responsable || '').trim()
@@ -216,7 +216,7 @@ router.put('/:id', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
   }
 })
 
-router.post('/:id/anular', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
+router.post('/:id/anular', verificarToken, soloRoles('admin', 'almacen', 'almacenero'),
   log('ANULAR_NOTA_DESUSO', req => `Nota de desuso id ${req.params.id}, motivo: ${(req.body.motivo || '').trim() || 'sin indicar'}`),
   async (req, res) => {
   const motivo = (req.body.motivo || '').trim()

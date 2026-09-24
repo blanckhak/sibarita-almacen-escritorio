@@ -6,7 +6,7 @@ import Notificaciones from './Notificaciones'
 const colorRol = {
   admin:         'bg-purple-600',
   almacen:       'bg-blue-600',
-  almacenero3:   'bg-blue-500',
+  almacenero:    'bg-blue-500',
   mantenimiento: 'bg-green-600',
   compras:       'bg-yellow-500',
 }
@@ -14,20 +14,20 @@ const colorRol = {
 // Enlaces principales (siempre visibles) y secundarios (menu "Mas").
 const ENLACES_PRIMARIOS = [
   { path: '/',              label: 'Dashboard',       roles: null },
-  { path: '/inventario',    label: 'Inventario',      roles: ['admin','almacen','almacenero3','mantenimiento','compras'] },
-  { path: '/guias',         label: 'Guias',           roles: ['admin','almacen','almacenero3','mantenimiento','compras'] },
-  { path: '/notas-salida',  label: 'Notas de Salida', roles: ['admin','almacen','almacenero3','mantenimiento','compras'] },
-  { path: '/periodos',      label: 'Periodos',        roles: ['admin','almacen','almacenero3','compras'] },
+  { path: '/inventario',    label: 'Inventario',      roles: ['admin','almacen','almacenero','mantenimiento','compras'] },
+  { path: '/guias',         label: 'Guias',           roles: ['admin','almacen','almacenero','mantenimiento','compras'] },
+  { path: '/notas-salida',  label: 'Notas de Salida', roles: ['admin','almacen','almacenero','mantenimiento','compras'] },
+  { path: '/periodos',      label: 'Periodos',        roles: ['admin','almacen'] },
 ]
 const ENLACES_SECUNDARIOS = [
   { path: '/almacenes',            label: 'Almacenes',           roles: null },
-  { path: '/productos',            label: 'Catalogo',            roles: ['admin','almacen','almacenero3','mantenimiento','compras'] },
-  { path: '/solicitudes-materiales', label: 'Solicitud Materiales', roles: ['admin','almacen','almacenero3','mantenimiento','compras'] },
-  { path: '/notas-desuso',         label: 'Notas de Desuso',     roles: ['admin','almacen','almacenero3','mantenimiento','compras'] },
-  { path: '/consulta-productos',   label: 'Consulta',            roles: ['admin','almacen','almacenero3','mantenimiento','compras'] },
-  { path: '/movimientos',          label: 'Movimientos',         roles: ['admin','almacen','almacenero3'] },
-  { path: '/reportes',             label: 'Reportes',            roles: ['admin','almacen','almacenero3','compras'] },
-  { path: '/historial',            label: 'Historial',           roles: ['admin','almacen','almacenero3','compras'] },
+  { path: '/productos',            label: 'Catalogo',            roles: ['admin','almacen','almacenero','mantenimiento','compras'] },
+  { path: '/solicitudes-materiales', label: 'Solicitud Materiales', roles: ['admin','almacen','almacenero','mantenimiento','compras'] },
+  { path: '/notas-desuso',         label: 'Notas de Desuso',     roles: ['admin','almacen','almacenero','mantenimiento','compras'] },
+  { path: '/consulta-productos',   label: 'Consulta',            roles: ['admin','almacen','almacenero','mantenimiento','compras'] },
+  { path: '/movimientos',          label: 'Movimientos',         roles: ['admin','almacen','almacenero'] },
+  { path: '/reportes',             label: 'Reportes',            roles: ['admin','almacen','almacenero','compras'] },
+  { path: '/historial',            label: 'Historial',           roles: ['admin','almacen','almacenero','compras'] },
   { path: '/usuarios',             label: 'Usuarios',            roles: ['admin'] },
   { path: '/posibles-duplicados',  label: 'Duplicados',          roles: ['admin'] },
   { path: '/configuracion',        label: 'Configuracion',       roles: ['admin'] },

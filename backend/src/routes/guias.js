@@ -154,7 +154,7 @@ router.get('/:id', verificarToken, async (req, res) => {
   }
 })
 
-router.post('/', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
+router.post('/', verificarToken, soloRoles('admin', 'almacen', 'almacenero'),
   log('CREAR_GUIA', req => `Guia ${req.body.numero_guia}, almacen ${req.body.almacen_id}, ${Array.isArray(req.body.items) ? req.body.items.length : 0} linea(s)`),
   async (req, res) => {
   const { numero_guia, almacen_id, fecha, items, proveedor, numero_oc, direccion, guia_remision, factura, observaciones } = req.body
@@ -578,7 +578,7 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
 // "pendiente de recoger" (Bloque 6): genera su Nota de Salida automatica
 // (USO_INTERNO, cerrada, sin devolucion) recien en este momento, cuando ya se
 // sabe quien lo retira.
-router.post('/:id/items/:itemId/retirar', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
+router.post('/:id/items/:itemId/retirar', verificarToken, soloRoles('admin', 'almacen', 'almacenero'),
   log('RETIRAR_ITEM_GUIA', req => `Guia id ${req.params.id}, item id ${req.params.itemId}`),
   async (req, res) => {
   const personaRetira = (req.body.persona_retira || '').trim()
@@ -662,7 +662,7 @@ router.post('/:id/items/:itemId/retirar', verificarToken, soloRoles('admin', 'al
 //   producto o el destino.
 // - Guia CERRADA: solo se admite `numero_oc`, `estado` (para reabrirla) e
 //   `items`. El resto de la cabecera queda bloqueado hasta pasarla a CARGADA.
-router.put('/:id', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
+router.put('/:id', verificarToken, soloRoles('admin', 'almacen', 'almacenero'),
   log('EDITAR_GUIA', req => `Guia ${req.params.id}: ${JSON.stringify(req.body)}`),
   async (req, res) => {
   const { proveedor, numero_oc, direccion, estado, guia_remision, guia_remision_tipo, factura, factura_tipo, tipo_documento, items, observaciones } = req.body
@@ -852,7 +852,7 @@ router.put('/:id', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
 // estado ANULADA) y deja la guia en estado ANULADA con el motivo. Solo se
 // permite si NINGUN codigo salio del almacen ni esta comprometido en una nota
 // de salida. No borra nada: la guia sigue visible en el historial.
-router.post('/:id/anular', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
+router.post('/:id/anular', verificarToken, soloRoles('admin', 'almacen', 'almacenero'),
   log('ANULAR_GUIA', req => `Guia id ${req.params.id}, motivo: ${(req.body.motivo || '').trim() || 'sin indicar'}`),
   async (req, res) => {
   const motivo = (req.body.motivo || '').trim()

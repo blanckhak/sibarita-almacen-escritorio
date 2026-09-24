@@ -30,7 +30,7 @@ export default function SolicitudMaterialesDetalle() {
   const [formEdit, setFormEdit] = useState(null)
   const [guardandoEdicion, setGuardandoEdicion] = useState(false)
 
-  const puedeGestionar = ['admin', 'almacen', 'almacenero3'].includes(usuario?.rol)
+  const puedeGestionar = ['admin', 'almacen', 'almacenero'].includes(usuario?.rol)
   // Editar es cosa del que la pide (mismos roles que pueden dar de alta), y
   // solo tiene sentido mientras nadie la atendio ni la rechazo todavia.
   const puedeEditar = ['admin', 'mantenimiento'].includes(usuario?.rol) && solicitud?.estado === 'PENDIENTE'

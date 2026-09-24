@@ -68,11 +68,11 @@ router.get('/disponible', verificarToken, async (req, res) => {
 })
 
 // Ajuste manual de inventario: en el frontend (Inventario.jsx, puedeAgregar)
-// solo admin/almacen/almacenero3 ven el formulario, pero el backend no tenia
+// solo admin/almacen/almacenero ven el formulario, pero el backend no tenia
 // NINGUNA verificacion -- ni siquiera login. Cualquiera con acceso a la API
 // podia insertar stock arbitrario en cualquier almacen. Encontrado al
 // revisar todo el codigo buscando rutas de escritura sin verificarToken.
-router.post('/', verificarToken, soloRoles('admin', 'almacen', 'almacenero3'),
+router.post('/', verificarToken, soloRoles('admin', 'almacen', 'almacenero'),
   log('AJUSTE_MANUAL_INVENTARIO', req => `Almacen ${req.body.almacen_id}, producto ${req.body.producto_id}, tipo ${req.body.tipo}, cantidad ${req.body.cantidad}`),
   async (req, res) => {
   const { almacen_id, producto_id, tipo = 'NUEVO', cantidad, descripcion } = req.body

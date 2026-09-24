@@ -27,7 +27,7 @@ export default function NotasDesuso() {
   const [form, setForm]           = useState(FORM_VACIO)
   const [unidades, setUnidades]   = useState([])
 
-  const puedeRegistrar = ['admin', 'almacen', 'almacenero3'].includes(usuario?.rol)
+  const puedeRegistrar = ['admin', 'almacen', 'almacenero'].includes(usuario?.rol)
 
   const cargarNotas = () => {
     api.get('/api/notas-desuso', { params: periodoSel ? { periodo_id: periodoSel } : {} })
