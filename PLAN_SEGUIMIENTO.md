@@ -109,4 +109,4 @@ Bloqueada hasta tener la respuesta de la Fase 3. Las tareas se definen con esa r
 | 23/09/2026 | 3–4 | Preguntas al cliente listas; modo cliente en la app; respaldo automático para la PC servidor; instalador 1.16.0 | `12e4459`, `ad474ba`, `29a6cfb`, (bump) |
 | 24/09/2026 | 1, 4 | Fase 1: lo que falta se verifica en producción. Fase 4: backend como servicio de Windows en la PC servidor | `5d8d00a` |
 | 24/09/2026 | 4 | Seguridad para producción: modos desarrollo/producción, contraseñas, sesión que se cierra al salir, clave de sesión por servidor, marca Sibarita, instalador 1.17.0 | `22df926` |
-| 24/09/2026 | — | Arranque ~2 s → ~1 s. Rol `almacenero3` → `almacenero` (Almacenero 1, 2 y 3). **Periodos solo para admin y almacén** | `b4445af`, (este commit) |
+| 24/09/2026 | — | Arranque ~2 s → ~1 s. Rol `almacenero3` → `almacenero` (Almacenero 1, 2 y 3). **Periodos solo para admin y almacén** | `b4445af`, `6616b23`, `3ac4802`, (bump 1.17.1) |
