@@ -411,16 +411,9 @@ export default function NotasSalida() {
                       <div className="col-span-2 text-sm text-gray-500">
                         {l.etiqueta.cantidad} {l.etiqueta.unidad_medida_abreviatura || ''}
                       </div>
-                      <div className="col-span-2">
-                        <input
-                          type="number" min="0" step="0.01"
-                          value={l.p_unitario}
-                          onChange={e => actualizarLinea(l.etiqueta_id, 'p_unitario', e.target.value)}
-                          placeholder="P. unitario"
-                          className="w-full border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                      </div>
-                      <div className="col-span-2 text-right">
+                      {/* Sin precio unitario: la nota de salida no maneja
+                          precios (pedido del usuario 24/09). */}
+                      <div className="col-span-4 text-right">
                         <button type="button" onClick={() => quitarLinea(l.etiqueta_id)} className="text-red-500 hover:text-red-700 text-sm">
                           Quitar
                         </button>

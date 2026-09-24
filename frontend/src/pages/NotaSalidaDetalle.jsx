@@ -790,10 +790,17 @@ export default function NotaSalidaDetalle() {
                             </>
                           )}
                         </td>
-                        <td className="py-1 text-center border-l border-gray-400 align-top">{r && !r.esContinuacion ? fmtCantidad(r.cantidad) : ''}</td>
+                        <td className="py-1 text-center border-l border-gray-400 align-top">
+                          {r && !r.esContinuacion
+                            ? `${fmtCantidad(r.cantidad)}${!pS.mostrar_precio && r.unidad_medida_abreviatura ? ` ${r.unidad_medida_abreviatura}` : ''}`
+                            : ''}
+                        </td>
+                        {/* Igual que la Nota de Ingreso (pedido del usuario 24/09):
+                            no se imprime ningun precio; la columna preimpresa
+                            "P. UNIT." lleva la UNIDAD y TOTAL queda en blanco. */}
                         {pS.mostrar_precio && <>
-                          <td className="py-1 text-right px-1 border-l border-gray-400 align-top">{r && !r.esContinuacion && r.p_unitario ? Number(r.p_unitario).toFixed(2) : ''}</td>
-                          <td className="py-1 text-right px-1 border-l border-gray-400 align-top">{r && !r.esContinuacion && r.total ? Number(r.total).toFixed(2) : ''}</td>
+                          <td className="py-1 text-center border-l border-gray-400 align-top">{r && !r.esContinuacion ? (r.unidad_medida_abreviatura || '') : ''}</td>
+                          <td className="py-1 border-l border-gray-400 align-top">&nbsp;</td>
                         </>}
                       </tr>
                     ))}
@@ -803,7 +810,7 @@ export default function NotaSalidaDetalle() {
                         <td className="border-l border-gray-800">&nbsp;</td>
                         {pS.mostrar_precio && <>
                           <td className="border-l border-gray-800">&nbsp;</td>
-                          <td className="py-1 text-right px-1 border-l border-gray-800">{total > 0 ? total.toFixed(2) : ''}</td>
+                          <td className="border-l border-gray-800">&nbsp;</td>
                         </>}
                       </tr>
                     )}
