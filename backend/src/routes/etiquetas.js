@@ -5,6 +5,7 @@ const { verificarToken, soloRoles } = require('../middlewares/authMiddleware')
 const { ajustarInventario } = require('../utils/inventario')
 const { validarLargos } = require('../utils/texto')
 const { periodoCerrado } = require('../utils/periodo')
+const { lineasAfuera } = require('../utils/salida')
 const log = require('../middlewares/logMiddleware')
 
 const ERR_PERIODO_CERRADO = 'El periodo de este codigo esta CERRADO; pedile a un admin que lo reabra para poder transferirlo.'
@@ -46,6 +47,7 @@ router.get('/', verificarToken, async (req, res) => {
              gi.tipo as guia_item_tipo, gi.servicio_modo,
              COALESCE(um.nombre, umgi.nombre) as unidad_medida_nombre,
              COALESCE(um.abreviatura, umgi.abreviatura) as unidad_medida_abreviatura,
+             COALESCE(um.permite_decimal, umgi.permite_decimal, false) as permite_decimal,
              -- Stock del producto en ese almacen (Fase 9, Bloque 7): total
              -- agregado (tabla inventario, NUEVO + DEVOLUCION) y conteo de
              -- codigos individuales que siguen EN_ALMACEN. Se calcula una vez
@@ -241,6 +243,13 @@ router.post('/:id/transferir', verificarToken, soloRoles('admin', 'almacen', 'al
     if (etiqueta.estado !== 'EN_ALMACEN') {
       await client.query('ROLLBACK')
       return res.status(409).json({ error: 'Solo se pueden transferir codigos que esten en almacen' })
+    }
+    // Salida parcial (24/09): si parte de este codigo sigue afuera en una nota
+    // de salida, su devolucion volveria al almacen de origen. Se transfiere
+    // cuando todo haya vuelto.
+    if ((await lineasAfuera(client, etiqueta.id)) > 0) {
+      await client.query('ROLLBACK')
+      return res.status(409).json({ error: 'Parte de este codigo esta afuera en una nota de salida pendiente de devolucion; transferilo cuando vuelva' })
     }
     if (Number(almacen_destino_id) === etiqueta.almacen_id) {
       await client.query('ROLLBACK')

@@ -115,7 +115,7 @@ export default function NotasSalida() {
       setTimeout(() => setMensaje(null), 3000)
       return
     }
-    setForm(f => ({ ...f, lineas: [...f.lineas, { etiqueta_id: encontrado.id, etiqueta: encontrado, p_unitario: '', observaciones: '' }] }))
+    setForm(f => ({ ...f, lineas: [...f.lineas, { etiqueta_id: encontrado.id, etiqueta: encontrado, cantidad: String(encontrado.cantidad), p_unitario: '', observaciones: '' }] }))
     setBuscarCodigo('')
     setMostrarSugerencias(false)
   }
@@ -157,6 +157,12 @@ export default function NotasSalida() {
       setTimeout(() => setMensaje(null), 3000)
       return
     }
+    const fueraDeRango = form.lineas.find(l => !(Number(l.cantidad) > 0 && Number(l.cantidad) <= Number(l.etiqueta.cantidad)))
+    if (fueraDeRango) {
+      setMensaje({ tipo: 'error', texto: `La cantidad de ${codigoAlmacen(fueraDeRango.etiqueta.codigo, fueraDeRango.etiqueta.almacen_nombre)} debe ser mayor a 0 y hasta ${fueraDeRango.etiqueta.cantidad}` })
+      setTimeout(() => setMensaje(null), 4000)
+      return
+    }
     setGuardando(true)
     try {
       const payload = {
@@ -165,7 +171,7 @@ export default function NotasSalida() {
         motivo: form.motivo,
         requiere_devolucion: form.requiere_devolucion,
         observaciones: form.observaciones,
-        lineas: form.lineas.map(l => ({ etiqueta_id: l.etiqueta_id, p_unitario: l.p_unitario || null, observaciones: l.observaciones })),
+        lineas: form.lineas.map(l => ({ etiqueta_id: l.etiqueta_id, cantidad: l.cantidad, p_unitario: l.p_unitario || null, observaciones: l.observaciones })),
       }
       await api.post('/api/notas-salida', payload)
       setMensaje({ tipo: 'ok', texto: 'Nota de salida generada correctamente' })
@@ -408,8 +414,23 @@ export default function NotasSalida() {
                           )
                         })()}
                       </div>
-                      <div className="col-span-2 text-sm text-gray-500">
-                        {l.etiqueta.cantidad} {l.etiqueta.unidad_medida_abreviatura || ''}
+                      {/* Salida parcial (24/09): cuanto sale de este codigo. Por
+                          defecto todo; lo que no sale queda en almacen con el
+                          mismo codigo. */}
+                      <div className="col-span-2">
+                        <input
+                          type="number" min="0" max={l.etiqueta.cantidad}
+                          step={l.etiqueta.permite_decimal ? '0.001' : '1'}
+                          value={l.cantidad}
+                          onChange={e => actualizarLinea(l.etiqueta_id, 'cantidad', e.target.value)}
+                          title="Cantidad que sale"
+                          className={`w-full border rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                            Number(l.cantidad) > 0 && Number(l.cantidad) <= Number(l.etiqueta.cantidad) ? 'border-gray-300' : 'border-red-400 bg-red-50'
+                          }`}
+                        />
+                        <span className="block text-[11px] text-gray-400 mt-0.5">
+                          de {l.etiqueta.cantidad} {l.etiqueta.unidad_medida_abreviatura || ''}
+                        </span>
                       </div>
                       <div className="col-span-2">
                         <input

@@ -3,7 +3,8 @@ const router = express.Router()
 const pool = require('../config/db')
 const { verificarToken, soloRoles } = require('../middlewares/authMiddleware')
 const { ajustarInventario } = require('../utils/inventario')
-const { marcarSalida } = require('../utils/salida')
+const { marcarSalida, lineasAfuera } = require('../utils/salida')
+const { esCantidadPositiva, unidadPermiteDecimal } = require('../utils/cantidad')
 const { validarLargos } = require('../utils/texto')
 const { mensajeConcurrencia } = require('../utils/dbErrores')
 const { periodoCerrado } = require('../utils/periodo')
@@ -74,6 +75,8 @@ router.get('/:id', verificarToken, async (req, res) => {
              d.cantidad_consumida::float8 as cantidad_consumida,
              d.total_consumido::float8 as total_consumido,
              e.codigo as etiqueta_codigo, e.estado as etiqueta_estado,
+             -- Salida parcial: lo que le queda HOY al codigo en almacen.
+             CASE WHEN e.estado = 'EN_ALMACEN' THEN COALESCE(e.cantidad, gi_e.cantidad)::float8 ELSE 0 END as stock_codigo,
              e.condicion as etiqueta_condicion, e.almacen_id,
              -- Fase 13 (R3): en una linea de servicio EXTERNO no hay etiqueta;
              -- el nombre viene de d.descripcion_servicio.
@@ -91,6 +94,7 @@ router.get('/:id', verificarToken, async (req, res) => {
                   AND e2.estado = 'EN_ALMACEN') as codigos_disponibles_actual
       FROM notas_salida_detalle d
       LEFT JOIN etiquetas e ON d.etiqueta_id = e.id
+      LEFT JOIN guia_items gi_e ON e.guia_item_id = gi_e.id
       LEFT JOIN productos p ON e.producto_id = p.id
       LEFT JOIN almacenes a ON e.almacen_id = a.id
       LEFT JOIN unidades_medida um ON p.unidad_medida_id = um.id
@@ -128,6 +132,12 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen', 'almacenero'),
   const etiquetaIds = lineas.map(l => l.etiqueta_id)
   if (new Set(etiquetaIds).size !== etiquetaIds.length) {
     return res.status(400).json({ error: 'Hay codigos repetidos en la nota de salida' })
+  }
+  // Salida parcial (24/09): cada linea puede indicar cuanto sale del codigo.
+  // Sin cantidad = sale todo lo que el codigo tiene en almacen.
+  const conCantidad = (l) => l.cantidad !== undefined && l.cantidad !== null && l.cantidad !== ''
+  if (lineas.some(l => conCantidad(l) && !esCantidadPositiva(l.cantidad))) {
+    return res.status(400).json({ error: 'La cantidad que sale debe ser mayor a 0 (hasta 3 decimales)' })
   }
 
   const client = await pool.connect()
@@ -171,17 +181,32 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen', 'almacenero'),
     )
     const periodoNotaId = perNota.rows[0]?.id || null
 
+    // Cantidades validadas ANTES de reservar el numero de nota: un nextval no
+    // se deshace con ROLLBACK y un intento rechazado dejaria un hueco en la
+    // numeracion del talonario.
+    const etiquetasPorId = Object.fromEntries(etiquetas.rows.map(e => [e.id, e]))
+    const detallesCalculados = []
+    for (const linea of lineas) {
+      const et = etiquetasPorId[linea.etiqueta_id]
+      // et.cantidad = lo que el codigo tiene hoy en almacen.
+      const cantidad = conCantidad(linea) ? Number(linea.cantidad) : et.cantidad
+      if (Math.round(cantidad * 1000) > Math.round(et.cantidad * 1000)) {
+        await client.query('ROLLBACK')
+        return res.status(400).json({ error: `El codigo ${et.codigo} tiene ${et.cantidad} en almacen; no pueden salir ${cantidad}` })
+      }
+      if (!Number.isInteger(cantidad) && !(await unidadPermiteDecimal(client, et.producto_id))) {
+        await client.query('ROLLBACK')
+        return res.status(400).json({ error: `La unidad del codigo ${et.codigo} no admite decimales` })
+      }
+      const pUnitario = linea.p_unitario !== null && linea.p_unitario !== undefined && linea.p_unitario !== ''
+        ? Number(linea.p_unitario) : null
+      const total = pUnitario !== null ? pUnitario * cantidad : null
+      detallesCalculados.push({ etiqueta: et, cantidad, pUnitario, total, observaciones: linea.observaciones?.trim() || null })
+    }
+
     const numeroResult = await client.query(`SELECT nextval('notas_salida_numero_seq') as n`)
     const numeroNota = String(numeroResult.rows[0].n).padStart(6, '0')
 
-    const etiquetasPorId = Object.fromEntries(etiquetas.rows.map(e => [e.id, e]))
-    const detallesCalculados = lineas.map(linea => {
-      const et = etiquetasPorId[linea.etiqueta_id]
-      const pUnitario = linea.p_unitario !== null && linea.p_unitario !== undefined && linea.p_unitario !== ''
-        ? Number(linea.p_unitario) : null
-      const total = pUnitario !== null ? pUnitario * et.cantidad : null
-      return { etiqueta: et, pUnitario, total, observaciones: linea.observaciones?.trim() || null }
-    })
     const montoTotal = detallesCalculados.reduce((s, d) => s + (d.total || 0), 0)
 
     // Aprobacion previa para salidas de alto valor (seccion 14 punto 5, CU-05)
@@ -215,12 +240,12 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen', 'almacenero'),
       await client.query(
         `INSERT INTO notas_salida_detalle (nota_salida_id, etiqueta_id, cantidad, p_unitario, total, observaciones)
          VALUES ($1, $2, $3, $4, $5, $6)`,
-        [nota.id, d.etiqueta.id, d.etiqueta.cantidad, d.pUnitario, d.total, d.observaciones]
+        [nota.id, d.etiqueta.id, d.cantidad, d.pUnitario, d.total, d.observaciones]
       )
 
       // Si queda en aprobacion, el producto todavia no sale fisicamente del almacen (CU-05)
       if (!requiereAprobacion) {
-        await marcarSalida(client, d.etiqueta, numeroNota, req.usuario.id)
+        await marcarSalida(client, d.etiqueta, numeroNota, req.usuario.id, d.cantidad)
       }
     }
 
@@ -259,22 +284,29 @@ router.post('/:id/aprobar', verificarToken, soloRoles('admin', 'almacen', 'almac
     }
 
     const detalle = await client.query(`
-      SELECT d.etiqueta_id, e.estado, e.almacen_id, e.producto_id, e.codigo, e.condicion, d.cantidad
+      SELECT d.etiqueta_id, e.estado, e.almacen_id, e.producto_id, e.codigo, e.condicion,
+             d.cantidad::float8 AS cantidad,
+             COALESCE(e.cantidad, gi.cantidad)::float8 AS stock_codigo
       FROM notas_salida_detalle d
       JOIN etiquetas e ON d.etiqueta_id = e.id
+      JOIN guia_items gi ON e.guia_item_id = gi.id
       WHERE d.nota_salida_id = $1
       FOR UPDATE OF e
     `, [req.params.id])
 
+    // Mientras la nota esperaba aprobacion el codigo pudo salir (todo o una
+    // parte) en otra nota: tiene que seguir teniendo lo que esta linea saca.
     for (const linea of detalle.rows) {
-      if (linea.estado !== 'EN_ALMACEN') {
+      if (linea.estado !== 'EN_ALMACEN' || Math.round(linea.stock_codigo * 1000) < Math.round(linea.cantidad * 1000)) {
         await client.query('ROLLBACK')
-        return res.status(409).json({ error: `El codigo ${linea.codigo} ya no esta disponible en almacen` })
+        return res.status(409).json({ error: `El codigo ${linea.codigo} ya no tiene ${linea.cantidad} disponible en almacen` })
       }
     }
 
     for (const linea of detalle.rows) {
-      await marcarSalida(client, { id: linea.etiqueta_id, almacen_id: linea.almacen_id, producto_id: linea.producto_id, cantidad: linea.cantidad, condicion: linea.condicion }, nota.rows[0].numero_nota, req.usuario.id)
+      await marcarSalida(client,
+        { id: linea.etiqueta_id, almacen_id: linea.almacen_id, producto_id: linea.producto_id, cantidad: linea.stock_codigo, condicion: linea.condicion },
+        nota.rows[0].numero_nota, req.usuario.id, linea.cantidad)
     }
 
     const nuevoEstado = nota.rows[0].requiere_devolucion ? 'PENDIENTE' : 'CERRADO'
@@ -464,14 +496,19 @@ router.post('/:id/devolucion', verificarToken, soloRoles('admin', 'almacen', 'al
 
     const detalle = await client.query(`
       SELECT d.id as detalle_id, d.etiqueta_id, d.cantidad::float8 as cantidad,
-             d.p_unitario::float8 as p_unitario,
-             e.estado, e.almacen_id, e.producto_id, e.codigo, e.guia_item_id, e.condicion, e.periodo_id
+             d.p_unitario::float8 as p_unitario, d.devuelto_condicion,
+             e.estado, e.almacen_id, e.producto_id, e.codigo, e.guia_item_id, e.condicion, e.periodo_id,
+             COALESCE(e.cantidad, gi.cantidad)::float8 as stock_codigo
       FROM notas_salida_detalle d
       JOIN etiquetas e ON d.etiqueta_id = e.id
+      JOIN guia_items gi ON e.guia_item_id = gi.id
       WHERE d.nota_salida_id = $1
       FOR UPDATE OF e
     `, [req.params.id])
 
+    // Salida parcial (24/09): lo que sigue afuera se decide por LINEA (sin
+    // devolucion registrada), no por el estado del codigo, que puede seguir
+    // EN_ALMACEN con el resto.
     const detallePorId = Object.fromEntries(detalle.rows.map(d => [d.etiqueta_id, d]))
     for (const eid of etiqueta_ids) {
       const linea = detallePorId[eid]
@@ -479,7 +516,7 @@ router.post('/:id/devolucion', verificarToken, soloRoles('admin', 'almacen', 'al
         await client.query('ROLLBACK')
         return res.status(400).json({ error: `El codigo ${eid} no pertenece a esta nota de salida` })
       }
-      if (linea.estado !== 'SALIO') {
+      if (linea.devuelto_condicion) {
         await client.query('ROLLBACK')
         return res.status(400).json({ error: `El codigo ${linea.codigo} ya fue devuelto` })
       }
@@ -507,10 +544,14 @@ router.post('/:id/devolucion', verificarToken, soloRoles('admin', 'almacen', 'al
           ? Math.round(linea.p_unitario * cantConsumida * 100) / 100
           : null
 
-        // El codigo viejo queda retirado; el item fisico ahora vive bajo un
-        // codigo nuevo marcado USADO, con su propia cantidad, que reingresa
-        // como stock DEVOLUCION.
-        await client.query(`UPDATE etiquetas SET estado = 'REEMPLAZADA' WHERE id = $1`, [eid])
+        // Lo que vuelve usado vive bajo un codigo nuevo marcado USADO, con su
+        // propia cantidad, que reingresa como stock DEVOLUCION. El codigo viejo
+        // queda retirado (REEMPLAZADA) solo si ya no le queda nada: ni stock en
+        // almacen (salida parcial) ni otras lineas afuera en otras notas.
+        const reemplazada = linea.estado === 'SALIO' && (await lineasAfuera(client, eid, linea.detalle_id)) === 0
+        if (reemplazada) {
+          await client.query(`UPDATE etiquetas SET estado = 'REEMPLAZADA' WHERE id = $1`, [eid])
+        }
 
         const codigoResult = await client.query(`SELECT nextval('etiquetas_codigo_seq') as codigo`)
         const codigoNuevo = codigoResult.rows[0].codigo
@@ -530,8 +571,11 @@ router.post('/:id/devolucion', verificarToken, soloRoles('admin', 'almacen', 'al
         ].filter(Boolean).join(', ')
         await client.query(
           `INSERT INTO etiqueta_historial (etiqueta_id, evento, almacen_origen_id, usuario_id, detalle)
-           VALUES ($1, 'REEMPLAZADA', $2, $3, $4)`,
-          [eid, linea.almacen_id, req.usuario.id, `Devuelta usada en nota ${numeroNota}, reemplazada por codigo ${codigoNuevo}`]
+           VALUES ($1, $2, $3, $4, $5)`,
+          [eid, reemplazada ? 'REEMPLAZADA' : 'DEVOLVIO', linea.almacen_id, req.usuario.id,
+           reemplazada
+             ? `Devuelta usada en nota ${numeroNota}, reemplazada por codigo ${codigoNuevo}`
+             : `Devuelta usada en nota ${numeroNota} (${cantDevuelta} de ${linea.cantidad}), reingresa como codigo ${codigoNuevo}`]
         )
         await client.query(
           `INSERT INTO etiqueta_historial (etiqueta_id, evento, almacen_destino_id, usuario_id, detalle)
@@ -558,7 +602,14 @@ router.post('/:id/devolucion', verificarToken, soloRoles('admin', 'almacen', 'al
            cantConsumida, totalConsumido, linea.detalle_id]
         )
       } else {
-        await client.query(`UPDATE etiquetas SET estado = 'EN_ALMACEN' WHERE id = $1`, [eid])
+        // Vuelve nuevo: las unidades se suman al mismo codigo. Si el codigo
+        // salio entero (SALIO) no tenia nada en almacen; si fue una salida
+        // parcial sigue EN_ALMACEN con el resto.
+        const stockActual = linea.estado === 'EN_ALMACEN' ? linea.stock_codigo : 0
+        await client.query(
+          `UPDATE etiquetas SET estado = 'EN_ALMACEN', cantidad = $1 WHERE id = $2`,
+          [Math.round((stockActual + linea.cantidad) * 1000) / 1000, eid]
+        )
 
         await client.query(
           `INSERT INTO etiqueta_historial (etiqueta_id, evento, almacen_destino_id, usuario_id, detalle)
@@ -589,8 +640,7 @@ router.post('/:id/devolucion', verificarToken, soloRoles('admin', 'almacen', 'al
 
     const pendientes = await client.query(`
       SELECT COUNT(*) FROM notas_salida_detalle d
-      JOIN etiquetas e ON d.etiqueta_id = e.id
-      WHERE d.nota_salida_id = $1 AND e.estado = 'SALIO'
+      WHERE d.nota_salida_id = $1 AND d.etiqueta_id IS NOT NULL AND d.devuelto_condicion IS NULL
     `, [req.params.id])
     const nuevoEstado = parseInt(pendientes.rows[0].count) === 0 ? 'DEVUELTO' : 'PENDIENTE'
 
@@ -736,22 +786,21 @@ router.put('/:id/lineas/:etiquetaId/devolucion-usada', verificarToken, soloRoles
 })
 
 // Registra que se reviso un codigo y todavia NO lo han devuelto: no cambia
-// ningun estado (la etiqueta sigue SALIO, la nota sigue PENDIENTE), solo
+// ningun estado (la linea sigue afuera, la nota sigue PENDIENTE), solo
 // queda anotado en la auditoria para seguimiento.
 router.post('/:id/lineas/:etiquetaId/no-devuelto', verificarToken, soloRoles('admin', 'almacen', 'almacenero'),
   log('MARCAR_NO_DEVUELTO', req => `Nota de salida id ${req.params.id}, etiqueta id ${req.params.etiquetaId}`),
   async (req, res) => {
   try {
     const linea = await pool.query(`
-      SELECT d.id, e.estado
+      SELECT d.id, d.devuelto_condicion
       FROM notas_salida_detalle d
-      JOIN etiquetas e ON d.etiqueta_id = e.id
       WHERE d.nota_salida_id = $1 AND d.etiqueta_id = $2
     `, [req.params.id, req.params.etiquetaId])
     if (linea.rows.length === 0) {
       return res.status(404).json({ error: 'Ese codigo no pertenece a esta nota de salida' })
     }
-    if (linea.rows[0].estado !== 'SALIO') {
+    if (linea.rows[0].devuelto_condicion) {
       return res.status(400).json({ error: 'Ese codigo no esta pendiente de devolucion' })
     }
     res.json({ ok: true })

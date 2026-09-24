@@ -1,15 +1,29 @@
 const { ajustarInventario } = require('./inventario')
 
-// Marca una etiqueta como salida del almacen: cambia estado, registra historial
-// y descuenta inventario. Usado por Notas de Salida normales y por la salida
-// automatica de guias hacia Compras Diarias (Bloque 6).
-async function marcarSalida(client, etiqueta, numeroNota, usuarioId) {
-  await client.query(`UPDATE etiquetas SET estado = 'SALIO' WHERE id = $1`, [etiqueta.id])
+const redondear = (n) => Math.round(Number(n) * 1000) / 1000
+
+// Marca la salida de una etiqueta: registra historial y descuenta inventario.
+// Usado por Notas de Salida normales y por la salida automatica de guias hacia
+// Compras Diarias (Bloque 6).
+// etiqueta.cantidad = lo que el codigo tiene HOY en almacen. cantidadSalida
+// (24/09, salida parcial) = lo que sale; por defecto todo. Si sale menos, el
+// codigo sigue EN_ALMACEN con el resto (etiquetas.cantidad); si sale todo pasa
+// a SALIO como siempre.
+async function marcarSalida(client, etiqueta, numeroNota, usuarioId, cantidadSalida = etiqueta.cantidad) {
+  const sale = redondear(cantidadSalida)
+  const resto = redondear(Number(etiqueta.cantidad) - sale)
+
+  if (resto > 0) {
+    await client.query(`UPDATE etiquetas SET cantidad = $1 WHERE id = $2`, [resto, etiqueta.id])
+  } else {
+    await client.query(`UPDATE etiquetas SET estado = 'SALIO' WHERE id = $1`, [etiqueta.id])
+  }
 
   await client.query(
     `INSERT INTO etiqueta_historial (etiqueta_id, evento, almacen_origen_id, usuario_id, detalle)
      VALUES ($1, 'SALIO', $2, $3, $4)`,
-    [etiqueta.id, etiqueta.almacen_id, usuarioId, `Nota de salida ${numeroNota}`]
+    [etiqueta.id, etiqueta.almacen_id, usuarioId,
+     `Nota de salida ${numeroNota}${resto > 0 ? ` (salieron ${sale}, quedan ${resto})` : ''}`]
   )
 
   // Un codigo USADO (devolucion) tiene su stock en el bucket DEVOLUCION; al
@@ -17,9 +31,25 @@ async function marcarSalida(client, etiqueta, numeroNota, usuarioId) {
   await ajustarInventario(client, {
     almacenId: etiqueta.almacen_id,
     productoId: etiqueta.producto_id,
-    delta: -etiqueta.cantidad,
+    delta: -sale,
     tipo: etiqueta.condicion === 'USADO' ? 'DEVOLUCION' : 'NUEVO',
   })
+}
+
+// Lineas de notas de salida de este codigo que siguen AFUERA: nota PENDIENTE de
+// devolucion y linea sin devolver. Con la salida parcial un codigo puede estar
+// EN_ALMACEN y a la vez tener unidades afuera en una o varias notas, asi que
+// "pendiente" se decide por linea, no por el estado del codigo.
+async function lineasAfuera(client, etiquetaId, exceptoDetalleId = null) {
+  const r = await client.query(
+    `SELECT COUNT(*)::int AS n
+     FROM notas_salida_detalle d
+     JOIN notas_salida n ON n.id = d.nota_salida_id
+     WHERE d.etiqueta_id = $1 AND d.devuelto_condicion IS NULL
+       AND n.estado = 'PENDIENTE' AND d.id IS DISTINCT FROM $2::int`,
+    [etiquetaId, exceptoDetalleId]
+  )
+  return r.rows[0].n
 }
 
 // Crea una Nota de Salida ya CERRADA (sin devolucion) para UNA O VARIAS
@@ -77,4 +107,4 @@ async function crearNotaSalidaServicios(client, { guiaId, servicios, usuarioId, 
   return nota
 }
 
-module.exports = { marcarSalida, crearNotaSalidaAutomatica, crearNotaSalidaServicios }
+module.exports = { marcarSalida, lineasAfuera, crearNotaSalidaAutomatica, crearNotaSalidaServicios }

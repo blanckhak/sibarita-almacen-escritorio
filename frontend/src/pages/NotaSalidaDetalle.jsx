@@ -399,7 +399,9 @@ export default function NotaSalidaDetalle() {
                 <tr key={d.id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                   {puedeGestionar && nota.estado === 'PENDIENTE' && (
                     <td className="px-4 py-3">
-                      {d.etiqueta_estado === 'SALIO' && (
+                      {/* Pendiente por LINEA (salida parcial: el codigo puede
+                          seguir EN_ALMACEN con el resto). */}
+                      {d.etiqueta_id && !d.devuelto_condicion && (
                         <div className="flex gap-1.5">
                           <button
                             type="button"
@@ -444,7 +446,20 @@ export default function NotaSalidaDetalle() {
                     {textoStock(d.stock_agregado_actual, d.codigos_disponibles_actual)}
                   </td>
                   <td className="px-6 py-3">
-                    <span className={`px-2 py-1 rounded-full text-xs font-bold ${colorEtiquetaEstado(d.etiqueta_estado)}`}>{labelEtiquetaEstado(d.etiqueta_estado)}</span>
+                    {(() => {
+                      // Linea que salio y no volvio: se muestra SALIDA aunque el
+                      // codigo siga EN_ALMACEN con el resto (salida parcial).
+                      const afuera = d.etiqueta_id && !d.devuelto_condicion && nota.fecha_salida
+                      const estado = afuera ? 'SALIO' : d.etiqueta_estado
+                      return (
+                        <>
+                          <span className={`px-2 py-1 rounded-full text-xs font-bold ${colorEtiquetaEstado(estado)}`}>{labelEtiquetaEstado(estado)}</span>
+                          {afuera && d.stock_codigo > 0 && (
+                            <span className="block text-xs text-gray-500 mt-1">quedan {fmtCantidad(d.stock_codigo)} en almacen</span>
+                          )}
+                        </>
+                      )
+                    })()}
                     {d.devuelto_condicion && (
                       <div className={`text-xs mt-1 font-medium ${d.devuelto_condicion === 'USADO' ? 'text-amber-700' : 'text-green-700'}`}>
                         Devuelta {d.devuelto_condicion === 'USADO' ? 'usada' : 'nueva'}

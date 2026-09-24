@@ -822,6 +822,18 @@ router.put('/:id', verificarToken, soloRoles('admin', 'almacen', 'almacenero'),
         return res.status(409).json({ error: `No se puede cambiar la cantidad de la linea "${l.etiqueta_codigo}": tiene una devolucion USADA asociada` })
       }
 
+      // Salida parcial (24/09): si el codigo ya salio en parte (sigue
+      // EN_ALMACEN con el resto), su cantidad en etiquetas ya no es la de la
+      // guia; cambiarla aca descuadraria el stock. Se bloquea igual que una
+      // salida completa.
+      if (l.etiqueta_id) {
+        const enNota = await client.query('SELECT 1 FROM notas_salida_detalle WHERE etiqueta_id = $1 LIMIT 1', [l.etiqueta_id])
+        if (enNota.rows.length > 0) {
+          await client.query('ROLLBACK')
+          return res.status(409).json({ error: `No se puede cambiar la cantidad de la linea "${l.etiqueta_codigo}": ese codigo ya tiene salidas registradas` })
+        }
+      }
+
       await client.query('UPDATE guia_items SET cantidad = $1 WHERE id = $2', [nuevaCantidad, l.id])
 
       // Solo las lineas con etiqueta EN_ALMACEN movieron inventario al
