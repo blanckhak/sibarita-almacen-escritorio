@@ -1036,9 +1036,18 @@ export default function GuiaDetalle() {
                             </>
                           )}
                         </td>
-                        <td className="py-1 text-center border-l border-gray-400 align-top">{r && !r.esContinuacion ? `${fmtCantidad(r.cantidad)}${r.unidad_medida_abreviatura ? ` ${r.unidad_medida_abreviatura}` : ''}` : ''}</td>
+                        {/* La guia no lleva precio: en el talonario la columna
+                            preimpresa "P. UNIT." se usa para la UNIDAD (U, KG,
+                            ROLLO...) y CANTIDAD lleva solo el numero (pedido del
+                            usuario 24/09). Sin esa columna, la unidad vuelve a ir
+                            junto a la cantidad. */}
+                        <td className="py-1 text-center border-l border-gray-400 align-top">
+                          {r && !r.esContinuacion
+                            ? `${fmtCantidad(r.cantidad)}${!pI.mostrar_precio && r.unidad_medida_abreviatura ? ` ${r.unidad_medida_abreviatura}` : ''}`
+                            : ''}
+                        </td>
                         {pI.mostrar_precio && <>
-                          <td className="py-1 border-l border-gray-400 align-top">&nbsp;</td>
+                          <td className="py-1 text-center border-l border-gray-400 align-top">{r && !r.esContinuacion ? (r.unidad_medida_abreviatura || '') : ''}</td>
                           <td className="py-1 border-l border-gray-400 align-top">&nbsp;</td>
                         </>}
                       </tr>
