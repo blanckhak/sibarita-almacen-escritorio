@@ -19,7 +19,7 @@ const sumaPartidas = (partidas) => sumarCantidades((partidas || []).map(p => p.c
 
 export default function Guias() {
   const { usuario } = useAuth()
-  const { periodoSel } = usePeriodo()
+  const { paramsPeriodo } = usePeriodo()
   const [guias, setGuias]         = useState([])
   const [almacenes, setAlmacenes] = useState([])
   const [productos, setProductos] = useState([])
@@ -50,7 +50,7 @@ export default function Guias() {
   const cargarDatos = async () => {
     const [g, a, p, u, inv] = await Promise.all([
       // Sin filtro de periodo visible (almaceneros, etc.) se ven los 3 almacenes.
-      api.get('/api/guias', { params: periodoSel && puedeVerPeriodos(usuario) ? { periodo_id: periodoSel } : {} }),
+      api.get('/api/guias', { params: puedeVerPeriodos(usuario) ? paramsPeriodo : {} }),
       api.get('/api/almacenes'),
       api.get('/api/productos'),
       api.get('/api/unidades-medida'),
@@ -79,7 +79,7 @@ export default function Guias() {
     return { total, porAlmacen, enEsteAlmacen }
   }
 
-  useEffect(() => { cargarDatos() }, [periodoSel])
+  useEffect(() => { cargarDatos() }, [paramsPeriodo.periodo_id])
 
   const abrirNuevo = () => {
     setForm({ numero_guia: '', tipo_documento: 'GUIA', almacen_id: '', fecha: hoy(), proveedor: '', numero_oc: '', direccion: '', guia_remision: '', factura: '', observaciones: '', items: [LINEA_VACIA()] })

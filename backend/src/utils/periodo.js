@@ -9,4 +9,14 @@ async function periodoCerrado(clientOrPool, periodoId) {
   return r.rows[0]?.estado === 'CERRADO'
 }
 
-module.exports = { periodoCerrado }
+// ?periodo_id=5 o ?periodo_id=5,10,15 (el mismo periodo en los 3 almacenes).
+// Devuelve el arreglo de ids para usar con `= ANY($n::int[])`, o null si no
+// vino o no es valido (en ese caso no se filtra por periodo).
+function idsPeriodo(valor) {
+  if (!valor) return null
+  const ids = String(valor).split(',').map(s => s.trim()).filter(Boolean)
+  if (ids.length === 0 || !ids.every(s => /^\d+$/.test(s))) return null
+  return ids.map(Number)
+}
+
+module.exports = { periodoCerrado, idsPeriodo }

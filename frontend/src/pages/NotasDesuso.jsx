@@ -13,13 +13,13 @@ const colorEstado = {
 
 const LINEA_VACIA = { descripcion: '', cantidad: '', unidad_medida_id: '', area_maquina: '' }
 const FORM_VACIO = {
-  seccion: '', persona_responsable: '', nota_salida_ref: '', observaciones: '',
+  seccion: '', persona_responsable: '', nota_salida_ref: '', observaciones: '', almacen_id: '',
   lineas: [{ ...LINEA_VACIA }],
 }
 
 export default function NotasDesuso() {
   const { usuario } = useAuth()
-  const { almacenes, almacenSel, periodoSel } = usePeriodo()
+  const { almacenes, almacenSel, paramsPeriodo } = usePeriodo()
   const [notas, setNotas]         = useState([])
   const [cargando, setCargando]   = useState(true)
   const [mostrarForm, setMostrarForm] = useState(false)
@@ -32,16 +32,19 @@ export default function NotasDesuso() {
 
   const cargarNotas = () => {
     // Sin filtro de periodo visible (almaceneros, etc.) se ven los 3 almacenes.
-    api.get('/api/notas-desuso', { params: periodoSel && puedeVerPeriodos(usuario) ? { periodo_id: periodoSel } : {} })
+    api.get('/api/notas-desuso', { params: puedeVerPeriodos(usuario) ? paramsPeriodo : {} })
       .then(res => { setNotas(res.data); setCargando(false) })
       .catch(() => setCargando(false))
   }
 
-  useEffect(() => { cargarNotas() }, [periodoSel])
+  useEffect(() => { cargarNotas() }, [paramsPeriodo.periodo_id])
   useEffect(() => { api.get('/api/unidades-medida').then(res => setUnidades(res.data)).catch(() => {}) }, [])
 
+  // Almacen de la nota nueva: el elegido en el filtro, si no el del usuario;
+  // si no hay ninguno se elige en el formulario.
   const abrirNuevo = () => {
-    setForm(FORM_VACIO)
+    const delUsuario = almacenes.find(a => a.nombre === usuario?.almacen)
+    setForm({ ...FORM_VACIO, almacen_id: almacenSel || (delUsuario ? String(delUsuario.id) : '') })
     setMostrarForm(true)
   }
 
@@ -66,7 +69,7 @@ export default function NotasDesuso() {
         seccion: form.seccion,
         persona_responsable: form.persona_responsable,
         nota_salida_ref: form.nota_salida_ref,
-        almacen_id: almacenSel,
+        almacen_id: form.almacen_id,
         observaciones: form.observaciones,
         lineas: lineasValidas.map(l => ({
           descripcion: l.descripcion,
@@ -108,7 +111,7 @@ export default function NotasDesuso() {
       {puedeVerPeriodos(usuario) && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 px-4 py-3 mb-6">
           <PeriodoFiltro />
-          <p className="text-xs text-gray-400 mt-1.5">La lista de abajo muestra las notas de este periodo. El alta nueva entra en el almacen elegido arriba.</p>
+          <p className="text-xs text-gray-400 mt-1.5">La lista de abajo muestra las notas de este periodo. El alta siempre entra en el periodo activo del almacen.</p>
         </div>
       )}
 
@@ -124,12 +127,23 @@ export default function NotasDesuso() {
 
       {mostrarForm && (
         <div className="bg-white rounded-xl shadow-md p-6 mb-6 border border-blue-100">
-          <h2 className="text-lg font-semibold text-gray-700 mb-1">Nueva Nota de Desuso</h2>
-          <p className="text-sm text-gray-500 mb-4">
-            Almacen: <b>{almacenes.find(a => String(a.id) === String(almacenSel))?.nombre || '—'}</b> {puedeVerPeriodos(usuario) && '(cambialo arriba en "Periodo" si no es el correcto)'}
-          </p>
+          <h2 className="text-lg font-semibold text-gray-700 mb-4">Nueva Nota de Desuso</h2>
           <form onSubmit={handleSubmit}>
             <div className="grid grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">Almacen</label>
+                <select
+                  required
+                  value={form.almacen_id}
+                  onChange={e => setForm({ ...form, almacen_id: e.target.value })}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Seleccionar...</option>
+                  {almacenes.map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}
+                </select>
+              </div>
+              <div />
+
               <div>
                 <label className="block text-sm font-medium text-gray-600 mb-1">Seccion</label>
                 <input

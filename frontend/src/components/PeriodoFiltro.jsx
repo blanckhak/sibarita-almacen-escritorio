@@ -1,8 +1,8 @@
 import { usePeriodo } from '../context/PeriodoContext'
 
 // Fase 16: el selector de periodo salio del navbar. Ahora vive dentro de las
-// pantallas que filtran por periodo (Guias, Notas de Salida). Elige almacen +
-// periodo para VER; el alta siempre entra en el periodo activo (lo decide el
+// pantallas que filtran por periodo (Guias, Notas de Salida). Elige almacen
+// (por defecto los 3) + periodo para VER; el alta siempre entra en el periodo activo (lo decide el
 // backend). El hub para abrir/cerrar/ver productos es la pantalla Periodos.
 export default function PeriodoFiltro({ className = '' }) {
   const {
@@ -19,6 +19,7 @@ export default function PeriodoFiltro({ className = '' }) {
         onChange={e => setAlmacenSel(e.target.value)}
         className="border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
       >
+        <option value="">Todos los almacenes</option>
         {almacenes.map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}
       </select>
       <select
@@ -27,9 +28,9 @@ export default function PeriodoFiltro({ className = '' }) {
         className="border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 max-w-[220px]"
       >
         {periodosDelAlmacen.length === 0 && <option value="">Sin periodos</option>}
-        {periodosDelAlmacen.map(p => (
-          <option key={p.id} value={p.id}>
-            {p.nombre}{p.estado === 'ACTIVO' ? ' (activo)' : ''}
+        {periodosDelAlmacen.map(o => (
+          <option key={o.value} value={o.value}>
+            {o.nombre}{o.activo ? ' (activo)' : ''}
           </option>
         ))}
       </select>

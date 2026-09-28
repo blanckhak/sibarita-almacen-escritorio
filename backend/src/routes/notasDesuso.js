@@ -4,7 +4,7 @@ const pool = require('../config/db')
 const { verificarToken, soloRoles } = require('../middlewares/authMiddleware')
 const { validarLargos } = require('../utils/texto')
 const { mensajeConcurrencia } = require('../utils/dbErrores')
-const { periodoCerrado } = require('../utils/periodo')
+const { periodoCerrado, idsPeriodo } = require('../utils/periodo')
 const log = require('../middlewares/logMiddleware')
 const { perfilSql } = require('../utils/perfil')
 
@@ -23,9 +23,10 @@ router.get('/', verificarToken, async (req, res) => {
     valores.push(estado)
     condiciones.push(`n.estado = $${valores.length}`)
   }
-  if (periodo_id) {
-    valores.push(periodo_id)
-    condiciones.push(`n.periodo_id = $${valores.length}`)
+  const periodos = idsPeriodo(periodo_id)
+  if (periodos) {
+    valores.push(periodos)
+    condiciones.push(`n.periodo_id = ANY($${valores.length}::int[])`)
   }
   if (almacen_id) {
     valores.push(almacen_id)

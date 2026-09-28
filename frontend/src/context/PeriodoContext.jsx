@@ -2,9 +2,9 @@ import { createContext, useContext, useEffect, useMemo, useState, useCallback } 
 import api from '../utils/api'
 import { useAuth } from './AuthContext'
 
-// Fase 14 (R7-a): periodo seleccionado para VER (por almacen). El periodo
-// activo de cada almacen es el default. Las pantallas de listado filtran por
-// periodoSel; el alta siempre entra en el periodo activo (lo decide el backend).
+// Fase 14 (R7-a): periodo seleccionado para VER. Por defecto se ven los 3
+// almacenes juntos en su periodo activo. Las pantallas de listado filtran con
+// paramsPeriodo; el alta siempre entra en el periodo activo (lo decide el backend).
 const PeriodoContext = createContext(null)
 
 export function PeriodoProvider({ children }) {
@@ -27,34 +27,45 @@ export function PeriodoProvider({ children }) {
 
   useEffect(() => { if (usuario) recargarPeriodos() }, [usuario, recargarPeriodos])
 
-  // Default de almacen: el del usuario, si no el primero con periodos.
-  useEffect(() => {
-    if (almacenSel || periodos.length === 0) return
-    const delUsuario = periodos.find(p => usuario?.almacen && p.almacen_nombre === usuario.almacen)
-    setAlmacenSel(String((delUsuario || periodos[0]).almacen_id))
-  }, [periodos, usuario, almacenSel])
+  // almacenSel '' = los 3 almacenes (default): un periodo se ve en todos los
+  // almacenes a la vez. Las opciones son los nombres de periodo ("Periodo 5")
+  // y cada una junta los ids de ese periodo en cada almacen. Con un almacen
+  // elegido, las opciones son sus periodos, como antes.
+  // Cada opcion: { value, nombre, activo, ids }.
+  const periodosDelAlmacen = useMemo(() => {
+    if (almacenSel) {
+      return periodos
+        .filter(p => String(p.almacen_id) === String(almacenSel))
+        .map(p => ({ value: String(p.id), nombre: p.nombre, activo: p.estado === 'ACTIVO', ids: [p.id] }))
+    }
+    const porNombre = new Map()
+    for (const p of periodos) { // vienen ordenados por fecha_inicio DESC dentro de cada almacen
+      const o = porNombre.get(p.nombre) || { value: `n:${p.nombre}`, nombre: p.nombre, activo: false, ids: [], inicio: p.fecha_inicio }
+      o.ids.push(p.id)
+      if (p.estado === 'ACTIVO') o.activo = true
+      if (p.fecha_inicio > o.inicio) o.inicio = p.fecha_inicio
+      porNombre.set(p.nombre, o)
+    }
+    return [...porNombre.values()].sort((a, b) => String(b.inicio).localeCompare(String(a.inicio)))
+  }, [periodos, almacenSel])
 
-  const periodosDelAlmacen = useMemo(
-    () => periodos.filter(p => String(p.almacen_id) === String(almacenSel)),
-    [periodos, almacenSel]
-  )
-
-  // Default de periodo: el ACTIVO del almacen elegido.
+  // Default de periodo: el ACTIVO (con los 3 almacenes, el nombre activo mas nuevo).
   useEffect(() => {
-    if (!almacenSel) return
-    const enLista = periodosDelAlmacen.some(p => String(p.id) === String(periodoSel))
+    const enLista = periodosDelAlmacen.some(o => o.value === periodoSel)
     if (enLista) return
-    const activo = periodosDelAlmacen.find(p => p.estado === 'ACTIVO')
-    setPeriodoSel(activo ? String(activo.id) : (periodosDelAlmacen[0] ? String(periodosDelAlmacen[0].id) : ''))
-  }, [almacenSel, periodosDelAlmacen, periodoSel])
+    const activo = periodosDelAlmacen.find(o => o.activo)
+    setPeriodoSel(activo ? activo.value : (periodosDelAlmacen[0]?.value || ''))
+  }, [periodosDelAlmacen, periodoSel])
 
-  const periodoActual = periodos.find(p => String(p.id) === String(periodoSel)) || null
+  // Parametro para los listados: ?periodo_id=5 o ?periodo_id=5,10,15.
+  const opcionSel = periodosDelAlmacen.find(o => o.value === periodoSel) || null
+  const paramsPeriodo = opcionSel ? { periodo_id: opcionSel.ids.join(',') } : {}
 
   const value = {
     periodos, almacenes, periodosDelAlmacen,
     almacenSel, setAlmacenSel,
     periodoSel, setPeriodoSel,
-    periodoActual,
+    paramsPeriodo,
     recargarPeriodos,
   }
   return <PeriodoContext.Provider value={value}>{children}</PeriodoContext.Provider>

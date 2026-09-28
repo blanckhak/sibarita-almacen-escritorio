@@ -45,18 +45,18 @@ export default function NotasSalida() {
 
   const puedeRegistrar = ['admin', 'almacen', 'almacenero'].includes(usuario?.rol)
   const esAdmin = usuario?.rol === 'admin'
-  const { periodoSel } = usePeriodo()
+  const { paramsPeriodo } = usePeriodo()
 
   const cargarNotas = () => {
     // Sin filtro de periodo visible (almaceneros, etc.) se ven los 3 almacenes.
-    api.get('/api/notas-salida', { params: periodoSel && puedeVerPeriodos(usuario) ? { periodo_id: periodoSel } : {} })
+    api.get('/api/notas-salida', { params: puedeVerPeriodos(usuario) ? paramsPeriodo : {} })
       .then(res => { setNotas(res.data); setCargando(false) })
       .catch(() => setCargando(false))
   }
 
   useEffect(() => {
     cargarNotas()
-  }, [periodoSel])
+  }, [paramsPeriodo.periodo_id])
 
   useEffect(() => {
     if (esAdmin) {
