@@ -111,3 +111,4 @@ Bloqueada hasta tener la respuesta de la Fase 3. Las tareas se definen con esa r
 | 24/09/2026 | 4 | Seguridad para producción: modos desarrollo/producción, contraseñas, sesión que se cierra al salir, clave de sesión por servidor, marca Sibarita, instalador 1.17.0 | `22df926` |
 | 24/09/2026 | — | Arranque ~2 s → ~1 s. Rol `almacenero3` → `almacenero` (Almacenero 1, 2 y 3). **Periodos solo para admin y almacén** | `b4445af`, `6616b23`, `3ac4802`, (bump 1.17.1) |
 | 24/09/2026 | — | Impresion: unidad en P. UNIT. y sin precios en Nota de Salida ni devolucion (el precio queda como dato interno). **Salida parcial** (el mismo codigo queda en almacen con el resto). Registrado por = perfil. Borrar alertas (cualquier perfil). Instalador 1.17.2 | `9f2ac64`..`bf78c95`, (bump) |
+| 28/09/2026 | — | Guias, Notas de Salida y Notas de Desuso: los perfiles sin filtro de periodo ven los 3 almacenes (antes solo MALSA). Instalador 1.17.3 | (este commit y el anterior) |
