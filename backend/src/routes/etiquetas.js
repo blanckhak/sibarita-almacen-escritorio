@@ -115,9 +115,9 @@ router.get('/:id', verificarToken, async (req, res) => {
       FROM etiquetas e
       LEFT JOIN productos p ON e.producto_id = p.id
       LEFT JOIN unidades_medida um ON p.unidad_medida_id = um.id
-      LEFT JOIN unidades_medida umgi ON gi.unidad_medida_id = umgi.id
       JOIN almacenes a ON e.almacen_id = a.id
       JOIN guia_items gi ON e.guia_item_id = gi.id
+      LEFT JOIN unidades_medida umgi ON gi.unidad_medida_id = umgi.id
       JOIN guias g ON gi.guia_id = g.id
       WHERE e.id = $1
     `, [req.params.id])
