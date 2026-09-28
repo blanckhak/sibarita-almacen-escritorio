@@ -31,7 +31,8 @@ export default function NotasDesuso() {
   const puedeRegistrar = ['admin', 'almacen', 'almacenero'].includes(usuario?.rol)
 
   const cargarNotas = () => {
-    api.get('/api/notas-desuso', { params: periodoSel ? { periodo_id: periodoSel } : {} })
+    // Sin filtro de periodo visible (almaceneros, etc.) se ven los 3 almacenes.
+    api.get('/api/notas-desuso', { params: periodoSel && puedeVerPeriodos(usuario) ? { periodo_id: periodoSel } : {} })
       .then(res => { setNotas(res.data); setCargando(false) })
       .catch(() => setCargando(false))
   }
