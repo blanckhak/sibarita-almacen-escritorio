@@ -32,8 +32,6 @@ export function exportarKardexPdf({ almacen, filas, filtro = '', usuario = '' })
   doc.text(`KARDEX DE REPUESTOS — ${almacen}`, ancho - 14, 13, { align: 'right' })
 
   // Datos del reporte
-  const activos = filas.filter(f => f.estado_guia !== 'ANULADA')
-  const saldo = activos.reduce((s, f) => s + (Number(f.saldo) || 0), 0)
   const meta = [
     ['Almacen:', almacen],
     ['Generado:', ahora],
@@ -48,7 +46,7 @@ export function exportarKardexPdf({ almacen, filas, filtro = '', usuario = '' })
     doc.setFont('helvetica', 'normal'); doc.text(String(v), 34, y, { maxWidth: 150 })
   })
   // Resumen a la derecha
-  const resumen = [['Codigos', filas.length], ['Ingresos', filas.filter(f => f.tipo === 'INGRESO').length], ['Devoluciones', filas.filter(f => f.tipo === 'DEVOLUCION').length], ['Saldo total', num(saldo)]]
+  const resumen = [['Codigos', filas.length], ['Ingresos', filas.filter(f => f.tipo === 'INGRESO').length], ['Devoluciones', filas.filter(f => f.tipo === 'DEVOLUCION').length]]
   resumen.forEach(([k, v], i) => {
     const y = 27 + i * 5
     doc.setFont('helvetica', 'normal'); doc.text(k, ancho - 60, y)

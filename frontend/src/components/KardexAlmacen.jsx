@@ -142,7 +142,6 @@ export default function KardexAlmacen({ almacen, onCerrar }) {
   }
 
   const limpiar = () => { setBusqueda(''); setDesde(''); setHasta(''); setTipo('') }
-  const totalSaldo = visibles.reduce((s, f) => s + (f.estado_guia === 'ANULADA' ? 0 : f.saldo), 0)
 
   return (
     <div ref={panel} className="bg-white rounded-xl shadow-md border border-blue-100 mb-10 overflow-hidden scroll-mt-4">
@@ -221,10 +220,6 @@ export default function KardexAlmacen({ almacen, onCerrar }) {
             {hayFiltro && (
               <button onClick={limpiar} className="text-sm text-blue-700 hover:underline py-2">Limpiar filtros</button>
             )}
-            <div className="ml-auto text-right">
-              <p className="text-xs text-gray-500">Saldo {hayFiltro ? 'filtrado' : 'total'}</p>
-              <p className="text-lg font-bold text-blue-800 leading-tight">{num(totalSaldo)}</p>
-            </div>
           </div>
 
           <div className="overflow-auto max-h-[65vh]">
