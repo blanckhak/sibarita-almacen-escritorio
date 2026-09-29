@@ -53,32 +53,55 @@ export function exportarKardexPdf({ almacen, filas, filtro = '', usuario = '' })
     doc.setFont('helvetica', 'bold'); doc.text(String(v), ancho - 14, y, { align: 'right' })
   })
 
-  const head = [['Codigo', 'Ubicac.', 'Fecha', 'N/I', 'O/C N° Ext.', 'Doc / N°', 'Proveedor', 'Detalle', 'Maquina - Motivo', 'Unid.', 'Tipo', 'Cant.', 'TTL / S', 'Saldo']]
-  const body = filas.map(f => [
-    f.codigo, f.ubicac || '', fechaCorta(f.fecha), f.ni || '', f.oc_externa || '',
-    [f.doc, f.nro_doc].filter(Boolean).join(' '), f.proveedor || '',
-    (f.estado_guia === 'ANULADA' ? 'ANULADA - ' : '') + (f.detalle || ''),
-    f.motivo || '', f.unid_med || '', f.tipo,
-    num(f.cantidad), f.ttl_s ? num(f.ttl_s) : '-', num(f.saldo),
-  ])
+  // Salidas en pares N° GUIA | CANT., tantos como tenga el codigo con mas
+  // salidas; al final TTL / S y SALDO PENDIENTE.
+  const nPares = Math.max(1, ...filas.map(f => (f.salidas || []).length))
+  const pares = []
+  for (let j = 1; j <= nPares; j++) pares.push(`N° Guia ${j}`, 'Cant.')
+  const head = [['Codigo', 'Ubicac.', 'Fecha', 'N/I', 'O/C N° Ext.', 'Doc / N°', 'Proveedor', 'Detalle', 'Maquina - Motivo', 'Unid.', 'Tipo', 'Cant.', ...pares, 'TTL / S', 'Saldo pend.']]
+  const body = filas.map(f => {
+    const salidas = []
+    for (let j = 0; j < nPares; j++) {
+      const s = f.salidas?.[j]
+      salidas.push(s ? s.guia : '', s ? num(s.cant) : '')
+    }
+    return [
+      f.codigo, f.ubicac || '', fechaCorta(f.fecha), f.ni || '', f.oc_externa || '',
+      [f.doc, f.nro_doc].filter(Boolean).join(' '), f.proveedor || '',
+      (f.estado_guia === 'ANULADA' ? 'ANULADA - ' : '') + (f.detalle || ''),
+      f.motivo || '', f.unid_med || '', f.tipo, num(f.cantidad),
+      ...salidas,
+      f.ttl_s ? num(f.ttl_s) : '-', num(f.saldo),
+    ]
+  })
+
+  // Con muchas salidas la tabla crece a lo ancho: se achica la letra y
+  // Proveedor/Detalle dejan de tener ancho fijo.
+  const apretado = nPares > 2
+  const colPares = {}
+  for (let j = 0; j < nPares; j++) {
+    colPares[12 + j * 2] = { fontStyle: 'bold' }
+    colPares[13 + j * 2] = { halign: 'right', textColor: [220, 38, 38] }
+  }
+  const iTtl = 12 + nPares * 2
 
   autoTable(doc, {
     startY: 50,
     head,
     body,
     theme: 'grid',
-    styles: { fontSize: 7, cellPadding: 1.2, overflow: 'linebreak', lineColor: [203, 213, 225], lineWidth: 0.1 },
+    styles: { fontSize: apretado ? 5.5 : 7, cellPadding: apretado ? 0.8 : 1.2, overflow: 'linebreak', lineColor: [203, 213, 225], lineWidth: 0.1 },
     headStyles: { fillColor: AZUL, textColor: 255, fontStyle: 'bold', halign: 'center', valign: 'middle' },
     alternateRowStyles: { fillColor: [241, 245, 249] },
     columnStyles: {
-      0: { fontStyle: 'bold', cellWidth: 16 },
-      2: { cellWidth: 15 },
-      6: { cellWidth: 30 },
-      7: { cellWidth: 48 },
-      10: { halign: 'center', cellWidth: 19 },
+      0: { fontStyle: 'bold', cellWidth: apretado ? 12 : 16 },
+      2: { cellWidth: apretado ? 12 : 15 },
+      ...(apretado ? {} : { 6: { cellWidth: 30 }, 7: { cellWidth: 48 } }),
+      10: { halign: 'center', cellWidth: apretado ? 15 : 19 },
       11: { halign: 'right' },
-      12: { halign: 'right', textColor: [220, 38, 38] },
-      13: { halign: 'right', fontStyle: 'bold', fillColor: [219, 234, 254] },
+      ...colPares,
+      [iTtl]: { halign: 'right', textColor: [220, 38, 38], fontStyle: 'bold' },
+      [iTtl + 1]: { halign: 'right', fontStyle: 'bold', fillColor: [219, 234, 254] },
     },
     margin: { left: 8, right: 8, bottom: 14 },
     didParseCell: (d) => {

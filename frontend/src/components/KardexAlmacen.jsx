@@ -1,8 +1,9 @@
 // Vista de detalle del Kardex de UN almacen, que se abre bajo las tarjetas de
-// la pantalla Almacenes al hacer clic en una. Una fila por codigo (como el kardex fisico):
-// su ingreso, el total que salio (TTL / S) y el saldo. Clic en la fila
-// despliega cada salida con su N° de guia y fecha.
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+// la pantalla Almacenes al hacer clic en una. Una fila por codigo (como el
+// kardex fisico): su ingreso, cada salida en pares N° GUIA | CANT. (tantos
+// pares como tenga el codigo con mas salidas), el total que salio (TTL / S)
+// y el saldo pendiente.
+import { useEffect, useMemo, useRef, useState } from 'react'
 import api from '../utils/api'
 import { codigoAlmacen, claseCodigoAlmacen } from '../utils/colorAlmacen'
 import { useAuth } from '../context/AuthContext'
@@ -63,14 +64,13 @@ function useDebounce(valor, ms = 300) {
   return v
 }
 
-const COLS = ['Codigo', 'Ubicac.', 'Fecha', 'N/I', 'O/C N° Ext.', 'Doc / N°', 'Proveedor', 'Detalle', 'Maquina - Motivo', 'Unid.', 'Tipo', 'Cantidad', 'TTL / S', 'Saldo']
+const COLS_BASE = ['Codigo', 'Ubicac.', 'Fecha', 'N/I', 'O/C N° Ext.', 'Doc / N°', 'Proveedor', 'Detalle', 'Maquina - Motivo', 'Unid.', 'Tipo', 'Cantidad']
 
 export default function KardexAlmacen({ almacen, onCerrar }) {
   const { usuario } = useAuth()
   const [exportando, setExportando] = useState(null)
   const [filas, setFilas] = useState(null)
   const [error, setError] = useState(null)
-  const [abierta, setAbierta] = useState(null)
   const [limite, setLimite] = useState(POR_PAGINA)
   const [busqueda, setBusqueda] = useState('')
   const [desde, setDesde] = useState('')
@@ -81,7 +81,6 @@ export default function KardexAlmacen({ almacen, onCerrar }) {
   const panel = useRef(null)
 
   useEffect(() => {
-    setAbierta(null)
     setLimite(POR_PAGINA)
     setError(null)
     panel.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -114,7 +113,11 @@ export default function KardexAlmacen({ almacen, onCerrar }) {
     })
   }, [filas, busquedaDeb, desde, hasta, tipo])
 
-  useEffect(() => { setLimite(POR_PAGINA); setAbierta(null) }, [busquedaDeb, desde, hasta, tipo])
+  useEffect(() => { setLimite(POR_PAGINA) }, [busquedaDeb, desde, hasta, tipo])
+
+  // Pares N° GUIA | CANT.: tantos como salidas tenga el codigo que mas tiene.
+  const nPares = Math.max(1, ...visibles.map(f => (f.salidas || []).length))
+  const nCols = COLS_BASE.length + nPares * 2 + 2
 
   const hayFiltro = Boolean(busquedaDeb.trim() || desde || hasta || tipo)
   // Texto del filtro aplicado, para dejarlo escrito en el Excel/PDF.
@@ -225,18 +228,23 @@ export default function KardexAlmacen({ almacen, onCerrar }) {
           <div className="overflow-auto max-h-[65vh]">
             <table className="w-full text-xs whitespace-nowrap">
               <thead className="bg-gray-800 text-white sticky top-0 z-10">
-                <tr>{COLS.map(c => <th key={c} className="px-3 py-2 text-left font-semibold">{c}</th>)}</tr>
+                <tr>
+                  {COLS_BASE.map(c => <th key={c} className="px-3 py-2 text-left font-semibold">{c}</th>)}
+                  {Array.from({ length: nPares }).flatMap((_, j) => [
+                    <th key={`g${j}`} className="px-3 py-2 text-left font-semibold bg-red-900/60 border-l border-gray-600">N° Guia {j + 1}</th>,
+                    <th key={`c${j}`} className="px-3 py-2 text-right font-semibold bg-red-900/60">Cant.</th>,
+                  ])}
+                  <th className="px-3 py-2 text-right font-semibold border-l border-gray-600">TTL / S</th>
+                  <th className="px-3 py-2 text-right font-semibold bg-blue-900">Saldo pendiente</th>
+                </tr>
               </thead>
               <tbody>
                 {visibles.slice(0, limite).map((f, i) => {
-                  const clave = `${f.almacen}-${f.item}`
-                  const tieneSalidas = (f.salidas || []).length > 0
                   const anulada = f.estado_guia === 'ANULADA'
                   return (
-                    <Fragment key={clave}>
                       <tr
-                        onClick={() => tieneSalidas && setAbierta(abierta === clave ? null : clave)}
-                        className={`border-b border-gray-100 ${i % 2 ? 'bg-gray-50' : 'bg-white'} ${tieneSalidas ? 'cursor-pointer hover:bg-blue-50' : ''} ${anulada ? 'text-red-600 line-through' : 'text-gray-700'}`}
+                        key={`${f.almacen}-${f.item}`}
+                        className={`border-b border-gray-100 hover:bg-blue-50 ${i % 2 ? 'bg-gray-50' : 'bg-white'} ${anulada ? 'text-red-600 line-through' : 'text-gray-700'}`}
                       >
                         <td className="px-3 py-2">
                           <span className={`font-mono font-semibold px-1.5 py-0.5 rounded ${claseCodigoAlmacen(f.almacen)}`}>{f.codigo}</span>
@@ -252,30 +260,20 @@ export default function KardexAlmacen({ almacen, onCerrar }) {
                         <td className="px-3 py-2">{f.unid_med}</td>
                         <td className="px-3 py-2"><TagTipo tipo={f.tipo} /></td>
                         <td className="px-3 py-2 text-right">{num(f.cantidad)}</td>
-                        <td className="px-3 py-2 text-right text-red-600">
-                          {f.ttl_s ? num(f.ttl_s) : '-'}
-                          {tieneSalidas && <span className="ml-1 text-gray-400">{abierta === clave ? '▾' : '▸'}</span>}
-                        </td>
-                        <td className={`px-3 py-2 text-right font-bold ${f.saldo > 0 ? 'text-blue-800' : 'text-gray-400'}`}>{num(f.saldo)}</td>
+                        {Array.from({ length: nPares }).flatMap((_, j) => {
+                          const s = f.salidas?.[j]
+                          return [
+                            <td key={`g${j}`} className="px-3 py-2 border-l border-gray-100 font-medium" title={s ? `Salida ${fechaCorta(s.fecha)}` : undefined}>{s ? s.guia : ''}</td>,
+                            <td key={`c${j}`} className="px-3 py-2 text-right text-red-600">{s ? num(s.cant) : ''}</td>,
+                          ]
+                        })}
+                        <td className="px-3 py-2 text-right text-red-600 font-semibold border-l border-gray-100">{f.ttl_s ? num(f.ttl_s) : '-'}</td>
+                        <td className={`px-3 py-2 text-right font-bold bg-blue-50/60 ${f.saldo > 0 ? 'text-blue-800' : f.saldo < 0 ? 'text-red-600' : 'text-gray-400'}`}>{num(f.saldo)}</td>
                       </tr>
-                      {abierta === clave && f.salidas.map((s, j) => (
-                        <tr key={`${clave}-s${j}`} className="bg-red-50/40 text-gray-600 border-b border-red-100">
-                          <td colSpan={2} />
-                          <td className="px-3 py-1.5">{fechaCorta(s.fecha)}</td>
-                          <td colSpan={2} className="px-3 py-1.5">Nota de salida</td>
-                          <td className="px-3 py-1.5 font-semibold">N° {s.guia}</td>
-                          <td colSpan={4} />
-                          <td className="px-3 py-1.5"><TagTipo tipo="SALIDA" /></td>
-                          <td />
-                          <td className="px-3 py-1.5 text-right text-red-600">-{num(s.cant)}</td>
-                          <td />
-                        </tr>
-                      ))}
-                    </Fragment>
                   )
                 })}
                 {visibles.length === 0 && (
-                  <tr><td colSpan={COLS.length} className="text-center py-10 text-gray-400">
+                  <tr><td colSpan={nCols} className="text-center py-10 text-gray-400">
                     {hayFiltro ? 'Ningun codigo coincide con los filtros' : 'Sin movimientos'}
                   </td></tr>
                 )}

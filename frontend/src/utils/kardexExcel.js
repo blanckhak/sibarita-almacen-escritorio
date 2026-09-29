@@ -35,18 +35,20 @@ const COLUMNAS = [
   { titulo: 'INGRESO',          tipo: 'numero', campo: 'cantidad' },
 ]
 
-function hojaAlmacen(nombre, subtitulo, filas) {
-  const maxSalidas = Math.max(6, ...filas.map(f => (f.salidas || []).length))
+// minPares: el kardex general deja 6 pares minimo (como el talonario); el de
+// un almacen solo los que hagan falta.
+function hojaAlmacen(nombre, subtitulo, filas, minPares = 6) {
+  const maxSalidas = Math.max(minPares, ...filas.map(f => (f.salidas || []).length))
   const pares = []
   for (let i = 0; i < maxSalidas; i++) {
-    pares.push({ titulo: 'CANT.', tipo: 'numero', ancho: 7, valor: f => f.salidas?.[i]?.cant })
     pares.push({ titulo: `N° GUIA ${i + 1}`, tipo: 'texto', ancho: 11, valor: f => f.salidas?.[i]?.guia })
+    pares.push({ titulo: 'CANT.', tipo: 'numero', ancho: 7, valor: f => f.salidas?.[i]?.cant })
   }
   const columnas = [
     ...COLUMNAS,
     ...pares,
     { titulo: 'TTL / S', tipo: 'numero', valor: f => sumaSalidas(f.salidas) },
-    { titulo: 'SALDO',   tipo: 'numero', valor: f => (Number(f.cantidad) || 0) - sumaSalidas(f.salidas) },
+    { titulo: 'SALDO PENDIENTE', tipo: 'numero', valor: f => (Number(f.cantidad) || 0) - sumaSalidas(f.salidas) },
   ]
   return {
     nombre,
@@ -86,5 +88,5 @@ export async function generarKardexExcel(ingresos = [], devoluciones = []) {
 // filtros aplicados para que quede escrito en el archivo.
 export async function exportarKardexAlmacen(almacen, filas, filtro = '') {
   const sub = filtro ? `Filtro: ${filtro}` : 'Todos los codigos'
-  await descargarExcel(`Kardex_${almacen}_${fechaArchivo()}`, [hojaAlmacen(almacen, sub, filas)])
+  await descargarExcel(`Kardex_${almacen}_${fechaArchivo()}`, [hojaAlmacen(almacen, sub, filas, 1)])
 }
