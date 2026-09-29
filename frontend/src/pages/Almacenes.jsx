@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import api from '../utils/api'
 import { useAuth } from '../context/AuthContext'
+import KardexAlmacen from '../components/KardexAlmacen'
 
 export default function Almacenes() {
   const { usuario } = useAuth()
@@ -11,6 +12,8 @@ export default function Almacenes() {
   const [guardando, setGuardando]     = useState(false)
   const [mensaje, setMensaje]         = useState(null)
   const [form, setForm] = useState({ nombre: '', ubicacion: '' })
+  // Almacen cuya tarjeta se pulso: abre su Kardex debajo de las tarjetas.
+  const [almacenSel, setAlmacenSel]   = useState(null)
 
   const cargarAlmacenes = async () => {
     const res = await api.get('/api/almacenes')
@@ -60,7 +63,7 @@ export default function Almacenes() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-3xl font-bold text-gray-800">Almacenes</h1>
-          <p className="text-gray-500 mt-1">Gestion de almacenes del sistema</p>
+          <p className="text-gray-500 mt-1">Gestion de almacenes del sistema · pulsa un almacen para ver su kardex</p>
         </div>
         {esAdmin && (
           <button
@@ -122,9 +125,21 @@ export default function Almacenes() {
       {cargando ? (
         <div className="text-center py-12 text-gray-400">Cargando almacenes...</div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {almacenes.map(a => (
-            <div key={a.id} className="bg-white rounded-xl shadow-md p-6 border border-gray-100 hover:shadow-lg transition">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+          {almacenes.map(a => {
+            const sel = almacenSel === a.nombre
+            const alternar = () => setAlmacenSel(sel ? null : a.nombre)
+            return (
+            <div
+              key={a.id}
+              role="button"
+              tabIndex={0}
+              onClick={alternar}
+              onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), alternar())}
+              className={`bg-white rounded-xl shadow-md p-6 border cursor-pointer transition ${
+                sel ? 'border-blue-600 ring-2 ring-blue-500 shadow-lg' : 'border-gray-100 hover:shadow-lg hover:border-blue-300'
+              }`}
+            >
               <div className="flex items-start justify-between mb-3">
                 <div>
                   <h3 className="text-xl font-bold text-gray-800">{a.nombre}</h3>
@@ -132,21 +147,27 @@ export default function Almacenes() {
                 </div>
                 <span className="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-1 rounded-full">#{a.id}</span>
               </div>
-              <p className="text-xs text-gray-400 mb-4">
-                Creado: {new Date(a.creado_en).toLocaleDateString('es-GT')}
-              </p>
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-xs text-gray-400">
+                  Creado: {new Date(a.creado_en).toLocaleDateString('es-GT')}
+                </p>
+                <p className="text-xs font-medium text-blue-700">{sel ? 'Viendo kardex ▾' : 'Ver kardex ›'}</p>
+              </div>
               {esAdmin && (
                 <button
-                  onClick={() => abrirEditar(a)}
+                  onClick={e => { e.stopPropagation(); abrirEditar(a) }}
                   className="w-full text-sm border border-blue-200 text-blue-700 rounded-lg py-2 hover:bg-blue-50 transition"
                 >
                   Editar
                 </button>
               )}
             </div>
-          ))}
+            )
+          })}
         </div>
       )}
+
+      {almacenSel && <KardexAlmacen almacen={almacenSel} onCerrar={() => setAlmacenSel(null)} />}
     </div>
   )
 }

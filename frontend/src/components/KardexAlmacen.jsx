@@ -1,10 +1,12 @@
-// Vista de detalle del Kardex de UN almacen, que se abre bajo las tarjetas del
-// Dashboard al hacer clic en una. Una fila por codigo (como el kardex fisico):
+// Vista de detalle del Kardex de UN almacen, que se abre bajo las tarjetas de
+// la pantalla Almacenes al hacer clic en una. Una fila por codigo (como el kardex fisico):
 // su ingreso, el total que salio (TTL / S) y el saldo. Clic en la fila
 // despliega cada salida con su N° de guia y fecha.
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import api from '../utils/api'
 import { codigoAlmacen, claseCodigoAlmacen } from '../utils/colorAlmacen'
+import { useAuth } from '../context/AuthContext'
+import { exportarKardexAlmacen } from '../utils/kardexExcel'
 
 const POR_PAGINA = 200
 
@@ -64,6 +66,8 @@ function useDebounce(valor, ms = 300) {
 const COLS = ['Codigo', 'Ubicac.', 'Fecha', 'N/I', 'O/C N° Ext.', 'Doc / N°', 'Proveedor', 'Detalle', 'Maquina - Motivo', 'Unid.', 'Tipo', 'Cantidad', 'TTL / S', 'Saldo']
 
 export default function KardexAlmacen({ almacen, onCerrar }) {
+  const { usuario } = useAuth()
+  const [exportando, setExportando] = useState(null)
   const [filas, setFilas] = useState(null)
   const [error, setError] = useState(null)
   const [abierta, setAbierta] = useState(null)
@@ -113,6 +117,30 @@ export default function KardexAlmacen({ almacen, onCerrar }) {
   useEffect(() => { setLimite(POR_PAGINA); setAbierta(null) }, [busquedaDeb, desde, hasta, tipo])
 
   const hayFiltro = Boolean(busquedaDeb.trim() || desde || hasta || tipo)
+  // Texto del filtro aplicado, para dejarlo escrito en el Excel/PDF.
+  const descFiltro = [
+    busquedaDeb.trim() && `"${busquedaDeb.trim()}"`,
+    desde && `desde ${desde.split('-').reverse().join('/')}`,
+    hasta && `hasta ${hasta.split('-').reverse().join('/')}`,
+    tipo && `tipo ${tipo}`,
+  ].filter(Boolean).join(', ')
+
+  const exportar = async (formato) => {
+    setExportando(formato)
+    try {
+      if (formato === 'excel') await exportarKardexAlmacen(almacen, visibles, descFiltro)
+      else {
+        const { exportarKardexPdf } = await import('../utils/kardexPdf')
+        exportarKardexPdf({ almacen, filas: visibles, filtro: descFiltro, usuario: usuario?.nombre })
+      }
+    } catch (err) {
+      console.error('No se pudo exportar el kardex', err)
+      setError('No se pudo generar el archivo')
+    } finally {
+      setExportando(null)
+    }
+  }
+
   const limpiar = () => { setBusqueda(''); setDesde(''); setHasta(''); setTipo('') }
   const totalSaldo = visibles.reduce((s, f) => s + (f.estado_guia === 'ANULADA' ? 0 : f.saldo), 0)
 
@@ -128,9 +156,25 @@ export default function KardexAlmacen({ almacen, onCerrar }) {
               : `${filas.length.toLocaleString()} codigos`}
           </p>
         </div>
-        <button onClick={onCerrar} className="text-blue-100 hover:text-white text-sm border border-blue-400 rounded-lg px-3 py-1.5">
-          Cerrar ✕
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => exportar('excel')}
+            disabled={!filas || visibles.length === 0 || exportando}
+            className="bg-green-600 hover:bg-green-700 text-white text-sm px-4 py-1.5 rounded-lg font-medium transition disabled:opacity-50"
+          >
+            {exportando === 'excel' ? 'Generando...' : 'Exportar Excel'}
+          </button>
+          <button
+            onClick={() => exportar('pdf')}
+            disabled={!filas || visibles.length === 0 || exportando}
+            className="bg-red-600 hover:bg-red-700 text-white text-sm px-4 py-1.5 rounded-lg font-medium transition disabled:opacity-50"
+          >
+            {exportando === 'pdf' ? 'Generando...' : 'Exportar PDF'}
+          </button>
+          <button onClick={onCerrar} className="text-blue-100 hover:text-white text-sm border border-blue-400 rounded-lg px-3 py-1.5">
+            Cerrar ✕
+          </button>
+        </div>
       </div>
 
       {error && <div className="m-5 bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg text-sm">{error}</div>}

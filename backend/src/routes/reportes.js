@@ -82,7 +82,7 @@ router.get('/stock-sin-movimiento', verificarToken, async (req, res) => {
 // salidas por nota. Se separa en ingresos (codigos NUEVO) y devoluciones
 // (condicion USADO); el front arma el .xlsx con una hoja por almacen. Solo
 // cuenta salidas que ya salieron fisicamente (fecha_salida).
-// ?almacen=NOMBRE limita a un almacen (vista de detalle del Dashboard).
+// ?almacen=NOMBRE limita a un almacen (vista de detalle de Almacenes).
 router.get('/kardex', verificarToken, async (req, res) => {
   const { almacen } = req.query
   const val = almacen ? [almacen] : []

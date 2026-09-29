@@ -35,7 +35,7 @@ const COLUMNAS = [
   { titulo: 'INGRESO',          tipo: 'numero', campo: 'cantidad' },
 ]
 
-function hojaAlmacen(nombre, periodo, filas) {
+function hojaAlmacen(nombre, subtitulo, filas) {
   const maxSalidas = Math.max(6, ...filas.map(f => (f.salidas || []).length))
   const pares = []
   for (let i = 0; i < maxSalidas; i++) {
@@ -51,7 +51,7 @@ function hojaAlmacen(nombre, periodo, filas) {
   return {
     nombre,
     titulo: `INVENTARIO DE REPUESTO - ${nombre}`,
-    subtitulo: `PERIODO AL ${periodo}`,
+    subtitulo,
     columnas,
     filas,
     destacar: [columnas.length - 1],
@@ -76,7 +76,15 @@ export async function generarKardexExcel(ingresos = [], devoluciones = []) {
   const presentes = [...new Set(todas.map(f => f.almacen).filter(Boolean))]
   const extras = presentes.filter(n => !ALMACENES_ORDEN.includes(n)).sort()
   const hojas = [...ALMACENES_ORDEN, ...extras]
-    .map(nombre => hojaAlmacen(nombre, periodo, todas.filter(f => f.almacen === nombre)))
+    .map(nombre => hojaAlmacen(nombre, `PERIODO AL ${periodo}`, todas.filter(f => f.almacen === nombre)))
 
   await descargarExcel(`Kardex_almacenes_${fechaArchivo()}`, hojas)
+}
+
+// Kardex de UN almacen tal como se ve en pantalla (vista de detalle de
+// Almacenes): `filas` ya viene filtrada y con TIPO; `filtro` describe los
+// filtros aplicados para que quede escrito en el archivo.
+export async function exportarKardexAlmacen(almacen, filas, filtro = '') {
+  const sub = filtro ? `Filtro: ${filtro}` : 'Todos los codigos'
+  await descargarExcel(`Kardex_${almacen}_${fechaArchivo()}`, [hojaAlmacen(almacen, sub, filas)])
 }
