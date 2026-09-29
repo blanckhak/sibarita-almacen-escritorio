@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import api from '../utils/api'
-import { exportarCSV, exportarPDF } from '../utils/exportar'
+import { exportarExcel, exportarPDF } from '../utils/exportar'
 import { colorEtiquetaEstado, labelEtiquetaEstado } from '../utils/etiquetaEstados'
 import { claseCodigoAlmacen, codigoAlmacen } from '../utils/colorAlmacen'
 
@@ -80,7 +80,7 @@ export default function ConsultaProductos() {
         </div>
         <div className="flex gap-2">
           <button
-            onClick={() => exportarCSV(resultadosExport, columnasExport, 'consulta_productos')}
+            onClick={() => exportarExcel(resultadosExport, columnasExport, 'Consulta de Productos', 'consulta_productos')}
             className="bg-green-600 hover:bg-green-700 text-white text-sm px-4 py-2 rounded-lg transition"
           >
             Excel

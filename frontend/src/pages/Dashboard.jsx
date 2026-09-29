@@ -5,7 +5,7 @@ import {
   PieChart, Pie, Cell, ResponsiveContainer
 } from 'recharts'
 import TarjetaAlmacen from '../components/TarjetaAlmacen'
-import { exportarCSV, exportarPDF } from '../utils/exportar'
+import { exportarExcel, exportarPDF } from '../utils/exportar'
 
 const COLORES = ['#1d4ed8', '#16a34a', '#f97316']
 
@@ -57,7 +57,7 @@ export default function Dashboard() {
         {!cargando && !error && (
           <div className="flex gap-2">
             <button
-              onClick={() => exportarCSV(resumen, columnasExport, 'resumen_almacenes')}
+              onClick={() => exportarExcel(resumen, columnasExport, 'Resumen de Almacenes', 'resumen_almacenes', { totales: true })}
               className="bg-green-600 hover:bg-green-700 text-white text-sm px-4 py-2 rounded-lg transition flex items-center gap-2"
             >
               Exportar Excel

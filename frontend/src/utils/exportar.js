@@ -1,19 +1,17 @@
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import { descargarExcel, fechaArchivo } from './excelEstilo'
 
-export function exportarCSV(datos, columnas, nombreArchivo) {
-  const encabezado = columnas.map(c => c.titulo).join(',')
-  const filas = datos.map(fila =>
-    columnas.map(c => `"${fila[c.campo] ?? ''}"`).join(',')
-  )
-  const csv = [encabezado, ...filas].join('\n')
-  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
-  const url  = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = `${nombreArchivo}_${new Date().toLocaleDateString('es-GT').replace(/\//g, '-')}.csv`
-  link.click()
-  URL.revokeObjectURL(url)
+// Misma firma que exportarPDF. opciones.totales agrega una fila TOTAL con la
+// suma de las columnas numericas.
+export function exportarExcel(datos, columnas, titulo, nombreArchivo, opciones = {}) {
+  return descargarExcel(`${nombreArchivo}_${fechaArchivo()}`, [{
+    nombre: titulo,
+    titulo,
+    columnas,
+    filas: datos,
+    totales: opciones.totales,
+  }]).catch(err => console.error('No se pudo generar el Excel', err))
 }
 
 export function exportarPDF(datos, columnas, titulo, nombreArchivo) {

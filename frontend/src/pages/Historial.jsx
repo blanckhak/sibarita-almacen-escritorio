@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import api from '../utils/api'
-import { exportarCSV, exportarPDF } from '../utils/exportar'
+import { exportarExcel, exportarPDF } from '../utils/exportar'
 
 const colorAccion = {
   LOGIN:    'bg-blue-100 text-blue-700',
@@ -49,7 +49,7 @@ export default function Historial() {
         </div>
         <div className="flex gap-2">
           <button
-            onClick={() => exportarCSV(filtrado, columnas, 'historial')}
+            onClick={() => exportarExcel(filtrado, columnas, 'Historial de Actividad', 'historial')}
             className="bg-green-600 hover:bg-green-700 text-white text-sm px-4 py-2 rounded-lg transition"
           >
             Excel

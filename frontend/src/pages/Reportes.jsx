@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import api from '../utils/api'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import { exportarCSV, exportarPDF } from '../utils/exportar'
+import { exportarExcel, exportarPDF } from '../utils/exportar'
 import { generarKardexExcel } from '../utils/kardexExcel'
 import { motivoLabel } from '../utils/motivos'
 
@@ -87,7 +87,7 @@ export default function Reportes() {
     try {
       const data = kardex || (await api.get('/api/reportes/kardex')).data
       if (!kardex) setKardex(data)
-      generarKardexExcel(data.ingresos || [], data.devoluciones || [])
+      await generarKardexExcel(data.ingresos || [], data.devoluciones || [])
     } catch (err) {
       console.error('No se pudo generar el kardex', err)
     } finally {
@@ -145,12 +145,12 @@ export default function Reportes() {
           <p className="text-sm text-gray-500 mb-4">Total: {totalGeneral.toLocaleString()} items</p>
           <div className="flex gap-2">
             <button
-              onClick={() => exportarCSV(resumen, [
+              onClick={() => exportarExcel(resumen, [
                 { titulo: 'Almacen', campo: 'almacen' },
                 { titulo: 'Nuevos', campo: 'nuevos' },
                 { titulo: 'Devoluciones', campo: 'devoluciones' },
                 { titulo: 'Total', campo: 'total' },
-              ], 'resumen_almacenes')}
+              ], 'Resumen de Almacenes', 'resumen_almacenes', { totales: true })}
               className="flex-1 bg-green-600 hover:bg-green-700 text-white text-xs py-2 rounded-lg transition"
             >
               Excel
@@ -181,12 +181,12 @@ export default function Reportes() {
           <p className="text-sm text-gray-500 mb-4">Nuevos: {totalNuevos.toLocaleString()} | Dev: {totalDev.toLocaleString()}</p>
           <div className="flex gap-2">
             <button
-              onClick={() => exportarCSV(inventario, [
+              onClick={() => exportarExcel(inventario, [
                 { titulo: 'Almacen', campo: 'almacen_nombre' },
                 { titulo: 'Tipo', campo: 'tipo' },
                 { titulo: 'Cantidad', campo: 'cantidad' },
                 { titulo: 'Descripcion', campo: 'descripcion' },
-              ], 'inventario_completo')}
+              ], 'Inventario Completo', 'inventario_completo')}
               className="flex-1 bg-green-600 hover:bg-green-700 text-white text-xs py-2 rounded-lg transition"
             >
               Excel
@@ -217,13 +217,13 @@ export default function Reportes() {
           <p className="text-sm text-gray-500 mb-4">Traslados, entradas y salidas</p>
           <div className="flex gap-2">
             <button
-              onClick={() => exportarCSV(movimientos, [
+              onClick={() => exportarExcel(movimientos, [
                 { titulo: 'Tipo', campo: 'tipo' },
                 { titulo: 'Origen', campo: 'origen' },
                 { titulo: 'Destino', campo: 'destino' },
                 { titulo: 'Cantidad', campo: 'cantidad' },
                 { titulo: 'Descripcion', campo: 'descripcion' },
-              ], 'movimientos')}
+              ], 'Reporte de Movimientos', 'movimientos')}
               className="flex-1 bg-green-600 hover:bg-green-700 text-white text-xs py-2 rounded-lg transition"
             >
               Excel
@@ -253,13 +253,13 @@ export default function Reportes() {
           <p className="text-sm text-gray-500 mb-4">Quien y cuando reimprimio cada codigo</p>
           <div className="flex gap-2">
             <button
-              onClick={() => exportarCSV(reimpresiones, [
+              onClick={() => exportarExcel(reimpresiones, [
                 { titulo: 'Codigo', campo: 'etiqueta_codigo' },
                 { titulo: 'Producto', campo: 'producto_nombre' },
                 { titulo: 'Almacen', campo: 'almacen_nombre' },
                 { titulo: 'Usuario', campo: 'usuario_nombre' },
                 { titulo: 'Fecha', campo: 'fecha' },
-              ], 'reimpresiones_etiquetas')}
+              ], 'Reimpresiones de Etiqueta', 'reimpresiones_etiquetas')}
               className="flex-1 bg-green-600 hover:bg-green-700 text-white text-xs py-2 rounded-lg transition"
             >
               Excel
@@ -290,12 +290,12 @@ export default function Reportes() {
           <p className="text-sm text-gray-500 mb-4">{totalUnidadesMotivo.toLocaleString()} unidades salidas en el rango</p>
           <div className="flex gap-2">
             <button
-              onClick={() => exportarCSV(salidasMotivoFilas, [
+              onClick={() => exportarExcel(salidasMotivoFilas, [
                 { titulo: 'Motivo', campo: 'motivo_label' },
                 { titulo: 'Almacen', campo: 'almacen' },
                 { titulo: 'Notas', campo: 'notas' },
                 { titulo: 'Unidades', campo: 'unidades' },
-              ], 'salidas_por_motivo')}
+              ], 'Salidas por Motivo', 'salidas_por_motivo', { totales: true })}
               className="flex-1 bg-green-600 hover:bg-green-700 text-white text-xs py-2 rounded-lg transition"
             >
               Excel
@@ -326,13 +326,13 @@ export default function Reportes() {
           <p className="text-sm text-gray-500 mb-4">Etiquetas en almacen sin ninguna actividad</p>
           <div className="flex gap-2">
             <button
-              onClick={() => exportarCSV(sinMovimientoFilas, [
+              onClick={() => exportarExcel(sinMovimientoFilas, [
                 { titulo: 'Codigo', campo: 'etiqueta_codigo' },
                 { titulo: 'Producto', campo: 'producto_nombre' },
                 { titulo: 'Almacen', campo: 'almacen_nombre' },
                 { titulo: 'Dias sin movimiento', campo: 'dias_inmovil' },
                 { titulo: 'Ultimo movimiento', campo: 'ultimo_movimiento_fecha' },
-              ], 'stock_sin_movimiento')}
+              ], 'Stock sin Movimiento', 'stock_sin_movimiento')}
               className="flex-1 bg-green-600 hover:bg-green-700 text-white text-xs py-2 rounded-lg transition"
             >
               Excel

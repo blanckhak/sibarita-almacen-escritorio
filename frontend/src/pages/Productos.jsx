@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import api from '../utils/api'
 import { useAuth } from '../context/AuthContext'
-import { exportarCSV, exportarPDF } from '../utils/exportar'
+import { exportarExcel, exportarPDF } from '../utils/exportar'
 
 const FORM_VACIO = { nombre: '', categoria: '', unidad_medida_id: '', codigo_interno: '', metrica: 'ENTERO' }
 
@@ -106,7 +106,7 @@ export default function Productos() {
         </div>
         <div className="flex gap-2">
           <button
-            onClick={() => exportarCSV(filtrados, columnasExport, 'productos')}
+            onClick={() => exportarExcel(filtrados, columnasExport, 'Catalogo de Productos', 'productos')}
             className="bg-green-600 hover:bg-green-700 text-white text-sm px-4 py-2 rounded-lg transition"
           >
             Excel

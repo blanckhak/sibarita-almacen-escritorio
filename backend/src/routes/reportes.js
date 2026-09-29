@@ -79,9 +79,9 @@ router.get('/stock-sin-movimiento', verificarToken, async (req, res) => {
 })
 
 // Kardex tipo MALSA.xlsx: una fila por codigo (etiqueta) con su ingreso y sus
-// salidas por nota. El front arma el .xls con dos hojas: INGRESOS (codigos
-// NUEVO) y DEVOLUCIONES (codigos nacidos de una devolucion usada, condicion
-// USADO). Solo cuenta salidas que ya salieron fisicamente (fecha_salida).
+// salidas por nota. Se separa en ingresos (codigos NUEVO) y devoluciones
+// (condicion USADO); el front arma el .xlsx con una hoja por almacen. Solo
+// cuenta salidas que ya salieron fisicamente (fecha_salida).
 router.get('/kardex', verificarToken, async (req, res) => {
   try {
     const result = await pool.query(`
@@ -137,7 +137,10 @@ router.get('/periodo', verificarToken, async (req, res) => {
   const { periodo_id } = req.query
   if (!periodo_id) return res.status(400).json({ error: 'periodo_id requerido' })
   try {
-    const per = await pool.query('SELECT * FROM periodos WHERE id = $1', [periodo_id])
+    const per = await pool.query(`
+      SELECT p.*, a.nombre AS almacen_nombre
+      FROM periodos p JOIN almacenes a ON a.id = p.almacen_id
+      WHERE p.id = $1`, [periodo_id])
     if (per.rows.length === 0) return res.status(404).json({ error: 'Periodo no encontrado' })
     const p = per.rows[0]
     const cerrado = p.estado === 'CERRADO'

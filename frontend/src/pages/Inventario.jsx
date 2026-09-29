@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import api from '../utils/api'
 import { useAuth } from '../context/AuthContext'
-import { exportarCSV, exportarPDF } from '../utils/exportar'
+import { exportarExcel, exportarPDF } from '../utils/exportar'
 
 const TIPOS = ['NUEVO', 'DEVOLUCION']
 
@@ -112,7 +112,7 @@ export default function Inventario() {
         </div>
         <div className="flex gap-2">
           <button
-            onClick={() => exportarCSV(filtrado, columnasExport, 'inventario')}
+            onClick={() => exportarExcel(filtrado, columnasExport, 'Reporte de Inventario', 'inventario')}
             className="bg-green-600 hover:bg-green-700 text-white text-sm px-4 py-2 rounded-lg transition"
           >
             Excel
