@@ -5,6 +5,7 @@ import {
   PieChart, Pie, Cell, ResponsiveContainer
 } from 'recharts'
 import TarjetaAlmacen from '../components/TarjetaAlmacen'
+import KardexAlmacen from '../components/KardexAlmacen'
 import { exportarExcel, exportarPDF } from '../utils/exportar'
 
 const COLORES = ['#1d4ed8', '#16a34a', '#f97316']
@@ -14,6 +15,8 @@ export default function Dashboard() {
   const [cargando, setCargando]   = useState(true)
   const [error, setError]         = useState(null)
   const [fase2, setFase2]         = useState(null)
+  // Almacen cuya tarjeta se pulso: abre su Kardex debajo de las tarjetas.
+  const [almacenSel, setAlmacenSel] = useState(null)
 
   useEffect(() => {
     api.get('/api/inventario/resumen')
@@ -132,7 +135,8 @@ export default function Dashboard() {
       {!cargando && !error && (
         <>
           {/* Tarjetas por almacen */}
-          <h2 className="text-lg font-semibold text-gray-700 mb-4">Por Almacen</h2>
+          <h2 className="text-lg font-semibold text-gray-700 mb-1">Por Almacen</h2>
+          <p className="text-sm text-gray-400 mb-4">Pulsa un almacen para ver su kardex</p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
             {resumen.map(item => (
               <TarjetaAlmacen
@@ -141,9 +145,13 @@ export default function Dashboard() {
                 nuevos={item.nuevos}
                 devoluciones={item.devoluciones}
                 total={item.total}
+                seleccionada={almacenSel === item.almacen}
+                onClick={() => setAlmacenSel(almacenSel === item.almacen ? null : item.almacen)}
               />
             ))}
           </div>
+
+          {almacenSel && <KardexAlmacen almacen={almacenSel} onCerrar={() => setAlmacenSel(null)} />}
 
           {/* Graficas */}
           <div className="grid grid-cols-2 gap-6 mb-10">

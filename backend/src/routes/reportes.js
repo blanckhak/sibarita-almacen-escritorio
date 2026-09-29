@@ -82,7 +82,10 @@ router.get('/stock-sin-movimiento', verificarToken, async (req, res) => {
 // salidas por nota. Se separa en ingresos (codigos NUEVO) y devoluciones
 // (condicion USADO); el front arma el .xlsx con una hoja por almacen. Solo
 // cuenta salidas que ya salieron fisicamente (fecha_salida).
+// ?almacen=NOMBRE limita a un almacen (vista de detalle del Dashboard).
 router.get('/kardex', verificarToken, async (req, res) => {
+  const { almacen } = req.query
+  const val = almacen ? [almacen] : []
   try {
     const result = await pool.query(`
       SELECT e.codigo::text                         AS item,
@@ -118,8 +121,9 @@ router.get('/kardex', verificarToken, async (req, res) => {
       JOIN almacenes a   ON e.almacen_id = a.id
       LEFT JOIN unidades_medida um ON p.unidad_medida_id = um.id
       LEFT JOIN unidades_medida umgi ON gi.unidad_medida_id = umgi.id
+      ${almacen ? 'WHERE a.nombre = $1' : ''}
       ORDER BY a.nombre, g.fecha, e.codigo
-    `)
+    `, val)
 
     const ingresos = result.rows.filter(r => r.condicion === 'NUEVO')
     const devoluciones = result.rows.filter(r => r.condicion === 'USADO')
