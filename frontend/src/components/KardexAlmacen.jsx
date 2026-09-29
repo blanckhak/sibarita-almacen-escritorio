@@ -2,7 +2,7 @@
 // Dashboard al hacer clic en una. Una fila por codigo (como el kardex fisico):
 // su ingreso, el total que salio (TTL / S) y el saldo. Clic en la fila
 // despliega cada salida con su N° de guia y fecha.
-import { Fragment, useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import api from '../utils/api'
 import { codigoAlmacen, claseCodigoAlmacen } from '../utils/colorAlmacen'
 
@@ -44,6 +44,23 @@ function Skeleton() {
   )
 }
 
+// Texto en el que busca el buscador: codigo (con y sin letra), descripcion,
+// documentos de ingreso (N/I, O/C, guia/factura) y N° de las notas de salida.
+const textoBusqueda = (f) => [
+  f.codigo, f.item, f.detalle, f.ni, f.oc_externa, f.doc, f.nro_doc, f.proveedor, f.motivo,
+  ...(f.salidas || []).map(s => s.guia),
+].filter(Boolean).join(' ').toLowerCase()
+
+// Espera a que el usuario deje de escribir antes de filtrar.
+function useDebounce(valor, ms = 300) {
+  const [v, setV] = useState(valor)
+  useEffect(() => {
+    const t = setTimeout(() => setV(valor), ms)
+    return () => clearTimeout(t)
+  }, [valor, ms])
+  return v
+}
+
 const COLS = ['Codigo', 'Ubicac.', 'Fecha', 'N/I', 'O/C N° Ext.', 'Doc / N°', 'Proveedor', 'Detalle', 'Maquina - Motivo', 'Unid.', 'Tipo', 'Cantidad', 'TTL / S', 'Saldo']
 
 export default function KardexAlmacen({ almacen, onCerrar }) {
@@ -51,6 +68,11 @@ export default function KardexAlmacen({ almacen, onCerrar }) {
   const [error, setError] = useState(null)
   const [abierta, setAbierta] = useState(null)
   const [limite, setLimite] = useState(POR_PAGINA)
+  const [busqueda, setBusqueda] = useState('')
+  const [desde, setDesde] = useState('')
+  const [hasta, setHasta] = useState('')
+  const [tipo, setTipo] = useState('')
+  const busquedaDeb = useDebounce(busqueda)
   const cache = useRef({})
   const panel = useRef(null)
 
@@ -72,7 +94,27 @@ export default function KardexAlmacen({ almacen, onCerrar }) {
     return () => { vigente = false }
   }, [almacen])
 
-  const visibles = filas || []
+  // Filtros en pantalla. La fecha que se compara es la del ingreso (guia).
+  const visibles = useMemo(() => {
+    const palabras = busquedaDeb.trim().toLowerCase().split(/\s+/).filter(Boolean)
+    return (filas || []).filter(f => {
+      const fecha = String(f.fecha || '').slice(0, 10)
+      if (desde && fecha < desde) return false
+      if (hasta && fecha > hasta) return false
+      if (tipo && f.tipo !== tipo) return false
+      if (palabras.length) {
+        const txt = textoBusqueda(f)
+        if (!palabras.every(p => txt.includes(p))) return false
+      }
+      return true
+    })
+  }, [filas, busquedaDeb, desde, hasta, tipo])
+
+  useEffect(() => { setLimite(POR_PAGINA); setAbierta(null) }, [busquedaDeb, desde, hasta, tipo])
+
+  const hayFiltro = Boolean(busquedaDeb.trim() || desde || hasta || tipo)
+  const limpiar = () => { setBusqueda(''); setDesde(''); setHasta(''); setTipo('') }
+  const totalSaldo = visibles.reduce((s, f) => s + (f.estado_guia === 'ANULADA' ? 0 : f.saldo), 0)
 
   return (
     <div ref={panel} className="bg-white rounded-xl shadow-md border border-blue-100 mb-10 overflow-hidden scroll-mt-4">
@@ -81,7 +123,9 @@ export default function KardexAlmacen({ almacen, onCerrar }) {
         <div>
           <h2 className="text-lg font-bold">Kardex — {almacen}</h2>
           <p className="text-xs text-blue-200">
-            {filas ? `${visibles.length.toLocaleString()} codigos` : 'Cargando movimientos...'}
+            {!filas ? 'Cargando movimientos...'
+              : hayFiltro ? `${visibles.length.toLocaleString()} de ${filas.length.toLocaleString()} codigos (filtrado)`
+              : `${filas.length.toLocaleString()} codigos`}
           </p>
         </div>
         <button onClick={onCerrar} className="text-blue-100 hover:text-white text-sm border border-blue-400 rounded-lg px-3 py-1.5">
@@ -94,6 +138,51 @@ export default function KardexAlmacen({ almacen, onCerrar }) {
 
       {filas && (
         <>
+          {/* Filtros */}
+          <div className="flex flex-wrap items-end gap-3 px-5 py-3 bg-gray-50 border-b border-gray-200">
+            <div className="flex-1 min-w-[220px]">
+              <label className="block text-xs font-medium text-gray-500 mb-1">Buscar</label>
+              <div className="relative">
+                <input
+                  value={busqueda}
+                  onChange={e => setBusqueda(e.target.value)}
+                  placeholder="Codigo, descripcion, N° de documento o de nota..."
+                  className="w-full border border-gray-300 rounded-lg pl-8 pr-8 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <span className="absolute left-2.5 top-2 text-gray-400 text-sm">🔍</span>
+                {busqueda && (
+                  <button onClick={() => setBusqueda('')} className="absolute right-2.5 top-1.5 text-gray-400 hover:text-gray-600" title="Borrar">✕</button>
+                )}
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Desde</label>
+              <input type="date" value={desde} max={hasta || undefined} onChange={e => setDesde(e.target.value)}
+                className="border border-gray-300 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Hasta</label>
+              <input type="date" value={hasta} min={desde || undefined} onChange={e => setHasta(e.target.value)}
+                className="border border-gray-300 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Tipo</label>
+              <select value={tipo} onChange={e => setTipo(e.target.value)}
+                className="border border-gray-300 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="">Todos</option>
+                <option value="INGRESO">Ingreso</option>
+                <option value="DEVOLUCION">Devolucion</option>
+              </select>
+            </div>
+            {hayFiltro && (
+              <button onClick={limpiar} className="text-sm text-blue-700 hover:underline py-2">Limpiar filtros</button>
+            )}
+            <div className="ml-auto text-right">
+              <p className="text-xs text-gray-500">Saldo {hayFiltro ? 'filtrado' : 'total'}</p>
+              <p className="text-lg font-bold text-blue-800 leading-tight">{num(totalSaldo)}</p>
+            </div>
+          </div>
+
           <div className="overflow-auto max-h-[65vh]">
             <table className="w-full text-xs whitespace-nowrap">
               <thead className="bg-gray-800 text-white sticky top-0 z-10">
@@ -147,7 +236,9 @@ export default function KardexAlmacen({ almacen, onCerrar }) {
                   )
                 })}
                 {visibles.length === 0 && (
-                  <tr><td colSpan={COLS.length} className="text-center py-10 text-gray-400">Sin movimientos</td></tr>
+                  <tr><td colSpan={COLS.length} className="text-center py-10 text-gray-400">
+                    {hayFiltro ? 'Ningun codigo coincide con los filtros' : 'Sin movimientos'}
+                  </td></tr>
                 )}
               </tbody>
             </table>
