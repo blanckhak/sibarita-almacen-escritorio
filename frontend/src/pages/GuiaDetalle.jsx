@@ -918,33 +918,30 @@ export default function GuiaDetalle() {
       <PreviewImpresion abierto={preview} onCerrar={cerrarPreview}>
       {/* Vista de impresion de etiquetas: solo visible al imprimir etiquetas */}
       <div className={vistaImpresion === 'etiquetas' ? (preview ? '' : 'hidden print:block') : 'hidden'}>
-        <div className="grid grid-cols-2 gap-4">
+        {/* Etiqueta delgada: una fila codigo | nombre (+ ubicacion) | unidad |
+            cantidad y el codigo de barras abajo. Una por renglon. */}
+        <div className="space-y-2">
           {itemsAImprimir.map(it => (
             <div key={it.etiqueta_id} className="border border-gray-800 rounded print:break-inside-avoid">
-              <div className="bg-gray-100 text-center font-semibold text-sm py-1.5 border-b border-gray-800">
-                {it.producto_nombre}
+             <div className="flex items-stretch">
+              <div className="font-bold text-lg flex items-center justify-center px-3 min-w-[70px]" style={estiloCodigoImpreso(guia.almacen_nombre)}>
+                {codigoAlmacen(it.etiqueta_codigo, guia.almacen_nombre)}
               </div>
-              <div className="flex">
-                <div className="font-bold text-2xl flex items-center justify-center px-4 min-w-[70px]" style={estiloCodigoImpreso(guia.almacen_nombre)}>
-                  {codigoAlmacen(it.etiqueta_codigo, guia.almacen_nombre)}
-                </div>
-                <div className="flex-1 border-l border-r border-gray-800 px-3 py-2 text-sm flex items-center">
-                  {it.producto_nombre}
-                </div>
-                <div className="px-3 py-2 text-sm flex items-center justify-center">
-                  {it.unidad_medida_abreviatura || it.unidad_medida_nombre || ''}
-                </div>
-                <div className="font-bold flex items-center justify-center px-4 min-w-[40px]" style={estiloCodigoImpreso(guia.almacen_nombre)}>
-                  {fmtCantidad(it.cantidad)}
-                </div>
+              <div className="flex-1 min-w-0 border-l border-gray-800 px-2 py-1 text-xs flex flex-col justify-center leading-tight">
+                <span className="truncate">{it.producto_nombre}</span>
+                {it.etiqueta_ubicacion && (
+                  <span className="truncate text-[10px] text-gray-600">Ubicacion: <b>{it.etiqueta_ubicacion.slice(0, 45)}</b></span>
+                )}
               </div>
-              {it.etiqueta_ubicacion && (
-                <div className="text-center text-xs py-1 border-t border-gray-800 truncate px-2">
-                  Ubicacion: <b>{it.etiqueta_ubicacion.slice(0, 45)}</b>
-                </div>
-              )}
-              <div className="flex justify-center py-1.5 border-t border-gray-800">
-                <CodigoBarras valor={it.etiqueta_codigo} height={28} />
+              <div className="border-l border-gray-800 px-2 text-xs flex items-center justify-center">
+                {it.unidad_medida_abreviatura || it.unidad_medida_nombre || ''}
+              </div>
+              <div className="font-bold flex items-center justify-center px-3 min-w-[36px]" style={estiloCodigoImpreso(guia.almacen_nombre)}>
+                {fmtCantidad(it.cantidad)}
+              </div>
+             </div>
+              <div className="flex justify-center py-1 border-t border-gray-800">
+                <CodigoBarras valor={it.etiqueta_codigo} height={22} />
               </div>
             </div>
           ))}
@@ -953,6 +950,16 @@ export default function GuiaDetalle() {
 
       {vistaImpresion === 'nota' && (() => {
         const pI = paramsImp?.INGRESO || PARAMS_IMPRESION_DEFAULT
+        // El N° del documento principal (numero_guia) va en su fila de
+        // referencia -- la primera (guia) para guia/boleta/otro, la segunda
+        // solo para factura -- si esa fila no tiene ya un numero propio.
+        const docEnFactura = guia.tipo_documento === 'FACTURA'
+        const ref1 = !docEnFactura && !guia.guia_remision
+          ? { tipo: guia.tipo_documento, numero: guia.numero_guia || '' }
+          : { tipo: guia.guia_remision_tipo, numero: guia.guia_remision || '' }
+        const ref2 = docEnFactura && !guia.factura
+          ? { tipo: guia.tipo_documento, numero: guia.numero_guia || '' }
+          : { tipo: guia.factura_tipo, numero: guia.factura || '' }
         return (
         <div className={preview ? '' : 'hidden print:block'}>
           {paginarPorItem(itemsImpresion, pI.lineas_por_pagina).map((filas, pi, todas) => {
@@ -976,16 +983,17 @@ export default function GuiaDetalle() {
                     </tbody>
                   </table>
                 </div>
+                {/* Correlativo de la Nota de Ingreso, propio de cada almacen,
+                    con el mismo formato que la Nota de Salida (6 digitos). */}
                 <div className="text-right px-4 text-sm text-red-600 font-bold">
-                  {tipoDocumentoLabel(guia.tipo_documento)} N.° {guia.numero_guia}
-                  {todas.length > 1 && <span className="text-gray-500 font-normal text-xs ml-2">Hoja {pi + 1} de {todas.length}</span>}
+                  N.° {String(guia.numero_ingreso ?? '').padStart(6, '0')}
                 </div>
 
                 <div className="px-4 py-3 text-sm space-y-1">
                   <div className="flex"><b className="text-gray-600 w-40 shrink-0">PROVEEDOR:</b><span className="border-b border-gray-400 flex-1">{guia.proveedor || ''}</span></div>
                   <div className="flex"><b className="text-gray-600 w-40 shrink-0">ORDEN DE COMPRA:</b><span className="border-b border-gray-400 flex-1">{guia.numero_oc || ''}</span></div>
-                  <div className="flex"><b className="text-gray-600 w-40 shrink-0">{tipoDocumentoRefLabel(guia.guia_remision_tipo)}:</b><span className="border-b border-gray-400 flex-1">{guia.guia_remision || ''}</span></div>
-                  <div className="flex"><b className="text-gray-600 w-40 shrink-0">{tipoDocumentoRefLabel(guia.factura_tipo)}:</b><span className="border-b border-gray-400 flex-1">{guia.factura || ''}</span></div>
+                  <div className="flex"><b className="text-gray-600 w-40 shrink-0">{tipoDocumentoRefLabel(ref1.tipo)}:</b><span className="border-b border-gray-400 flex-1">{ref1.numero}</span></div>
+                  <div className="flex"><b className="text-gray-600 w-40 shrink-0">{tipoDocumentoRefLabel(ref2.tipo)}:</b><span className="border-b border-gray-400 flex-1">{ref2.numero}</span></div>
                 </div>
 
                 {/* Formato fisico "imgreso.png": 4 columnas (DETALLE | CANTIDAD |

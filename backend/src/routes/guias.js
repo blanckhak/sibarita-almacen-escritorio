@@ -305,9 +305,15 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen', 'almacenero'),
     }
     const periodoActivoId = perAct.rows[0].id
 
+    // N.° de Nota de Ingreso: correlativo propio del almacen. El lock (hasta
+    // el COMMIT) evita que dos ingresos simultaneos del mismo almacen tomen
+    // el mismo numero; almacenes distintos no se esperan entre si.
+    await client.query(`SELECT pg_advisory_xact_lock(hashtext('guias_numero_ingreso'), $1::int)`, [almacen_id])
+
     const guiaResult = await client.query(
-      `INSERT INTO guias (numero_guia, almacen_id, usuario_id, fecha, proveedor, numero_oc, direccion, guia_remision, guia_remision_tipo, factura, factura_tipo, tipo_documento, observaciones, periodo_id)
-       VALUES ($1, $2, $3, COALESCE($4, CURRENT_DATE), $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING *`,
+      `INSERT INTO guias (numero_guia, almacen_id, usuario_id, fecha, proveedor, numero_oc, direccion, guia_remision, guia_remision_tipo, factura, factura_tipo, tipo_documento, observaciones, periodo_id, numero_ingreso)
+       VALUES ($1, $2, $3, COALESCE($4, CURRENT_DATE), $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
+               (SELECT COALESCE(MAX(numero_ingreso), 0) + 1 FROM guias WHERE almacen_id = $2)) RETURNING *`,
       [
         numero_guia.trim(), almacen_id, req.usuario.id, fecha || null,
         (proveedor || '').trim() || null,

@@ -178,7 +178,10 @@ CREATE TABLE guias (
     CHECK (factura_tipo IN ('GUIA', 'FACTURA', 'BOLETA', 'OTRO')),
   -- Fase 11 (R4): observacion general de la guia (se imprime en la Nota de
   -- Ingreso; antes se referenciaba sin que la columna existiera).
-  observaciones TEXT
+  observaciones TEXT,
+  -- N.° de la Nota de Ingreso: correlativo propio de cada almacen.
+  numero_ingreso INTEGER,
+  UNIQUE (almacen_id, numero_ingreso)
 );
 
 -- Unico solo entre guias vigentes: una guia ANULADA libera su numero para

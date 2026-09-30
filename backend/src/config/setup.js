@@ -246,6 +246,18 @@ async function setup() {
     ALTER TABLE guias ADD CONSTRAINT guias_factura_tipo_check
       CHECK (factura_tipo IN ('GUIA', 'FACTURA', 'BOLETA', 'OTRO'));
 
+    -- N.° de la Nota de Ingreso: correlativo PROPIO de cada almacen (MALSA,
+    -- JOPISA e INDELPAS cuentan 1, 2, 3... por separado). Las guias que ya
+    -- existian se numeran en orden de carga; las nuevas lo toman en el POST.
+    ALTER TABLE guias ADD COLUMN IF NOT EXISTS numero_ingreso INTEGER;
+    UPDATE guias g SET numero_ingreso = s.rn + COALESCE(
+        (SELECT MAX(g2.numero_ingreso) FROM guias g2 WHERE g2.almacen_id = g.almacen_id), 0)
+      FROM (SELECT id, ROW_NUMBER() OVER (PARTITION BY almacen_id ORDER BY id) AS rn
+              FROM guias WHERE numero_ingreso IS NULL) s
+     WHERE g.id = s.id;
+    CREATE UNIQUE INDEX IF NOT EXISTS guias_almacen_numero_ingreso_unique
+      ON guias (almacen_id, numero_ingreso);
+
     CREATE TABLE IF NOT EXISTS guia_items (
       id SERIAL PRIMARY KEY,
       guia_id INTEGER REFERENCES guias(id),
