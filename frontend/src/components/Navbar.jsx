@@ -19,10 +19,10 @@ const ENLACES_PRIMARIOS = [
   { path: '/guias',         label: 'Guias',           roles: ['admin','almacen','almacenero','mantenimiento','compras'] },
   { path: '/notas-salida',  label: 'Notas de Salida', roles: ['admin','almacen','almacenero','mantenimiento','compras'] },
   { path: '/notas-desuso',  label: 'Notas de Devolucion', roles: ['admin','almacen','almacenero','mantenimiento','compras'] },
+  { path: '/almacenes',     label: 'Almacenes',       roles: null },
   { path: '/periodos',      label: 'Periodos',        roles: ROLES_PERIODOS },
 ]
 const ENLACES_SECUNDARIOS = [
-  { path: '/almacenes',            label: 'Almacenes',           roles: null },
   { path: '/productos',            label: 'Catalogo',            roles: ['admin','almacen','almacenero','mantenimiento','compras'] },
   { path: '/solicitudes-materiales', label: 'Solicitud Materiales', roles: ['admin','almacen','almacenero','mantenimiento','compras'] },
   { path: '/consulta-productos',   label: 'Consulta',            roles: ['admin','almacen','almacenero','mantenimiento','compras'] },
