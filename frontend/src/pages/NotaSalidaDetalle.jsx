@@ -19,32 +19,6 @@ const colorEstado = {
   EN_APROBACION: 'bg-yellow-100 text-yellow-700',
 }
 
-// Encabezado comun del talonario FT-GE-17 (empresa, fecha, referencia y datos
-// de la nota). Lo comparten la vista de impresion de salida y la de devolucion.
-function CabeceraTalonario({ nota, subtitulo, fecha, refTexto }) {
-  return (
-    <>
-      <div className="flex items-start justify-between px-4 pt-3">
-        <div>
-          <div className="font-bold text-lg text-gray-800">MANUFACTURA DE ALIMENTOS S.A.</div>
-          <div className="font-semibold text-sm text-gray-700 uppercase tracking-wide">{subtitulo}</div>
-        </div>
-        <div className="border border-gray-800 text-center text-sm">
-          <div className="bg-gray-100 px-3 py-0.5 border-b border-gray-800 font-semibold">Fecha</div>
-          <div className="px-3 py-1">{fecha}</div>
-        </div>
-      </div>
-      <div className="text-right px-4 text-sm text-red-600 font-bold">{refTexto}</div>
-      <div className="grid grid-cols-2 gap-x-6 gap-y-1 px-4 py-3 text-sm">
-        <div className="border-b border-gray-200 pb-1"><b className="text-gray-500 text-xs uppercase mr-1">Secc.</b> {nota.seccion || '—'}</div>
-        <div className="border-b border-gray-200 pb-1"><b className="text-gray-500 text-xs uppercase mr-1">Orden de Ingreso</b> {nota.numero_guia || '—'}</div>
-        <div className="border-b border-gray-200 pb-1"><b className="text-gray-500 text-xs uppercase mr-1">Persona responsable</b> {nota.persona_responsable}</div>
-        <div className="border-b border-gray-200 pb-1"><b className="text-gray-500 text-xs uppercase mr-1">Motivo</b> {nota.motivo}</div>
-      </div>
-    </>
-  )
-}
-
 export default function NotaSalidaDetalle() {
   const { id } = useParams()
   const { usuario } = useAuth()
@@ -874,66 +848,108 @@ export default function NotaSalidaDetalle() {
         )
       })()}
 
-      {/* Nota de Devolucion (Bloque 4): se imprime cuando ya hay lineas
-          devueltas. Lista lo que volvio a Mesa, en que condicion y, si volvio
-          usada, el codigo nuevo que se le asigno. */}
-      {modoImpresion === 'devolucion' && (
-      <div className={`${preview ? '' : 'hidden print:block'} border-2 border-gray-800 rounded`}>
-        <CabeceraTalonario
-          nota={nota}
-          subtitulo="Nota de Devolucion de Activos"
-          fecha={fechaDevolucion ? new Date(fechaDevolucion).toLocaleDateString('es-GT') : '—'}
-          refTexto={`Ref. Nota de Salida N.° ${nota.numero_nota}`}
-        />
-        <table className="w-full text-xs" style={{ width: 'calc(100% - 2rem)', margin: '0.5rem auto' }}>
-          <thead>
-            <tr className="border-b-2 border-gray-800">
-              <th className="text-left py-1 pr-3">Codigo salida</th>
-              <th className="text-left py-1 pr-3">Detalle</th>
-              <th className="text-right py-1 pr-3">Salio</th>
-              <th className="text-right py-1 pr-3">Volvio</th>
-              <th className="text-right py-1 pr-3">Consumido</th>
-              <th className="text-left py-1 pr-3">Presentacion</th>
-              <th className="text-left py-1 pr-3">Unidad</th>
-              <th className="text-left py-1 pr-3">Condicion</th>
-              <th className="text-left py-1 pr-3">Codigo nuevo</th>
-              <th className="text-left py-1">Fecha dev.</th>
-            </tr>
-          </thead>
-          <tbody>
-            {lineasDevueltas.map(d => (
-              <tr key={d.id} className="border-b border-gray-200">
-                <td className="py-1 pr-3"><span className="font-mono font-bold px-1 rounded" style={estiloCodigoImpreso(d.almacen_nombre)}>{codigoAlmacen(d.etiqueta_codigo, d.almacen_nombre)}</span></td>
-                <td className="py-1 pr-3">{d.producto_nombre}</td>
-                <td className="py-1 pr-3 text-right">{fmtCantidad(d.cantidad)}</td>
-                <td className="py-1 pr-3 text-right">{fmtCantidad(d.devuelto_cantidad != null ? d.devuelto_cantidad : d.cantidad)}</td>
-                <td className="py-1 pr-3 text-right">{d.cantidad_consumida != null ? fmtCantidad(d.cantidad_consumida) : '—'}</td>
-                <td className="py-1 pr-3">{presentacionLabel(d.devuelto_presentacion) || '—'}</td>
-                <td className="py-1 pr-3">{d.devuelto_unidad_medida_nombre || '—'}</td>
-                <td className="py-1 pr-3">{d.devuelto_condicion === 'USADO' ? 'Usada' : 'Nueva'}</td>
-                <td className="py-1 pr-3">
-                  {d.etiqueta_devuelta_codigo
-                    ? <span className="font-mono font-bold px-1 rounded" style={estiloCodigoImpreso(d.almacen_nombre)}>{codigoAlmacen(d.etiqueta_devuelta_codigo, d.almacen_nombre)}</span>
-                    : '—'}
-                </td>
-                <td className="py-1">{d.devuelto_en ? new Date(d.devuelto_en).toLocaleDateString('es-GT') : '—'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <div className="px-4 py-1 text-xs italic text-gray-600 border-t border-gray-300">
-          Nota.- Los items devueltos como "usados" reingresan con un codigo nuevo y stock de devolucion.
+      {/* Nota de Devolucion de Activos: mismo formato que el talonario fisico
+          (para giarse/NOTA DEVOLUCION DE ACTIVOS MALA.pdf). Lista lo que volvio
+          a Mesa; si volvio usado, el codigo nuevo va en Observaciones. */}
+      {modoImpresion === 'devolucion' && (() => {
+        const pD = paramsImp?.DEVOLUCION || PARAMS_IMPRESION_DEFAULT
+        const f = fechaDevolucion ? new Date(fechaDevolucion) : null
+        const dd = f ? String(f.getDate()).padStart(2, '0') : ''
+        const mm = f ? String(f.getMonth() + 1).padStart(2, '0') : ''
+        const yy = f ? String(f.getFullYear()).slice(2) : ''
+        const obsLineas = lineasDevueltas
+          .filter(d => d.devuelto_condicion === 'USADO' || d.devuelto_obs)
+          .map(d => {
+            const usado = d.devuelto_condicion === 'USADO'
+              ? `${codigoAlmacen(d.etiqueta_codigo, d.almacen_nombre)} USADO${d.etiqueta_devuelta_codigo ? ` -> COD. ${codigoAlmacen(d.etiqueta_devuelta_codigo, d.almacen_nombre)}` : ''}`
+              : codigoAlmacen(d.etiqueta_codigo, d.almacen_nombre)
+            return d.devuelto_obs ? `${usado}: ${d.devuelto_obs}` : usado
+          })
+        const observaciones = [nota.observaciones, ...obsLineas].filter(Boolean).join(' · ')
+        return (
+        <div className={preview ? '' : 'hidden print:block'}>
+          {paginarPorItem(lineasDevueltas, pD.lineas_por_pagina).map((filas, pi) => (
+            <div key={pi} className="border-2 border-gray-800 rounded break-after-page last:break-after-auto">
+              <div className="flex items-start justify-between px-4 pt-3">
+                <div>
+                  <div className="font-bold text-lg text-gray-800 text-center">MANUFACTURA DE ALIMENTOS S.A.</div>
+                  <div className="font-semibold text-sm text-gray-700 uppercase tracking-wide text-center underline">Nota de Devolucion de Activos</div>
+                </div>
+                <table className="border border-gray-800 text-center text-xs">
+                  <tbody>
+                    <tr><td colSpan={3} className="bg-gray-100 border-b border-gray-800 font-semibold px-2 py-0.5">FECHA</td></tr>
+                    <tr>
+                      <td className="border-r border-gray-800 px-3 py-1 w-8">{dd}</td>
+                      <td className="border-r border-gray-800 px-3 py-1 w-8">{mm}</td>
+                      <td className="px-3 py-1 w-8">{yy}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div className="text-right px-4 text-sm text-red-600 font-bold">N.° {nota.numero_nota}</div>
+
+              <div className="px-4 py-3 text-sm space-y-1">
+                <div className="flex"><b className="text-gray-600 w-56 shrink-0">SECCION:</b><span className="border-b border-gray-400 flex-1">{nota.seccion || ''}</span></div>
+                <div className="flex"><b className="text-gray-600 w-56 shrink-0">PERSONA RESPONSABLE:</b><span className="border-b border-gray-400 flex-1">{nota.persona_responsable}</span></div>
+                <div className="flex"><b className="text-gray-600 w-56 shrink-0">NOTA DE SALIDA DE ACTIVO:</b><span className="border-b border-gray-400 flex-1">{nota.numero_nota}</span></div>
+              </div>
+
+              <table className="w-full text-xs table-fixed" style={{ width: 'calc(100% - 2rem)', margin: '0 auto' }}>
+                <thead>
+                  <tr className="bg-gray-100 border-y-2 border-gray-800">
+                    <th className="text-center py-1">DESCRIPCION</th>
+                    <th className="text-center py-1 border-l border-gray-800 w-20">CANTIDAD</th>
+                    <th className="text-center py-1 border-l border-gray-800 w-20">UNIDAD</th>
+                    <th className="text-center py-1 border-l border-gray-800 w-32">AREA - MAQUINA</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {/* Talonario preimpreso: la fila NO crece (ver renglonesFijos.js).
+                      AREA - MAQUINA queda en blanco para llenarse a mano. */}
+                  {filas.map((r, ri) => (
+                    <tr key={ri} className="border-b border-gray-400" style={{ height: ALTO_RENGLON_FIJO }}>
+                      <td className="py-1 px-1 align-top overflow-hidden" style={{ height: ALTO_RENGLON_FIJO, maxHeight: ALTO_RENGLON_FIJO }}>
+                        {r && (
+                          <>
+                            {!r.esContinuacion && r.etiqueta_codigo && <span className="font-mono font-bold px-1 mr-1 rounded" style={estiloCodigoImpreso(r.almacen_nombre)}>{codigoAlmacen(r.etiqueta_codigo, r.almacen_nombre)}</span>}
+                            <span>{r.textoLinea}</span>
+                          </>
+                        )}
+                      </td>
+                      <td className="py-1 text-center border-l border-gray-400 align-top">
+                        {r && !r.esContinuacion ? fmtCantidad(r.devuelto_cantidad != null ? r.devuelto_cantidad : r.cantidad) : ''}
+                      </td>
+                      <td className="py-1 text-center border-l border-gray-400 align-top">
+                        {r && !r.esContinuacion ? (r.devuelto_unidad_medida_abreviatura || r.devuelto_unidad_medida_nombre || r.unidad_medida_abreviatura || '') : ''}
+                      </td>
+                      <td className="py-1 px-1 border-l border-gray-400 align-top">&nbsp;</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {/* Observaciones y firmas en cada hoja, como la Nota de Salida. */}
+              <div className="px-4 py-2 text-xs flex">
+                <b className="text-gray-600 mr-1">OBSERVACIONES:</b>
+                <span className="border-b border-gray-400 flex-1">{observaciones}</span>
+              </div>
+              <div className="grid grid-cols-3 gap-x-6 px-4 pt-10 pb-2 text-xs text-gray-600 text-center">
+                <div className="border-t border-gray-800 pt-1">Solicitado por</div>
+                <div className="border-t border-gray-800 pt-1">Revisado por</div>
+                <div className="border-t border-gray-800 pt-1">Revisado por</div>
+              </div>
+              <div className="grid grid-cols-2 gap-x-6 px-10 pt-10 pb-3 text-xs text-gray-600 text-center">
+                <div className="border-t border-gray-800 pt-1">Revisado por</div>
+                <div className="border-t border-gray-800 pt-1">Aprobado por</div>
+              </div>
+              {pD.pie_texto && (
+                <div className="px-4 pb-2 text-[10px] text-gray-500">{pD.pie_texto}</div>
+              )}
+            </div>
+          ))}
         </div>
-        <div className="flex justify-between px-4 py-6 text-xs text-gray-500 text-center">
-          <div className="border-t border-gray-800 pt-1 w-[45%]">Recibido en Mesa por</div>
-          <div className="border-t border-gray-800 pt-1 w-[45%]">V.B. Almacen</div>
-        </div>
-        <div className="flex justify-between items-end px-4 pb-2 pt-1 text-[10px] text-gray-400 border-t border-gray-300">
-          <span>FT-GE-17 ED.-01</span>
-          <span className="text-right">c.c. Almacen {nota.detalle[0]?.almacen_nombre || '—'}<br />c.c. Compras</span>
-        </div>
-      </div>
-      )}
+        )
+      })()}
 
       {/* Etiqueta fisica del codigo nuevo de una devolucion usada */}
       {modoImpresion === 'etiqueta_usada' && lineaEtiquetaUsada && (
