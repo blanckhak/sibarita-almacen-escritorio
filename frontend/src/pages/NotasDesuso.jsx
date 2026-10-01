@@ -33,6 +33,9 @@ export default function NotasDesuso() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [salidaId, setSalidaId]   = useState(searchParams.get('salida') || '')
   const [pendientes, setPendientes] = useState([])
+  const [busqueda, setBusqueda]   = useState('')
+  // Linea a abrir directo al elegir (se encontro escaneando su codigo).
+  const [abrirEtiquetaId, setAbrirEtiquetaId] = useState(null)
   const [modoManual, setModoManual] = useState(false)
 
   const puedeRegistrar = ['admin', 'almacen', 'almacenero'].includes(usuario?.rol)
@@ -46,12 +49,27 @@ export default function NotasDesuso() {
 
   useEffect(() => { cargarNotas() }, [paramsPeriodo.periodo_id])
   useEffect(() => { api.get('/api/unidades-medida').then(res => setUnidades(res.data)).catch(() => {}) }, [])
-  const cargarPendientes = () => {
-    api.get('/api/notas-salida', { params: { estado: 'PENDIENTE' } })
+  const cargarPendientes = (q = busqueda) => {
+    api.get('/api/notas-salida/pendientes-devolucion', { params: { q } })
       .then(res => setPendientes(res.data))
       .catch(() => {})
   }
-  useEffect(() => { if (mostrarForm) cargarPendientes() }, [mostrarForm])
+  // Busca mientras se escribe (con una pausa corta para no consultar por letra).
+  useEffect(() => {
+    if (!mostrarForm || modoManual) return
+    const t = setTimeout(() => cargarPendientes(busqueda), 250)
+    return () => clearTimeout(t)
+  }, [busqueda, mostrarForm, modoManual])
+
+  // Enter en el buscador: si el codigo escaneado esta en una sola nota, la
+  // abre con la confirmacion de ese codigo ya lista.
+  const buscarEnter = async () => {
+    const { data } = await api.get('/api/notas-salida/pendientes-devolucion', { params: { q: busqueda } }).catch(() => ({ data: [] }))
+    setPendientes(data)
+    const conCodigo = data.filter(n => n.linea_etiqueta_id)
+    if (conCodigo.length === 1) elegirSalida(String(conCodigo[0].id), conCodigo[0].linea_etiqueta_id)
+    else if (data.length === 1) elegirSalida(String(data[0].id))
+  }
   // Viene de "Registrar devolucion" en una nota de salida.
   useEffect(() => {
     const s = searchParams.get('salida')
@@ -64,6 +82,7 @@ export default function NotasDesuso() {
     const delUsuario = almacenes.find(a => a.nombre === usuario?.almacen)
     setForm({ ...FORM_VACIO, almacen_id: almacenSel || (delUsuario ? String(delUsuario.id) : '') })
     setSalidaId('')
+    setBusqueda('')
     setModoManual(false)
     setMostrarForm(true)
   }
@@ -74,8 +93,9 @@ export default function NotasDesuso() {
     if (searchParams.get('salida')) setSearchParams({})
   }
 
-  const elegirSalida = (v) => {
+  const elegirSalida = (v, etiquetaId = null) => {
     setSalidaId(v)
+    setAbrirEtiquetaId(etiquetaId)
     setSearchParams(v ? { salida: v } : {})
   }
 
@@ -162,34 +182,60 @@ export default function NotasDesuso() {
 
           {!modoManual && (
             <>
-              <label className="block text-sm font-medium text-gray-600 mb-1">Nota de Salida de Activo</label>
-              <select
-                value={salidaId}
-                onChange={e => elegirSalida(e.target.value)}
-                className="w-full max-w-xl border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 mb-1"
-              >
-                <option value="">Seleccionar nota de salida pendiente...</option>
-                {/* La que vino por ?salida= puede no estar en la lista si ya quedo DEVUELTO. */}
-                {salidaId && !pendientes.some(n => String(n.id) === String(salidaId)) && (
-                  <option value={salidaId}>Nota de salida seleccionada (sin pendientes)</option>
-                )}
-                {pendientes.map(n => (
-                  <option key={n.id} value={n.id}>
-                    N.° {n.numero_nota} · {n.persona_responsable} · {n.seccion || 'Sin seccion'} · {new Date(n.fecha).toLocaleDateString('es-GT')}
-                  </option>
-                ))}
-              </select>
-              <p className="text-xs text-gray-400 mb-4">
-                Elegi la nota de salida y marca cada codigo como Devuelto (nuevo o usado) o No devuelto.
-                Lo devuelto en el dia queda en una sola Nota de Devolucion.{' '}
+              <label className="block text-sm font-medium text-gray-600 mb-1">Buscar nota de salida pendiente</label>
+              <input
+                autoFocus
+                value={busqueda}
+                onChange={e => setBusqueda(e.target.value.toUpperCase())}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); buscarEnter() } }}
+                placeholder="Escanea el codigo del producto (M9079) o escribe N.° de nota, persona o producto..."
+                className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 mb-1"
+              />
+              <p className="text-xs text-gray-400 mb-3">
+                Con el codigo escaneado + Enter se abre directo la confirmacion de ese producto.
+                Lo devuelto en el dia de una misma nota de salida queda en una sola Nota de Devolucion.{' '}
                 <button type="button" onClick={() => { setModoManual(true); elegirSalida('') }} className="text-blue-700 hover:underline">
                   Volvio material sin nota de salida en el sistema
                 </button>
               </p>
 
+              {!salidaId && (
+                <div className="border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-80 overflow-y-auto mb-2">
+                  {pendientes.map(n => (
+                    <button
+                      key={n.id}
+                      type="button"
+                      onClick={() => elegirSalida(String(n.id), n.linea_etiqueta_id)}
+                      className="w-full text-left px-4 py-2.5 hover:bg-blue-50 transition"
+                    >
+                      <div className="flex items-center justify-between text-sm">
+                        <span>
+                          <b className="font-mono text-gray-800">N.° {n.numero_nota}</b>
+                          <span className="text-gray-600"> · {n.persona_responsable} · {n.seccion || 'Sin seccion'} · {new Date(n.fecha).toLocaleDateString('es-GT')}</span>
+                        </span>
+                        <span className="text-xs text-orange-700 shrink-0 ml-3">
+                          {n.linea_etiqueta_id ? 'codigo encontrado · ' : ''}{n.pendientes} pendiente(s)
+                        </span>
+                      </div>
+                      {n.productos && <div className="text-xs text-gray-400 truncate">{n.productos}</div>}
+                    </button>
+                  ))}
+                  {pendientes.length === 0 && (
+                    <p className="text-center text-gray-400 py-4 text-sm">No hay notas de salida pendientes que coincidan</p>
+                  )}
+                </div>
+              )}
+
+              {salidaId && (
+                <button type="button" onClick={() => elegirSalida('')} className="text-sm text-blue-700 hover:underline mb-3">
+                  &larr; Buscar otra nota de salida
+                </button>
+              )}
+
               {salidaId && (
                 <DevolucionNotaSalida
                   notaSalidaId={salidaId}
+                  abrirEtiquetaId={abrirEtiquetaId}
                   puedeGestionar={puedeRegistrar}
                   onRegistrada={() => { cargarNotas(); cargarPendientes() }}
                 />

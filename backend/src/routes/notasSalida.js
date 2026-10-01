@@ -57,6 +57,42 @@ router.get('/', verificarToken, async (req, res) => {
   }
 })
 
+// Buscador de la pantalla Notas de Devolucion: notas de salida PENDIENTES por
+// N.° de nota, codigo de etiqueta (escaneado, con o sin letra), persona,
+// seccion o producto. `linea_etiqueta_id` = la linea pendiente cuyo codigo
+// coincide exacto (para abrir directo su confirmacion).
+router.get('/pendientes-devolucion', verificarToken, async (req, res) => {
+  const q = String(req.query.q || '').trim()
+  const soloDigitos = q.replace(/^[A-Za-z]+/, '')
+  const codigo = /^\d+$/.test(soloDigitos) ? Number(soloDigitos) : null
+  try {
+    const result = await pool.query(`
+      SELECT n.id, n.numero_nota, n.persona_responsable, n.seccion, n.fecha,
+             COUNT(d.id) FILTER (WHERE d.etiqueta_id IS NOT NULL AND d.devuelto_condicion IS NULL)::int as pendientes,
+             MIN(d.etiqueta_id) FILTER (WHERE d.devuelto_condicion IS NULL AND $2::bigint IS NOT NULL AND e.codigo = $2::bigint) as linea_etiqueta_id,
+             string_agg(DISTINCT p.nombre, ' · ') FILTER (WHERE d.devuelto_condicion IS NULL) as productos
+      FROM notas_salida n
+      JOIN notas_salida_detalle d ON d.nota_salida_id = n.id
+      LEFT JOIN etiquetas e ON d.etiqueta_id = e.id
+      LEFT JOIN productos p ON e.producto_id = p.id
+      WHERE n.estado = 'PENDIENTE'
+      GROUP BY n.id
+      HAVING $1 = ''
+          OR n.numero_nota ILIKE '%' || $1 || '%'
+          OR n.persona_responsable ILIKE '%' || $1 || '%'
+          OR COALESCE(n.seccion, '') ILIKE '%' || $1 || '%'
+          OR bool_or(d.devuelto_condicion IS NULL AND p.nombre ILIKE '%' || $1 || '%')
+          OR bool_or(d.devuelto_condicion IS NULL AND $2::bigint IS NOT NULL AND e.codigo = $2::bigint)
+      ORDER BY (MIN(d.etiqueta_id) FILTER (WHERE d.devuelto_condicion IS NULL AND $2::bigint IS NOT NULL AND e.codigo = $2::bigint)) IS NULL,
+               n.fecha DESC
+      LIMIT 30
+    `, [q, codigo])
+    res.json(result.rows)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 router.get('/:id', verificarToken, async (req, res) => {
   try {
     const nota = await pool.query(`

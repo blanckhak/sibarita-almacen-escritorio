@@ -13,7 +13,9 @@ import { fmtCantidad } from '../utils/fmt'
 // de Devolucion: por cada linea que salio, Devuelto (nueva / usada) o No
 // devuelto. Cada linea devuelta queda en la Nota de Devolucion del dia
 // (backend utils/notaDevolucion.js); `onRegistrada(notaDevolucion)` avisa cual.
-export default function DevolucionNotaSalida({ notaSalidaId, puedeGestionar, onRegistrada }) {
+// `abrirEtiquetaId`: linea cuya confirmacion se abre sola al cargar (vino del
+// buscador con el codigo escaneado; el codigo ya va escrito).
+export default function DevolucionNotaSalida({ notaSalidaId, abrirEtiquetaId, puedeGestionar, onRegistrada }) {
   const [nota, setNota]           = useState(null)
   const [guardando, setGuardando] = useState(false)
   const [mensaje, setMensaje]     = useState(null)
@@ -49,6 +51,16 @@ export default function DevolucionNotaSalida({ notaSalidaId, puedeGestionar, onR
   }
 
   useEffect(() => { cargar() }, [notaSalidaId])
+  const [yaAbierta, setYaAbierta] = useState(null)
+  useEffect(() => {
+    if (!nota || !abrirEtiquetaId || yaAbierta === abrirEtiquetaId) return
+    const linea = nota.detalle.find(d => d.etiqueta_id === abrirEtiquetaId && !d.devuelto_condicion)
+    if (linea && puedeGestionar && nota.estado === 'PENDIENTE') {
+      abrirConfirmacionDevuelto(linea)
+      setCodigoConfirmacion(codigoAlmacen(linea.etiqueta_codigo, linea.almacen_nombre))
+    }
+    setYaAbierta(abrirEtiquetaId)
+  }, [nota, abrirEtiquetaId])
   useEffect(() => { api.get('/api/unidades-medida').then(res => setUnidades(res.data)).catch(() => {}) }, [])
 
   const avisar = (m, ms = 5000) => {
