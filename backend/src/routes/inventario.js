@@ -12,11 +12,13 @@ const TIPOS = ['NUEVO', 'DEVOLUCION']
 router.get('/', verificarToken, async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT i.*, a.nombre as almacen_nombre, p.nombre as producto_nombre
+      SELECT i.*, a.nombre as almacen_nombre, p.nombre as producto_nombre,
+             um.abreviatura as unidad_medida_abreviatura
       FROM inventario i
       JOIN almacenes a ON i.almacen_id = a.id
       LEFT JOIN productos p ON i.producto_id = p.id
-      ORDER BY a.nombre
+      LEFT JOIN unidades_medida um ON p.unidad_medida_id = um.id
+      ORDER BY a.nombre, p.nombre
     `)
     res.json(result.rows)
   } catch (err) {

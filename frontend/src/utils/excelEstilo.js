@@ -1,26 +1,40 @@
 // Motor comun de todos los Excel del sistema: genera .xlsx reales (ExcelJS)
-// con el mismo estilo que el PDF: banda de titulo azul SIBARITA, encabezado
-// azul con texto blanco, filas cebra, bordes finos, encabezado congelado,
-// filtros, anchos automaticos y formato de numeros/fechas.
+// con formato de reporte formal:
+//   - membrete: empresa, titulo del reporte y linea de datos (fecha de
+//     generacion, usuario, filtros) cerrada con una linea azul
+//   - bloque de resumen opcional (indicadores clave)
+//   - tabla: encabezado azul oscuro, filas cebra suaves, bordes finos,
+//     encabezado congelado, filtros y anchos automaticos
+//   - agrupacion opcional (p.ej. por almacen) con subtotal por grupo
+//   - impresion: A4 ajustado al ancho, encabezado repetido en cada hoja y
+//     pie con empresa, titulo y "Pagina X de Y"
 //
 // hoja = {
 //   nombre, titulo, subtitulo?,
-//   columnas: [{ titulo, campo? | valor?(fila), tipo?: 'texto'|'numero'|'fecha', ancho? }],
+//   columnas: [{ titulo, campo? | valor?(fila), tipo?: 'texto'|'numero'|'fecha'|'porcentaje', ancho? }],
 //   filas: [...],
-//   totales?: true,               // fila TOTAL con la suma de las columnas numericas
+//   totales?: true,               // fila TOTAL GENERAL con la suma de las columnas numericas
+//   resumen?: [{ etiqueta, valor, tipo? }],   // indicadores arriba de la tabla
+//   agrupar?: { valor(fila), titulo?(clave) }, // banda + subtotal por grupo
 //   estiloFila?: (fila) => ({ fuente?, relleno? }),  // p.ej. anuladas en rojo
 //   destacar?: [indices de columna] // columnas resaltadas (p.ej. SALDO)
 // }
 
+const EMPRESA = 'MANUFACTURA DE ALIMENTOS S.A.'
 const AZUL = 'FF1E3A8A'
+const AZUL_OSCURO = 'FF172554'
 const AZUL_CLARO = 'FFDBEAFE'
-const CEBRA = 'FFF1F5F9'
-const BORDE = 'FFCBD5E1'
+const AZUL_SUAVE = 'FFEFF6FF'
+const CEBRA = 'FFF8FAFC'
+const BORDE = 'FFD9E1EC'
 const GRIS_TXT = 'FF64748B'
+const TEXTO = 'FF1F2937'
+const FUENTE = 'Calibri'
 
 const borde = { style: 'thin', color: { argb: BORDE } }
 const BORDES = { top: borde, left: borde, bottom: borde, right: borde }
 const relleno = (argb) => ({ type: 'pattern', pattern: 'solid', fgColor: { argb } })
+const fuente = (extra = {}) => ({ name: FUENTE, size: 10, color: { argb: TEXTO }, ...extra })
 
 // Codigos, guias, telefonos, etc. son numeros "de texto": nunca se formatean
 // con separador de miles aunque solo tengan digitos.
@@ -55,7 +69,7 @@ function aFechaLocal(v) {
 
 function convertir(v, tipo) {
   if (v === null || v === undefined || v === '') return null
-  if (tipo === 'numero') {
+  if (tipo === 'numero' || tipo === 'porcentaje') {
     const n = Number(v)
     return Number.isNaN(n) ? String(v) : n
   }
@@ -67,103 +81,219 @@ const ahoraTexto = () => new Date().toLocaleString('es-GT', {
   day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
 })
 
+const usuarioActual = () => {
+  try { return JSON.parse(sessionStorage.getItem('usuario') || 'null')?.nombre || '' } catch { return '' }
+}
+
+const alineacion = (tipo) => ({
+  vertical: 'middle',
+  horizontal: tipo === 'numero' || tipo === 'porcentaje' ? 'right' : tipo === 'fecha' ? 'center' : 'left',
+  indent: tipo === 'texto' ? 1 : 0,
+})
+
 function construirHoja(wb, hoja) {
-  const { columnas, filas = [], totales, estiloFila, destacar = [] } = hoja
+  const { columnas, filas = [], totales, estiloFila, destacar = [], resumen, agrupar } = hoja
   const nombre = String(hoja.nombre || 'Hoja').replace(/[\\/?*[\]:]/g, ' ').slice(0, 31)
-  const ws = wb.addWorksheet(nombre, {
-    views: [{ state: 'frozen', ySplit: 4, showGridLines: false }],
-    pageSetup: { orientation: columnas.length > 6 ? 'landscape' : 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0, paperSize: 9 },
-  })
+  const titulo = hoja.titulo || nombre
   const nCol = columnas.length
   const tipos = columnas.map(c => tipoColumna(c, filas))
-
-  // 1) Banda de titulo
-  ws.mergeCells(1, 1, 1, nCol)
-  const t = ws.getCell(1, 1)
-  t.value = hoja.titulo || nombre
-  t.font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } }
-  t.fill = relleno(AZUL)
-  t.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 }
-  ws.getRow(1).height = 26
-
-  // 2) Subtitulo: SIBARITA + fecha de generacion (+ texto propio)
-  ws.mergeCells(2, 1, 2, nCol)
-  const s = ws.getCell(2, 1)
-  s.value = ['SIBARITA', hoja.subtitulo, `Generado: ${ahoraTexto()}`].filter(Boolean).join('   ·   ')
-  s.font = { italic: true, size: 10, color: { argb: GRIS_TXT } }
-  s.alignment = { indent: 1 }
-  ws.getRow(3).height = 6
-
-  // 4) Encabezado
-  const head = ws.getRow(4)
-  columnas.forEach((c, i) => {
-    const cell = head.getCell(i + 1)
-    cell.value = c.titulo
-    cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }
-    cell.fill = relleno(AZUL)
-    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true }
-    cell.border = BORDES
+  const ws = wb.addWorksheet(nombre, {
+    pageSetup: {
+      orientation: nCol > 6 ? 'landscape' : 'portrait', paperSize: 9,
+      fitToPage: true, fitToWidth: 1, fitToHeight: 0, horizontalCentered: true,
+      margins: { left: 0.4, right: 0.4, top: 0.55, bottom: 0.6, header: 0.25, footer: 0.3 },
+    },
+    headerFooter: {
+      oddFooter: `&L&8SIBARITA - ${EMPRESA}&C&8${titulo.replace(/&/g, '&&')}&R&8Pagina &P de &N`,
+    },
   })
-  head.height = 30
 
-  // 5) Datos
-  filas.forEach((f, r) => {
-    const row = ws.getRow(5 + r)
-    const extra = estiloFila ? estiloFila(f) || {} : {}
-    columnas.forEach((c, i) => {
-      const cell = row.getCell(i + 1)
-      cell.value = convertir(valorDe(c, f), tipos[i])
-      cell.border = BORDES
-      cell.alignment = { vertical: 'middle', horizontal: tipos[i] === 'numero' ? 'right' : tipos[i] === 'fecha' ? 'center' : 'left' }
-      if (tipos[i] === 'numero' && typeof cell.value === 'number') cell.numFmt = formatoNum(cell.value)
-      if (tipos[i] === 'fecha') cell.numFmt = 'dd/mm/yyyy hh:mm'
-      const fondo = destacar.includes(i) ? AZUL_CLARO : extra.relleno || (r % 2 ? CEBRA : null)
-      if (fondo) cell.fill = relleno(fondo)
-      if (destacar.includes(i)) cell.font = { bold: true }
-      if (extra.fuente) cell.font = { ...(cell.font || {}), ...extra.fuente }
+  // Anchos segun el contenido (entre 10 y 55 caracteres).
+  columnas.forEach((c, i) => {
+    if (c.ancho) { ws.getColumn(i + 1).width = c.ancho; return }
+    let max = String(c.titulo).length + 2
+    for (const f of filas) {
+      const v = valorDe(c, f)
+      const len = tipos[i] === 'fecha' ? 16 : tipos[i] === 'porcentaje' ? 8
+        : tipos[i] === 'numero' ? String(v ?? '').length + 4 : String(v ?? '').length
+      if (len > max) max = len
+    }
+    ws.getColumn(i + 1).width = Math.min(55, Math.max(10, max + 2))
+  })
+
+  const unir = (n) => { if (nCol > 1) ws.mergeCells(n, 1, n, nCol) }
+  const poner = (cell, props) => Object.assign(cell, props)
+
+  // 1) Membrete
+  unir(1)
+  poner(ws.getCell(1, 1), {
+    value: EMPRESA,
+    font: fuente({ bold: true, size: 9, color: { argb: GRIS_TXT } }),
+    alignment: { vertical: 'bottom' },
+  })
+  ws.getRow(1).height = 16
+  unir(2)
+  poner(ws.getCell(2, 1), {
+    value: titulo.toUpperCase(),
+    font: fuente({ bold: true, size: 16, color: { argb: AZUL_OSCURO } }),
+    alignment: { vertical: 'middle' },
+  })
+  ws.getRow(2).height = 26
+  unir(3)
+  const usuario = usuarioActual()
+  poner(ws.getCell(3, 1), {
+    value: [
+      hoja.subtitulo,
+      `Generado: ${ahoraTexto()}`,
+      usuario && `Por: ${usuario}`,
+    ].filter(Boolean).join('   |   '),
+    font: fuente({ size: 9, color: { argb: GRIS_TXT } }),
+    alignment: { vertical: 'top', wrapText: true },
+  })
+  for (let c = 1; c <= nCol; c++) ws.getCell(3, c).border = { bottom: { style: 'medium', color: { argb: AZUL } } }
+  // Si la linea no entra en el ancho de la tabla, baja a un segundo renglon.
+  const anchoTabla = columnas.reduce((acc, c, i) => acc + (ws.getColumn(i + 1).width || 10), 0)
+  ws.getRow(3).height = String(ws.getCell(3, 1).value).length > anchoTabla * 1.35 ? 30 : 18
+  let r = 5
+
+  // 2) Resumen: tarjetas de indicadores, una por columna (etiqueta arriba,
+  // valor grande abajo); si hay mas indicadores que columnas, otra fila.
+  if (resumen?.length) {
+    for (let k = 0; k < resumen.length; k += nCol) {
+      resumen.slice(k, k + nCol).forEach((ind, j) => {
+        const lado = { left: { style: 'medium', color: { argb: AZUL } } }
+        poner(ws.getCell(r, j + 1), {
+          value: String(ind.etiqueta).toUpperCase(),
+          font: fuente({ size: 8, bold: true, color: { argb: GRIS_TXT } }),
+          fill: relleno(AZUL_SUAVE),
+          alignment: { vertical: 'bottom', indent: 1, wrapText: true },
+          border: lado,
+        })
+        const va = ws.getCell(r + 1, j + 1)
+        poner(va, {
+          value: ind.valor,
+          font: fuente({ bold: true, size: 14, color: { argb: AZUL_OSCURO } }),
+          fill: relleno(AZUL_SUAVE),
+          alignment: { vertical: 'middle', horizontal: 'left', indent: 1 },
+          border: lado,
+        })
+        if (typeof ind.valor === 'number') va.numFmt = ind.tipo === 'porcentaje' ? '0.0%' : formatoNum(ind.valor)
+      })
+      ws.getRow(r).height = 24
+      ws.getRow(r + 1).height = 24
+      r += 3
+    }
+  }
+
+  // 3) Encabezado de la tabla
+  const filaHead = r
+  columnas.forEach((c, i) => {
+    poner(ws.getCell(filaHead, i + 1), {
+      value: String(c.titulo).toUpperCase(),
+      font: fuente({ bold: true, size: 9, color: { argb: 'FFFFFFFF' } }),
+      fill: relleno(AZUL_OSCURO),
+      alignment: { ...alineacion(tipos[i]), wrapText: true },
+      border: { ...BORDES, bottom: { style: 'medium', color: { argb: AZUL } } },
     })
   })
+  ws.getRow(filaHead).height = 24
+  ws.views = [{ state: 'frozen', ySplit: filaHead, showGridLines: false }]
+  ws.pageSetup.printTitlesRow = `${filaHead}:${filaHead}`
+  r = filaHead + 1
 
-  // 6) Totales
-  if (totales && filas.length) {
-    const ult = 4 + filas.length
-    const row = ws.getRow(ult + 1)
+  const escribirDato = (f, zebra) => {
+    const extra = estiloFila ? estiloFila(f) || {} : {}
     columnas.forEach((c, i) => {
-      const cell = row.getCell(i + 1)
-      if (i === 0) cell.value = 'TOTAL'
-      else if (tipos[i] === 'numero') {
+      const cell = ws.getCell(r, i + 1)
+      cell.value = convertir(valorDe(c, f), tipos[i])
+      cell.font = fuente()
+      cell.border = BORDES
+      cell.alignment = alineacion(tipos[i])
+      if (tipos[i] === 'numero' && typeof cell.value === 'number') cell.numFmt = formatoNum(cell.value)
+      if (tipos[i] === 'porcentaje') cell.numFmt = '0.0%'
+      if (tipos[i] === 'fecha') cell.numFmt = 'dd/mm/yyyy hh:mm'
+      const fondo = destacar.includes(i) ? AZUL_CLARO : extra.relleno || (zebra ? CEBRA : null)
+      if (fondo) cell.fill = relleno(fondo)
+      if (destacar.includes(i)) cell.font = fuente({ bold: true })
+      if (extra.fuente) cell.font = { ...cell.font, ...extra.fuente }
+    })
+    ws.getRow(r).height = 18
+    r++
+  }
+
+  // Fila de suma (subtotal de grupo o TOTAL GENERAL). SUBTOTAL(9,...) ignora
+  // los subtotales de grupo que quedan dentro del rango del total general.
+  const escribirSuma = (etiqueta, desde, hasta, filasSuma, general) => {
+    columnas.forEach((c, i) => {
+      const cell = ws.getCell(r, i + 1)
+      if (i === 0) cell.value = etiqueta
+      else if (tipos[i] === 'numero' || tipos[i] === 'porcentaje') {
+        // Los % (participacion) tambien se suman: el total da 100%.
         const L = ws.getColumn(i + 1).letter
-        const suma = filas.reduce((acc, f) => acc + (Number(valorDe(c, f)) || 0), 0)
-        cell.value = { formula: `SUBTOTAL(9,${L}5:${L}${ult})`, result: suma }
-        cell.numFmt = formatoNum(Math.round(suma * 1000) / 1000)
-        cell.alignment = { horizontal: 'right' }
+        const suma = filasSuma.reduce((acc, f) => acc + (Number(valorDe(c, f)) || 0), 0)
+        cell.value = { formula: `SUBTOTAL(9,${L}${desde}:${L}${hasta})`, result: suma }
+        cell.numFmt = tipos[i] === 'porcentaje' ? '0.0%' : formatoNum(Math.round(suma * 1000) / 1000)
       }
-      cell.font = { bold: true }
-      cell.fill = relleno(AZUL_CLARO)
-      cell.border = { ...BORDES, top: { style: 'medium', color: { argb: AZUL } } }
+      cell.alignment = i === 0 ? { vertical: 'middle', indent: 1 } : { vertical: 'middle', horizontal: 'right' }
+      cell.font = fuente({ bold: true, color: { argb: general ? 'FFFFFFFF' : AZUL_OSCURO } })
+      cell.fill = relleno(general ? AZUL : AZUL_CLARO)
+      cell.border = general
+        ? { top: { style: 'medium', color: { argb: AZUL_OSCURO } }, bottom: { style: 'medium', color: { argb: AZUL_OSCURO } } }
+        : { top: borde, bottom: { style: 'thin', color: { argb: AZUL } } }
+    })
+    ws.getRow(r).height = general ? 22 : 19
+    r++
+  }
+
+  const hayNumeros = tipos.includes('numero')
+  const primeraDato = r
+  if (agrupar && filas.length) {
+    const grupos = new Map()
+    for (const f of filas) {
+      const k = agrupar.valor(f) ?? '—'
+      if (!grupos.has(k)) grupos.set(k, [])
+      grupos.get(k).push(f)
+    }
+    for (const [clave, filasG] of grupos) {
+      unir(r)
+      poner(ws.getCell(r, 1), {
+        value: `${agrupar.titulo ? agrupar.titulo(clave) : clave}   (${filasG.length})`,
+        font: fuente({ bold: true, color: { argb: AZUL_OSCURO } }),
+        fill: relleno(AZUL_SUAVE),
+        alignment: { vertical: 'middle', indent: 1 },
+        border: { top: { style: 'thin', color: { argb: AZUL } }, bottom: borde },
+      })
+      ws.getRow(r).height = 20
+      r++
+      const desde = r
+      filasG.forEach((f, k) => escribirDato(f, k % 2 === 1))
+      if (hayNumeros) escribirSuma(`Subtotal ${clave}`, desde, r - 1, filasG, false)
+    }
+  } else {
+    filas.forEach((f, k) => escribirDato(f, k % 2 === 1))
+  }
+  const ultimaDato = r - 1
+
+  if (totales && filas.length && hayNumeros) escribirSuma('TOTAL GENERAL', primeraDato, ultimaDato, filas, true)
+  if (!filas.length) {
+    unir(r)
+    poner(ws.getCell(r, 1), {
+      value: 'Sin datos para mostrar',
+      font: fuente({ italic: true, color: { argb: GRIS_TXT } }),
+      alignment: { horizontal: 'center' },
     })
   }
 
-  // Filtros en el encabezado
-  if (filas.length) ws.autoFilter = { from: { row: 4, column: 1 }, to: { row: 4 + filas.length, column: nCol } }
-
-  // Anchos segun el contenido (entre 8 y 50 caracteres)
-  columnas.forEach((c, i) => {
-    if (c.ancho) { ws.getColumn(i + 1).width = c.ancho; return }
-    let max = String(c.titulo).length
-    for (const f of filas) {
-      const v = valorDe(c, f)
-      const len = tipos[i] === 'fecha' ? 16 : tipos[i] === 'numero' ? String(v ?? '').length + 3 : String(v ?? '').length
-      if (len > max) max = len
-    }
-    ws.getColumn(i + 1).width = Math.min(50, Math.max(8, max + 2))
-  })
+  // Filtros en el encabezado (con grupos no: las bandas romperian el filtro).
+  if (filas.length && !agrupar) ws.autoFilter = { from: { row: filaHead, column: 1 }, to: { row: ultimaDato, column: nCol } }
 }
 
 export async function descargarExcel(nombreArchivo, hojas) {
   const ExcelJS = (await import('exceljs')).default
   const wb = new ExcelJS.Workbook()
   wb.creator = 'SIBARITA'
+  wb.company = EMPRESA
+  wb.title = hojas[0]?.titulo || nombreArchivo
   wb.created = new Date()
   hojas.forEach(h => construirHoja(wb, h))
 

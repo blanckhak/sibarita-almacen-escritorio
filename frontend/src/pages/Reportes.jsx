@@ -3,6 +3,7 @@ import api from '../utils/api'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { exportarExcel, exportarPDF } from '../utils/exportar'
 import { generarKardexExcel } from '../utils/kardexExcel'
+import { excelResumenAlmacenes, excelInventario, excelMovimientos, excelSalidasMotivo } from '../utils/reportesExcel'
 import { motivoLabel } from '../utils/motivos'
 
 export default function Reportes() {
@@ -145,12 +146,7 @@ export default function Reportes() {
           <p className="text-sm text-gray-500 mb-4">Total: {totalGeneral.toLocaleString()} items</p>
           <div className="flex gap-2">
             <button
-              onClick={() => exportarExcel(resumen, [
-                { titulo: 'Almacen', campo: 'almacen' },
-                { titulo: 'Nuevos', campo: 'nuevos' },
-                { titulo: 'Devoluciones', campo: 'devoluciones' },
-                { titulo: 'Total', campo: 'total' },
-              ], 'Resumen de Almacenes', 'resumen_almacenes', { totales: true })}
+              onClick={() => excelResumenAlmacenes(resumen)}
               className="flex-1 bg-green-600 hover:bg-green-700 text-white text-xs py-2 rounded-lg transition"
             >
               Excel
@@ -181,12 +177,7 @@ export default function Reportes() {
           <p className="text-sm text-gray-500 mb-4">Nuevos: {totalNuevos.toLocaleString()} | Dev: {totalDev.toLocaleString()}</p>
           <div className="flex gap-2">
             <button
-              onClick={() => exportarExcel(inventario, [
-                { titulo: 'Almacen', campo: 'almacen_nombre' },
-                { titulo: 'Tipo', campo: 'tipo' },
-                { titulo: 'Cantidad', campo: 'cantidad' },
-                { titulo: 'Descripcion', campo: 'descripcion' },
-              ], 'Inventario Completo', 'inventario_completo')}
+              onClick={() => excelInventario(inventario)}
               className="flex-1 bg-green-600 hover:bg-green-700 text-white text-xs py-2 rounded-lg transition"
             >
               Excel
@@ -217,13 +208,7 @@ export default function Reportes() {
           <p className="text-sm text-gray-500 mb-4">Traslados, entradas y salidas</p>
           <div className="flex gap-2">
             <button
-              onClick={() => exportarExcel(movimientos, [
-                { titulo: 'Tipo', campo: 'tipo' },
-                { titulo: 'Origen', campo: 'origen' },
-                { titulo: 'Destino', campo: 'destino' },
-                { titulo: 'Cantidad', campo: 'cantidad' },
-                { titulo: 'Descripcion', campo: 'descripcion' },
-              ], 'Reporte de Movimientos', 'movimientos')}
+              onClick={() => excelMovimientos(movimientos)}
               className="flex-1 bg-green-600 hover:bg-green-700 text-white text-xs py-2 rounded-lg transition"
             >
               Excel
@@ -290,12 +275,7 @@ export default function Reportes() {
           <p className="text-sm text-gray-500 mb-4">{totalUnidadesMotivo.toLocaleString()} unidades salidas en el rango</p>
           <div className="flex gap-2">
             <button
-              onClick={() => exportarExcel(salidasMotivoFilas, [
-                { titulo: 'Motivo', campo: 'motivo_label' },
-                { titulo: 'Almacen', campo: 'almacen' },
-                { titulo: 'Notas', campo: 'notas' },
-                { titulo: 'Unidades', campo: 'unidades' },
-              ], 'Salidas por Motivo', 'salidas_por_motivo', { totales: true })}
+              onClick={() => excelSalidasMotivo(salidasMotivo, desde, hasta)}
               className="flex-1 bg-green-600 hover:bg-green-700 text-white text-xs py-2 rounded-lg transition"
             >
               Excel

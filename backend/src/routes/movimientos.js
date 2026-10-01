@@ -16,11 +16,15 @@ router.get('/', verificarToken, async (req, res) => {
         m.id, m.tipo, m.cantidad, m.descripcion, m.fecha,
         o.nombre as origen,
         d.nombre as destino,
-        p.nombre as producto_nombre
+        p.nombre as producto_nombre,
+        um.abreviatura as unidad_medida_abreviatura,
+        u.nombre as usuario_nombre
       FROM movimientos m
       LEFT JOIN almacenes o ON m.almacen_origen_id = o.id
       LEFT JOIN almacenes d ON m.almacen_destino_id = d.id
       LEFT JOIN productos p ON m.producto_id = p.id
+      LEFT JOIN unidades_medida um ON p.unidad_medida_id = um.id
+      LEFT JOIN usuarios u ON m.usuario_id = u.id
       ORDER BY m.fecha DESC
     `)
     res.json(result.rows)
