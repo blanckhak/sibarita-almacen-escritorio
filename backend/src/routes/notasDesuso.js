@@ -37,16 +37,18 @@ router.get('/', verificarToken, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT n.id, n.numero_nota, n.seccion, n.persona_responsable, n.nota_salida_ref,
+             n.nota_salida_id, ns.estado as nota_salida_estado,
              n.fecha, n.estado, n.periodo_id, n.almacen_id, a.nombre as almacen_nombre,
              ${perfilSql('u', 'ru')} as usuario_nombre,
              COUNT(d.id)::int as total_lineas
       FROM notas_desuso n
       JOIN almacenes a ON n.almacen_id = a.id
+      LEFT JOIN notas_salida ns ON n.nota_salida_id = ns.id
       LEFT JOIN usuarios u ON n.usuario_id = u.id
       LEFT JOIN roles ru ON ru.id = u.rol_id
       LEFT JOIN notas_desuso_detalle d ON d.nota_desuso_id = n.id
       ${where}
-      GROUP BY n.id, a.nombre, u.nombre, ru.nombre
+      GROUP BY n.id, a.nombre, ns.estado, u.nombre, ru.nombre
       ORDER BY n.fecha DESC
     `, valores)
     res.json(result.rows)
@@ -60,9 +62,11 @@ router.get('/:id', verificarToken, async (req, res) => {
     const nota = await pool.query(`
       SELECT n.*, a.nombre as almacen_nombre, ${perfilSql('u', 'ru')} as usuario_nombre,
              ua.nombre as anulado_por_nombre,
-             pe.estado as periodo_estado, pe.nombre as periodo_nombre
+             pe.estado as periodo_estado, pe.nombre as periodo_nombre,
+             ns.numero_nota as nota_salida_numero, ns.estado as nota_salida_estado
       FROM notas_desuso n
       JOIN almacenes a ON n.almacen_id = a.id
+      LEFT JOIN notas_salida ns ON n.nota_salida_id = ns.id
       LEFT JOIN usuarios u ON n.usuario_id = u.id
       LEFT JOIN roles ru ON ru.id = u.rol_id
       LEFT JOIN usuarios ua ON n.anulado_por = ua.id
@@ -75,9 +79,17 @@ router.get('/:id', verificarToken, async (req, res) => {
 
     const detalle = await pool.query(`
       SELECT d.*, d.cantidad::float8 as cantidad,
-             um.nombre as unidad_medida_nombre, um.abreviatura as unidad_medida_abreviatura
+             um.nombre as unidad_medida_nombre, um.abreviatura as unidad_medida_abreviatura,
+             -- Renglon enlazado a una linea de la nota de salida: codigo que
+             -- salio, como volvio y (si volvio usado) el codigo nuevo.
+             e.codigo as etiqueta_codigo, ea.nombre as almacen_nombre,
+             sd.devuelto_condicion, sd.devuelto_obs, en.codigo as etiqueta_devuelta_codigo
       FROM notas_desuso_detalle d
       LEFT JOIN unidades_medida um ON d.unidad_medida_id = um.id
+      LEFT JOIN notas_salida_detalle sd ON d.nota_salida_detalle_id = sd.id
+      LEFT JOIN etiquetas e ON sd.etiqueta_id = e.id
+      LEFT JOIN almacenes ea ON e.almacen_id = ea.id
+      LEFT JOIN etiquetas en ON sd.etiqueta_devuelta_id = en.id
       WHERE d.nota_desuso_id = $1
       ORDER BY d.id
     `, [req.params.id])
@@ -122,6 +134,20 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen', 'almacenero'),
     [`area/maquina linea ${i + 1}`]: [l.area_maquina, 150],
   })).find(Boolean)
   if (errLargoLineas) return res.status(400).json({ error: errLargoLineas })
+
+  // Si la nota de salida esta en el sistema, la devolucion se registra desde
+  // ella (boton Devuelto): asi vuelve el stock y la nota queda enlazada.
+  const ref = (nota_salida_ref || '').trim()
+  if (ref) {
+    const refNum = /^\d+$/.test(ref) ? ref.padStart(6, '0') : ref
+    const ns = await pool.query('SELECT id, numero_nota FROM notas_salida WHERE numero_nota = $1', [refNum])
+    if (ns.rows.length > 0) {
+      return res.status(409).json({
+        error: `La nota de salida N.° ${ns.rows[0].numero_nota} esta en el sistema: registra la devolucion desde ella (boton Devuelto) para que vuelva el stock y la nota de devolucion se genere enlazada.`,
+        nota_salida_id: ns.rows[0].id,
+      })
+    }
+  }
 
   const client = await pool.connect()
   try {
@@ -196,13 +222,15 @@ router.put('/:id', verificarToken, soloRoles('admin', 'almacen', 'almacenero'),
   if (errLargo) return res.status(400).json({ error: errLargo })
 
   try {
-    const nota = await pool.query('SELECT estado, periodo_id FROM notas_desuso WHERE id = $1', [req.params.id])
+    const nota = await pool.query('SELECT estado, periodo_id, nota_salida_id, nota_salida_ref FROM notas_desuso WHERE id = $1', [req.params.id])
     if (nota.rows.length === 0) {
       return res.status(404).json({ error: 'Nota de devolucion no encontrada' })
     }
     if (nota.rows[0].estado === 'ANULADA') {
       return res.status(400).json({ error: 'Esta nota esta anulada' })
     }
+    // Enlazada a una nota de salida: la referencia no se cambia a mano.
+    const refFinal = nota.rows[0].nota_salida_id ? nota.rows[0].nota_salida_ref : (nota_salida_ref || null)
     if (await periodoCerrado(null, nota.rows[0].periodo_id)) {
       return res.status(409).json({ error: ERR_PERIODO_CERRADO })
     }
@@ -212,7 +240,7 @@ router.put('/:id', verificarToken, soloRoles('admin', 'almacen', 'almacenero'),
           SET persona_responsable = $1, seccion = $2, nota_salida_ref = $3, observaciones = $4
         WHERE id = $5
       RETURNING *`,
-      [persona_responsable, seccion || null, nota_salida_ref || null, observaciones || null, req.params.id]
+      [persona_responsable, seccion || null, refFinal, observaciones || null, req.params.id]
     )
     res.json(actualizada.rows[0])
   } catch (err) {
@@ -231,12 +259,15 @@ router.post('/:id/anular', verificarToken, soloRoles('admin', 'almacen', 'almace
   if (errLargo) return res.status(400).json({ error: errLargo })
 
   try {
-    const nota = await pool.query('SELECT estado, periodo_id FROM notas_desuso WHERE id = $1', [req.params.id])
+    const nota = await pool.query('SELECT estado, periodo_id, nota_salida_id FROM notas_desuso WHERE id = $1', [req.params.id])
     if (nota.rows.length === 0) {
       return res.status(404).json({ error: 'Nota de devolucion no encontrada' })
     }
     if (nota.rows[0].estado === 'ANULADA') {
       return res.status(400).json({ error: 'La nota ya esta anulada' })
+    }
+    if (nota.rows[0].nota_salida_id) {
+      return res.status(400).json({ error: 'Esta nota de devolucion se genero desde una nota de salida; la devolucion ya movio el stock y no se anula desde aqui' })
     }
     if (await periodoCerrado(null, nota.rows[0].periodo_id)) {
       return res.status(409).json({ error: ERR_PERIODO_CERRADO })

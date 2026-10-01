@@ -1,1 +1,7 @@
 @import "tailwindcss";
+
+/* Impresion desde un portal (etiqueta usada en DevolucionNotaSalida): solo
+   sale el overlay, no la pagina de atras. */
+@media print {
+  body.print-solo-portal > #root { display: none; }
+}

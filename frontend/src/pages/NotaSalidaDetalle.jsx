@@ -6,10 +6,9 @@ import { colorEtiquetaEstado, labelEtiquetaEstado } from '../utils/etiquetaEstad
 import { textoStock } from '../utils/stockResumen'
 import { paginarPorItem, ALTO_RENGLON_FIJO } from '../utils/renglonesFijos'
 import { cargarParamsImpresion, PARAMS_IMPRESION_DEFAULT } from '../utils/parametrosImpresion'
-import { claseCodigoAlmacen, estiloCodigoImpreso, codigoAlmacen, numeroCodigo } from '../utils/colorAlmacen'
-import { PRESENTACIONES, presentacionLabel } from '../utils/presentaciones'
+import { claseCodigoAlmacen, estiloCodigoImpreso, codigoAlmacen } from '../utils/colorAlmacen'
+import { presentacionLabel } from '../utils/presentaciones'
 import PreviewImpresion from '../components/PreviewImpresion'
-import CodigoBarras from '../components/CodigoBarras'
 import { fmtCantidad } from '../utils/fmt'
 
 const colorEstado = {
@@ -28,30 +27,9 @@ export default function NotaSalidaDetalle() {
   const [mensaje, setMensaje]     = useState(null)
   const [motivoRechazo, setMotivoRechazo] = useState('')
   const [procesandoAprobacion, setProcesandoAprobacion] = useState(false)
-  const [lineaDevolucion, setLineaDevolucion] = useState(null)
-  const [codigoConfirmacion, setCodigoConfirmacion] = useState('')
-  // Panel de "Devolucion usada": cantidad/presentacion/unidad reales con que
-  // vuelve el item. Presentacion (Caja/Rollo/Bolsa/Saco) es como vino
-  // fisicamente; Unidad (del catalogo Unidades de Medida) es la medida.
-  const [devCantidad, setDevCantidad] = useState('')
-  const [devPresentacion, setDevPresentacion] = useState('')
-  const [devUnidadMedidaId, setDevUnidadMedidaId] = useState('')
-  const [devObs, setDevObs]           = useState('')
-  const [unidades, setUnidades]       = useState([])
-  // Edicion de una devolucion usada ya registrada (cantidad/presentacion/unidad/obs).
-  const [lineaEditando, setLineaEditando]     = useState(null)
-  const [editCantidad, setEditCantidad]       = useState('')
-  const [editPresentacion, setEditPresentacion] = useState('')
-  const [editUnidadMedidaId, setEditUnidadMedidaId] = useState('')
-  const [editObs, setEditObs]                 = useState('')
-  const [guardandoEdicion, setGuardandoEdicion] = useState(false)
-  const [marcandoNoDevuelto, setMarcandoNoDevuelto] = useState(null)
-  const [modoImpresion, setModoImpresion] = useState('salida')
   // Previsualizacion: el documento se muestra en pantalla dentro de un overlay
   // con boton Imprimir antes de mandar a la impresora.
   const [preview, setPreview] = useState(false)
-  // Linea cuya etiqueta USADA (codigo nuevo de la devolucion) se va a imprimir.
-  const [lineaEtiquetaUsada, setLineaEtiquetaUsada] = useState(null)
   // Edicion del encabezado de la nota (persona responsable / seccion / obs).
   // Sobre todo para las notas automaticas de guias a Oficina/Laboratorio.
   const [editandoEncabezado, setEditandoEncabezado] = useState(false)
@@ -72,133 +50,9 @@ export default function NotaSalidaDetalle() {
   }
 
   useEffect(() => { cargar() }, [id])
-  useEffect(() => { api.get('/api/unidades-medida').then(res => setUnidades(res.data)).catch(() => {}) }, [])
   // Fase 13 (R1): que mostrar en las notas de Salida / Devolucion impresas.
   const [paramsImp, setParamsImp] = useState(null)
   useEffect(() => { cargarParamsImpresion().then(setParamsImp) }, [])
-
-  // Cierra el preview y vuelve el modo a 'salida' para que un Ctrl+P posterior
-  // no saque la nota de devolucion por error.
-  const cerrarPreview = () => {
-    setPreview(false)
-    setModoImpresion('salida')
-    setLineaEtiquetaUsada(null)
-  }
-
-  const abrirConfirmacionDevuelto = (linea) => {
-    setLineaDevolucion(linea)
-    setCodigoConfirmacion('')
-    setDevCantidad(String(linea.cantidad ?? ''))
-    setDevPresentacion('')
-    setDevUnidadMedidaId('')
-    setDevObs('')
-  }
-
-  const confirmarDevolucion = async (condicion) => {
-    if (!lineaDevolucion) return
-    if (numeroCodigo(codigoConfirmacion) !== String(lineaDevolucion.etiqueta_codigo)) {
-      setMensaje({ tipo: 'error', texto: 'El codigo escrito no coincide con el de la etiqueta' })
-      setTimeout(() => setMensaje(null), 3000)
-      return
-    }
-    if (condicion === 'USADO') {
-      const n = Number(devCantidad)
-      if (!Number.isFinite(n) || n <= 0 || n > lineaDevolucion.cantidad) {
-        setMensaje({ tipo: 'error', texto: `La cantidad que vuelve debe ser mayor a 0 y hasta ${fmtCantidad(lineaDevolucion.cantidad)}` })
-        setTimeout(() => setMensaje(null), 3000)
-        return
-      }
-    }
-    setGuardando(true)
-    try {
-      const payload = { etiqueta_ids: [lineaDevolucion.etiqueta_id], condicion }
-      if (condicion === 'USADO') {
-        payload.devuelto_cantidad = Number(devCantidad)
-        if (devPresentacion !== '') payload.devuelto_presentacion = devPresentacion
-        if (devUnidadMedidaId !== '') payload.devuelto_unidad_medida_id = Number(devUnidadMedidaId)
-        if (devObs.trim()) payload.devuelto_obs = devObs.trim()
-      }
-      const { data } = await api.post(`/api/notas-salida/${id}/devolucion`, payload)
-      const nuevo = data.codigos_nuevos?.[0]?.codigo_nuevo
-      setMensaje({
-        tipo: 'ok',
-        texto: condicion === 'USADO'
-          ? `Devolucion usada del codigo ${lineaDevolucion.etiqueta_codigo} registrada. Codigo nuevo: ${nuevo}`
-          : `Devolucion del codigo ${lineaDevolucion.etiqueta_codigo} registrada correctamente`,
-      })
-      setLineaDevolucion(null)
-      cargar()
-    } catch (err) {
-      setMensaje({ tipo: 'error', texto: err.response?.data?.error || 'Error al registrar la devolucion' })
-    } finally {
-      setGuardando(false)
-      setTimeout(() => setMensaje(null), 5000)
-    }
-  }
-
-  const abrirEdicionDevolucion = (linea) => {
-    setLineaEditando(linea)
-    setEditCantidad(String(linea.devuelto_cantidad ?? ''))
-    setEditPresentacion(linea.devuelto_presentacion || '')
-    setEditUnidadMedidaId(linea.devuelto_unidad_medida_id ? String(linea.devuelto_unidad_medida_id) : '')
-    setEditObs(linea.devuelto_obs || '')
-  }
-
-  const guardarEdicionDevolucion = async () => {
-    if (!lineaEditando) return
-    const n = Number(editCantidad)
-    if (!Number.isFinite(n) || n <= 0 || n > lineaEditando.cantidad) {
-      setMensaje({ tipo: 'error', texto: `La cantidad que vuelve debe ser mayor a 0 y hasta ${fmtCantidad(lineaEditando.cantidad)}` })
-      setTimeout(() => setMensaje(null), 3000)
-      return
-    }
-    setGuardandoEdicion(true)
-    try {
-      await api.put(`/api/notas-salida/${id}/lineas/${lineaEditando.etiqueta_id}/devolucion-usada`, {
-        devuelto_cantidad: n,
-        devuelto_presentacion: editPresentacion || null,
-        devuelto_unidad_medida_id: editUnidadMedidaId !== '' ? Number(editUnidadMedidaId) : null,
-        devuelto_obs: editObs.trim(),
-      })
-      setMensaje({ tipo: 'ok', texto: 'Devolucion corregida correctamente' })
-      setLineaEditando(null)
-      cargar()
-    } catch (err) {
-      setMensaje({ tipo: 'error', texto: err.response?.data?.error || 'Error al corregir la devolucion' })
-    } finally {
-      setGuardandoEdicion(false)
-      setTimeout(() => setMensaje(null), 5000)
-    }
-  }
-
-  const imprimir = (modo) => {
-    setModoImpresion(modo)
-    setPreview(true)
-  }
-
-  // Imprime la etiqueta fisica del codigo nuevo que genero una devolucion usada
-  // (con codigo de barras, marcada USADO). Registra la (re)impresion como en
-  // GuiaDetalle.
-  const imprimirEtiquetaUsada = async (d) => {
-    if (d.etiqueta_devuelta_id) {
-      await api.post(`/api/etiquetas/${d.etiqueta_devuelta_id}/imprimir`).catch(() => {})
-    }
-    setLineaEtiquetaUsada(d)
-    imprimir('etiqueta_usada')
-  }
-
-  const marcarNoDevuelto = async (linea) => {
-    setMarcandoNoDevuelto(linea.etiqueta_id)
-    try {
-      await api.post(`/api/notas-salida/${id}/lineas/${linea.etiqueta_id}/no-devuelto`)
-      setMensaje({ tipo: 'ok', texto: `Codigo ${linea.etiqueta_codigo} anotado como no devuelto todavia` })
-    } catch (err) {
-      setMensaje({ tipo: 'error', texto: err.response?.data?.error || 'Error al anotar' })
-    } finally {
-      setMarcandoNoDevuelto(null)
-      setTimeout(() => setMensaje(null), 4000)
-    }
-  }
 
   const aprobar = async () => {
     setProcesandoAprobacion(true)
@@ -260,14 +114,6 @@ export default function NotaSalidaDetalle() {
   if (!nota) return <div className="p-6 text-center py-12 text-gray-400">Nota de salida no encontrada</div>
 
   const total = nota.detalle.reduce((s, d) => s + (Number(d.total) || 0), 0)
-  const lineasDevueltas = nota.detalle.filter(d => d.devuelto_condicion)
-  const hayDevoluciones = lineasDevueltas.length > 0
-  // Fecha del documento de devolucion = la mas reciente en que volvio una linea.
-  const fechaDevolucion = lineasDevueltas
-    .map(d => d.devuelto_en)
-    .filter(Boolean)
-    .sort()
-    .at(-1)
 
   return (
     <div className="p-6">
@@ -292,18 +138,19 @@ export default function NotaSalidaDetalle() {
               </button>
             )}
             <button
-              onClick={() => imprimir('salida')}
+              onClick={() => setPreview(true)}
               className="bg-blue-700 hover:bg-blue-800 text-white text-sm px-4 py-2 rounded-lg font-medium transition"
             >
               Imprimir
             </button>
-            {hayDevoluciones && (
-              <button
-                onClick={() => imprimir('devolucion')}
+            {/* La devolucion se registra en la pantalla Notas de Devolucion. */}
+            {puedeGestionar && nota.estado === 'PENDIENTE' && (
+              <Link
+                to={`/notas-desuso?salida=${nota.id}`}
                 className="bg-emerald-700 hover:bg-emerald-800 text-white text-sm px-4 py-2 rounded-lg font-medium transition"
               >
-                Imprimir Nota de Devolucion
-              </button>
+                Registrar devolucion
+              </Link>
             )}
           </div>
         </div>
@@ -359,7 +206,6 @@ export default function NotaSalidaDetalle() {
           <table className="w-full text-sm">
             <thead className="bg-gray-800 text-white">
               <tr>
-                {puedeGestionar && nota.estado === 'PENDIENTE' && <th className="px-4 py-3 text-left">Devolucion</th>}
                 <th className="px-6 py-3 text-left">Codigo</th>
                 <th className="px-6 py-3 text-left">Producto</th>
                 <th className="px-6 py-3 text-left">Almacen</th>
@@ -371,45 +217,11 @@ export default function NotaSalidaDetalle() {
             <tbody>
               {nota.detalle.map((d, i) => (
                 <tr key={d.id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                  {puedeGestionar && nota.estado === 'PENDIENTE' && (
-                    <td className="px-4 py-3">
-                      {/* Pendiente por LINEA (salida parcial: el codigo puede
-                          seguir EN_ALMACEN con el resto). */}
-                      {d.etiqueta_id && !d.devuelto_condicion && (
-                        <div className="flex gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => abrirConfirmacionDevuelto(d)}
-                            className="text-xs px-2.5 py-1.5 rounded-lg bg-green-100 text-green-700 hover:bg-green-200 font-medium transition"
-                          >
-                            Devuelto
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => marcarNoDevuelto(d)}
-                            disabled={marcandoNoDevuelto === d.etiqueta_id}
-                            className="text-xs px-2.5 py-1.5 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 font-medium transition disabled:opacity-50"
-                          >
-                            {marcandoNoDevuelto === d.etiqueta_id ? '...' : 'No devuelto'}
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  )}
                   <td className="px-6 py-3 font-mono font-semibold text-gray-800">
                     <Link to={`/etiquetas/${d.etiqueta_id}`} className={`hover:underline px-1.5 rounded ${claseCodigoAlmacen(d.almacen_nombre)}`}>{codigoAlmacen(d.etiqueta_codigo, d.almacen_nombre)}</Link>
                     {d.etiqueta_devuelta_codigo && (
                       <div className="text-xs text-amber-700 font-normal mt-0.5 flex items-center gap-2">
                         <span>&rarr; cod. {codigoAlmacen(d.etiqueta_devuelta_codigo, d.almacen_nombre)} (usado)</span>
-                        {puedeGestionar && (
-                          <button
-                            type="button"
-                            onClick={() => imprimirEtiquetaUsada(d)}
-                            className="text-[11px] border border-amber-300 text-amber-700 rounded px-1.5 py-0.5 hover:bg-amber-50 print:hidden"
-                          >
-                            Imprimir etiqueta
-                          </button>
-                        )}
                       </div>
                     )}
                   </td>
@@ -450,14 +262,10 @@ export default function NotaSalidaDetalle() {
                             consumido {fmtCantidad(d.cantidad_consumida)}
                           </span>
                         )}
-                        {d.devuelto_condicion === 'USADO' && puedeGestionar && (
-                          <button
-                            type="button"
-                            onClick={() => abrirEdicionDevolucion(d)}
-                            className="text-[11px] text-blue-600 hover:underline print:hidden mt-0.5"
-                          >
-                            Editar
-                          </button>
+                        {d.nota_devolucion_id && (
+                          <Link to={`/notas-desuso/${d.nota_devolucion_id}`} className="block font-normal text-blue-600 hover:underline">
+                            Nota de Devolucion N.° {d.nota_devolucion_numero}
+                          </Link>
                         )}
                       </div>
                     )}
@@ -467,6 +275,26 @@ export default function NotaSalidaDetalle() {
             </tbody>
           </table>
         </div>
+
+        {/* Notas de Devolucion generadas al registrar lo que volvio
+            (pantalla Notas de Devolucion). */}
+        {nota.notas_devolucion?.length > 0 && (
+          <div className="bg-white rounded-xl shadow p-4 mb-6">
+            <h2 className="text-sm font-semibold text-gray-700 mb-2">Notas de Devolucion</h2>
+            <div className="flex flex-wrap gap-2">
+              {nota.notas_devolucion.map(nd => (
+                <Link
+                  key={nd.id}
+                  to={`/notas-desuso/${nd.id}`}
+                  className="text-sm border border-emerald-200 text-emerald-800 rounded-lg px-3 py-1.5 hover:bg-emerald-50 transition"
+                >
+                  N.° {nd.numero_nota} · {new Date(nd.fecha).toLocaleDateString('es-GT')} · {nd.total_lineas} linea(s)
+                  {nd.estado === 'ANULADA' && <span className="ml-1 text-gray-500">(anulada)</span>}
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
 
       </div>
 
@@ -520,202 +348,8 @@ export default function NotaSalidaDetalle() {
         </div>
       )}
 
-      {lineaDevolucion && (
-        <div
-          className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 print:hidden"
-          onClick={() => setLineaDevolucion(null)}
-        >
-          <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <h2 className="text-lg font-semibold text-gray-800 mb-1">Confirmar devolucion</h2>
-            <p className="text-sm text-gray-500 mb-4">
-              Verifica el producto y elegi como vuelve: <b>nueva</b> (el mismo codigo
-              vuelve al stock) o <b>usada</b> (se retira el codigo y se genera uno
-              nuevo, que reingresa como stock de devolucion).
-            </p>
-
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-4 text-sm space-y-1">
-              <div><span className="text-gray-500">Producto:</span> <span className="font-medium text-gray-800">{lineaDevolucion.producto_nombre}</span></div>
-              <div><span className="text-gray-500">Cantidad esperada:</span> <span className="font-medium text-gray-800">{fmtCantidad(lineaDevolucion.cantidad)}</span></div>
-              <div><span className="text-gray-500">Codigo:</span> <span className="font-mono font-bold text-gray-800">{codigoAlmacen(lineaDevolucion.etiqueta_codigo, lineaDevolucion.almacen_nombre)}</span></div>
-            </div>
-
-            <label className="block text-sm font-medium text-gray-600 mb-1">Escribe o escanea el codigo para confirmar</label>
-            <input
-              autoFocus
-              value={codigoConfirmacion}
-              onChange={e => setCodigoConfirmacion(e.target.value.toUpperCase())}
-              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); confirmarDevolucion('NUEVO') } }}
-              placeholder={`Ej: ${codigoAlmacen(lineaDevolucion.etiqueta_codigo, lineaDevolucion.almacen_nombre)}`}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
-            />
-
-            {/* Panel de la devolucion USADA: solo se usa al elegir "Devuelta usada" */}
-            <div className="border border-amber-200 bg-amber-50 rounded-lg p-3 mb-4">
-              <p className="text-xs font-semibold text-amber-800 mb-2">Datos de la devolucion usada</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Cantidad que vuelve</label>
-                  <input
-                    type="number" min="0.001" step="0.001" max={lineaDevolucion.cantidad}
-                    value={devCantidad}
-                    onChange={e => setDevCantidad(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-                  />
-                  <span className="text-[11px] text-gray-400">de {fmtCantidad(lineaDevolucion.cantidad)} que salieron</span>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Presentacion (opcional)</label>
-                  <select
-                    value={devPresentacion}
-                    onChange={e => setDevPresentacion(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-                  >
-                    <option value="">Sin definir...</option>
-                    {PRESENTACIONES.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-                  </select>
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Unidad de medida (opcional)</label>
-                  <select
-                    value={devUnidadMedidaId}
-                    onChange={e => setDevUnidadMedidaId(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-                  >
-                    <option value="">Sin definir...</option>
-                    {unidades.map(u => <option key={u.id} value={u.id}>{u.nombre}{u.abreviatura ? ` (${u.abreviatura})` : ''}</option>)}
-                  </select>
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Observacion (opcional)</label>
-                  <input
-                    value={devObs}
-                    onChange={e => setDevObs(e.target.value.toUpperCase())}
-                    placeholder="En que estado vuelve..."
-                    className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-                  />
-                </div>
-                {/* Fase 11 (R6): lo que se consume si se devuelve usada esta
-                    cantidad. Sin montos: en la devolucion no se muestra ningun
-                    precio (pedido del usuario 24/09). */}
-                {(() => {
-                  const salio = Number(lineaDevolucion.cantidad)
-                  const vuelve = Number(devCantidad || 0)
-                  const consumido = Math.max(0, Math.round((salio - vuelve) * 1000) / 1000)
-                  return (
-                    <div className="col-span-2 border-t border-amber-200 pt-2 text-xs text-amber-800">
-                      Consumido: <b>{fmtCantidad(consumido)}</b>
-                    </div>
-                  )
-                })()}
-              </div>
-            </div>
-
-            <div className="flex flex-wrap justify-end gap-2">
-              <button type="button" onClick={() => setLineaDevolucion(null)} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={() => confirmarDevolucion('NUEVO')}
-                disabled={guardando || codigoConfirmacion.trim() === ''}
-                className="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
-              >
-                {guardando ? 'Registrando...' : 'Devuelta nueva'}
-              </button>
-              <button
-                type="button"
-                onClick={() => confirmarDevolucion('USADO')}
-                disabled={guardando || codigoConfirmacion.trim() === ''}
-                className="px-4 py-2 text-sm bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50"
-              >
-                {guardando ? 'Registrando...' : 'Devuelta usada'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {lineaEditando && (
-        <div
-          className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 print:hidden"
-          onClick={() => setLineaEditando(null)}
-        >
-          <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <h2 className="text-lg font-semibold text-gray-800 mb-1">Corregir devolucion usada</h2>
-            <p className="text-sm text-gray-500 mb-4">
-              Corrige la cantidad, unidad u observacion de esta devolucion ya registrada.
-              El codigo generado no cambia; si la cantidad cambia, se ajusta el inventario
-              por la diferencia.
-            </p>
-
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-4 text-sm space-y-1">
-              <div><span className="text-gray-500">Producto:</span> <span className="font-medium text-gray-800">{lineaEditando.producto_nombre}</span></div>
-              <div><span className="text-gray-500">Codigo nuevo:</span> <span className="font-mono font-bold text-gray-800">{codigoAlmacen(lineaEditando.etiqueta_devuelta_codigo, lineaEditando.almacen_nombre)}</span></div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Cantidad que vuelve</label>
-                <input
-                  type="number" min="0.001" step="0.001" max={lineaEditando.cantidad}
-                  value={editCantidad}
-                  onChange={e => setEditCantidad(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <span className="text-[11px] text-gray-400">de {fmtCantidad(lineaEditando.cantidad)} que salieron</span>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Presentacion (opcional)</label>
-                <select
-                  value={editPresentacion}
-                  onChange={e => setEditPresentacion(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Sin definir...</option>
-                  {PRESENTACIONES.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-                </select>
-              </div>
-              <div className="col-span-2">
-                <label className="block text-xs font-medium text-gray-600 mb-1">Unidad de medida (opcional)</label>
-                <select
-                  value={editUnidadMedidaId}
-                  onChange={e => setEditUnidadMedidaId(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Sin definir...</option>
-                  {unidades.map(u => <option key={u.id} value={u.id}>{u.nombre}{u.abreviatura ? ` (${u.abreviatura})` : ''}</option>)}
-                </select>
-              </div>
-              <div className="col-span-2">
-                <label className="block text-xs font-medium text-gray-600 mb-1">Observacion (opcional)</label>
-                <input
-                  value={editObs}
-                  onChange={e => setEditObs(e.target.value.toUpperCase())}
-                  placeholder="En que estado vuelve..."
-                  className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-
-            <div className="flex flex-wrap justify-end gap-2">
-              <button type="button" onClick={() => setLineaEditando(null)} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={guardarEdicionDevolucion}
-                disabled={guardandoEdicion}
-                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-              >
-                {guardandoEdicion ? 'Guardando...' : 'Guardar correccion'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <PreviewImpresion abierto={preview} onCerrar={cerrarPreview}>
-      {modoImpresion === 'salida' && (() => {
+      <PreviewImpresion abierto={preview} onCerrar={() => setPreview(false)}>
+      {(() => {
         const pS = paramsImp?.SALIDA || PARAMS_IMPRESION_DEFAULT
         return (
         <div className={preview ? '' : 'hidden print:block'}>
@@ -848,136 +482,6 @@ export default function NotaSalidaDetalle() {
         )
       })()}
 
-      {/* Nota de Devolucion de Activos: mismo formato que el talonario fisico
-          (para giarse/NOTA DEVOLUCION DE ACTIVOS MALA.pdf). Lista lo que volvio
-          a Mesa; si volvio usado, el codigo nuevo va en Observaciones. */}
-      {modoImpresion === 'devolucion' && (() => {
-        const pD = paramsImp?.DEVOLUCION || PARAMS_IMPRESION_DEFAULT
-        const f = fechaDevolucion ? new Date(fechaDevolucion) : null
-        const dd = f ? String(f.getDate()).padStart(2, '0') : ''
-        const mm = f ? String(f.getMonth() + 1).padStart(2, '0') : ''
-        const yy = f ? String(f.getFullYear()).slice(2) : ''
-        const obsLineas = lineasDevueltas
-          .filter(d => d.devuelto_condicion === 'USADO' || d.devuelto_obs)
-          .map(d => {
-            const usado = d.devuelto_condicion === 'USADO'
-              ? `${codigoAlmacen(d.etiqueta_codigo, d.almacen_nombre)} USADO${d.etiqueta_devuelta_codigo ? ` -> COD. ${codigoAlmacen(d.etiqueta_devuelta_codigo, d.almacen_nombre)}` : ''}`
-              : codigoAlmacen(d.etiqueta_codigo, d.almacen_nombre)
-            return d.devuelto_obs ? `${usado}: ${d.devuelto_obs}` : usado
-          })
-        const observaciones = [nota.observaciones, ...obsLineas].filter(Boolean).join(' · ')
-        return (
-        <div className={preview ? '' : 'hidden print:block'}>
-          {paginarPorItem(lineasDevueltas, pD.lineas_por_pagina).map((filas, pi) => (
-            <div key={pi} className="border-2 border-gray-800 rounded break-after-page last:break-after-auto">
-              <div className="flex items-start justify-between px-4 pt-3">
-                <div>
-                  <div className="font-bold text-lg text-gray-800 text-center">MANUFACTURA DE ALIMENTOS S.A.</div>
-                  <div className="font-semibold text-sm text-gray-700 uppercase tracking-wide text-center underline">Nota de Devolucion de Activos</div>
-                </div>
-                <table className="border border-gray-800 text-center text-xs">
-                  <tbody>
-                    <tr><td colSpan={3} className="bg-gray-100 border-b border-gray-800 font-semibold px-2 py-0.5">FECHA</td></tr>
-                    <tr>
-                      <td className="border-r border-gray-800 px-3 py-1 w-8">{dd}</td>
-                      <td className="border-r border-gray-800 px-3 py-1 w-8">{mm}</td>
-                      <td className="px-3 py-1 w-8">{yy}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <div className="text-right px-4 text-sm text-red-600 font-bold">N.° {nota.numero_nota}</div>
-
-              <div className="px-4 py-3 text-sm space-y-1">
-                <div className="flex"><b className="text-gray-600 w-56 shrink-0">SECCION:</b><span className="border-b border-gray-400 flex-1">{nota.seccion || ''}</span></div>
-                <div className="flex"><b className="text-gray-600 w-56 shrink-0">PERSONA RESPONSABLE:</b><span className="border-b border-gray-400 flex-1">{nota.persona_responsable}</span></div>
-                <div className="flex"><b className="text-gray-600 w-56 shrink-0">NOTA DE SALIDA DE ACTIVO:</b><span className="border-b border-gray-400 flex-1">{nota.numero_nota}</span></div>
-              </div>
-
-              <table className="w-full text-xs table-fixed" style={{ width: 'calc(100% - 2rem)', margin: '0 auto' }}>
-                <thead>
-                  <tr className="bg-gray-100 border-y-2 border-gray-800">
-                    <th className="text-center py-1">DESCRIPCION</th>
-                    <th className="text-center py-1 border-l border-gray-800 w-20">CANTIDAD</th>
-                    <th className="text-center py-1 border-l border-gray-800 w-20">UNIDAD</th>
-                    <th className="text-center py-1 border-l border-gray-800 w-32">AREA - MAQUINA</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {/* Talonario preimpreso: la fila NO crece (ver renglonesFijos.js).
-                      AREA - MAQUINA queda en blanco para llenarse a mano. */}
-                  {filas.map((r, ri) => (
-                    <tr key={ri} className="border-b border-gray-400" style={{ height: ALTO_RENGLON_FIJO }}>
-                      <td className="py-1 px-1 align-top overflow-hidden" style={{ height: ALTO_RENGLON_FIJO, maxHeight: ALTO_RENGLON_FIJO }}>
-                        {r && (
-                          <>
-                            {!r.esContinuacion && r.etiqueta_codigo && <span className="font-mono font-bold px-1 mr-1 rounded" style={estiloCodigoImpreso(r.almacen_nombre)}>{codigoAlmacen(r.etiqueta_codigo, r.almacen_nombre)}</span>}
-                            <span>{r.textoLinea}</span>
-                          </>
-                        )}
-                      </td>
-                      <td className="py-1 text-center border-l border-gray-400 align-top">
-                        {r && !r.esContinuacion ? fmtCantidad(r.devuelto_cantidad != null ? r.devuelto_cantidad : r.cantidad) : ''}
-                      </td>
-                      <td className="py-1 text-center border-l border-gray-400 align-top">
-                        {r && !r.esContinuacion ? (r.devuelto_unidad_medida_abreviatura || r.devuelto_unidad_medida_nombre || r.unidad_medida_abreviatura || '') : ''}
-                      </td>
-                      <td className="py-1 px-1 border-l border-gray-400 align-top">&nbsp;</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-
-              {/* Observaciones y firmas en cada hoja, como la Nota de Salida. */}
-              <div className="px-4 py-2 text-xs flex">
-                <b className="text-gray-600 mr-1">OBSERVACIONES:</b>
-                <span className="border-b border-gray-400 flex-1">{observaciones}</span>
-              </div>
-              <div className="grid grid-cols-3 gap-x-6 px-4 pt-10 pb-2 text-xs text-gray-600 text-center">
-                <div className="border-t border-gray-800 pt-1">Solicitado por</div>
-                <div className="border-t border-gray-800 pt-1">Revisado por</div>
-                <div className="border-t border-gray-800 pt-1">Revisado por</div>
-              </div>
-              <div className="grid grid-cols-2 gap-x-6 px-10 pt-10 pb-3 text-xs text-gray-600 text-center">
-                <div className="border-t border-gray-800 pt-1">Revisado por</div>
-                <div className="border-t border-gray-800 pt-1">Aprobado por</div>
-              </div>
-              {pD.pie_texto && (
-                <div className="px-4 pb-2 text-[10px] text-gray-500">{pD.pie_texto}</div>
-              )}
-            </div>
-          ))}
-        </div>
-        )
-      })()}
-
-      {/* Etiqueta fisica del codigo nuevo de una devolucion usada */}
-      {modoImpresion === 'etiqueta_usada' && lineaEtiquetaUsada && (
-        <div className={preview ? '' : 'hidden print:block'}>
-          <div className="border border-gray-800 rounded inline-block">
-            <div className="bg-gray-100 text-center font-semibold text-sm py-1.5 border-b border-gray-800 px-4">
-              {lineaEtiquetaUsada.producto_nombre} · USADO
-            </div>
-            <div className="flex">
-              <div className="font-bold text-2xl flex items-center justify-center px-4 min-w-[70px]" style={estiloCodigoImpreso(lineaEtiquetaUsada.almacen_nombre)}>
-                {codigoAlmacen(lineaEtiquetaUsada.etiqueta_devuelta_codigo, lineaEtiquetaUsada.almacen_nombre)}
-              </div>
-              <div className="flex-1 border-l border-r border-gray-800 px-3 py-2 text-sm flex items-center">
-                {lineaEtiquetaUsada.producto_nombre}
-              </div>
-              <div className="px-3 py-2 text-sm flex items-center justify-center">
-                {lineaEtiquetaUsada.unidad_medida_abreviatura || ''}
-              </div>
-              <div className="font-bold flex items-center justify-center px-4 min-w-[40px]" style={estiloCodigoImpreso(lineaEtiquetaUsada.almacen_nombre)}>
-                {fmtCantidad(lineaEtiquetaUsada.devuelto_cantidad != null ? lineaEtiquetaUsada.devuelto_cantidad : lineaEtiquetaUsada.cantidad)}
-              </div>
-            </div>
-            <div className="flex justify-center py-1.5 border-t border-gray-800">
-              <CodigoBarras valor={lineaEtiquetaUsada.etiqueta_devuelta_codigo} height={28} />
-            </div>
-          </div>
-        </div>
-      )}
       </PreviewImpresion>
     </div>
   )

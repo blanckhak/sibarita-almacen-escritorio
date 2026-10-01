@@ -5,6 +5,8 @@ import { useAuth } from '../context/AuthContext'
 import { paginarPorItem, ALTO_RENGLON_FIJO } from '../utils/renglonesFijos'
 import PreviewImpresion from '../components/PreviewImpresion'
 import { fmtCantidad } from '../utils/fmt'
+import { claseCodigoAlmacen, estiloCodigoImpreso, codigoAlmacen } from '../utils/colorAlmacen'
+import DevolucionNotaSalida from '../components/DevolucionNotaSalida'
 
 const colorEstado = {
   VIGENTE: 'bg-green-100 text-green-700',
@@ -98,6 +100,17 @@ export default function NotaDesusoDetalle() {
   if (!nota) return <div className="p-6 text-center py-12 text-gray-400">Nota de devolucion no encontrada</div>
 
   const [yy, mm, dd] = String(nota.fecha).slice(0, 10).split('-')
+  const enlazada = !!nota.nota_salida_id
+  // OBSERVACIONES impresas: la de la nota + lo que volvio usado (codigo nuevo).
+  const obsUsados = nota.detalle
+    .filter(d => d.devuelto_condicion === 'USADO' || d.devuelto_obs)
+    .map(d => {
+      const base = d.devuelto_condicion === 'USADO'
+        ? `${codigoAlmacen(d.etiqueta_codigo, d.almacen_nombre)} USADO${d.etiqueta_devuelta_codigo ? ` -> COD. ${codigoAlmacen(d.etiqueta_devuelta_codigo, d.almacen_nombre)}` : ''}`
+        : codigoAlmacen(d.etiqueta_codigo, d.almacen_nombre)
+      return d.devuelto_obs ? `${base}: ${d.devuelto_obs}` : base
+    })
+  const observacionesImpresas = [nota.observaciones, ...obsUsados].filter(Boolean).join(' · ')
 
   return (
     <div className="p-6">
@@ -110,6 +123,15 @@ export default function NotaDesusoDetalle() {
             <p className="text-gray-500 mt-1">
               {nota.persona_responsable} · {nota.seccion || 'Sin seccion'} · {nota.almacen_nombre} · {new Date(nota.fecha).toLocaleDateString('es-GT')}
             </p>
+            {enlazada ? (
+              <p className="text-sm mt-1">
+                Nota de Salida{' '}
+                <Link to={`/notas-salida/${nota.nota_salida_id}`} className="font-mono font-semibold text-blue-700 hover:underline">N.° {nota.nota_salida_numero}</Link>
+                <span className="text-gray-500"> · {nota.nota_salida_estado}</span>
+              </p>
+            ) : nota.nota_salida_ref && (
+              <p className="text-sm text-gray-500 mt-1">Ref. nota de salida {nota.nota_salida_ref} (manual)</p>
+            )}
           </div>
           <div className="flex items-center gap-3">
             <span className={`px-3 py-1.5 rounded-full text-xs font-bold ${colorEstado[nota.estado]}`}>{nota.estado}</span>
@@ -118,9 +140,11 @@ export default function NotaDesusoDetalle() {
                 <button onClick={abrirEdicion} className="border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm px-4 py-2 rounded-lg font-medium transition">
                   Editar
                 </button>
-                <button onClick={() => setAnulando(true)} className="border border-red-300 text-red-700 hover:bg-red-50 text-sm px-4 py-2 rounded-lg font-medium transition">
-                  Anular
-                </button>
+                {!enlazada && (
+                  <button onClick={() => setAnulando(true)} className="border border-red-300 text-red-700 hover:bg-red-50 text-sm px-4 py-2 rounded-lg font-medium transition">
+                    Anular
+                  </button>
+                )}
               </>
             )}
             <button onClick={() => setPreview(true)} className="bg-blue-700 hover:bg-blue-800 text-white text-sm px-4 py-2 rounded-lg font-medium transition">
@@ -168,8 +192,8 @@ export default function NotaDesusoDetalle() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-600 mb-1">Nota de Salida de Activo (ref.)</label>
-                <input value={edRef} onChange={e => setEdRef(e.target.value.toUpperCase())}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <input value={edRef} onChange={e => setEdRef(e.target.value.toUpperCase())} disabled={enlazada}
+                  className="disabled:bg-gray-100 w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-600 mb-1">Observaciones</label>
@@ -209,7 +233,9 @@ export default function NotaDesusoDetalle() {
           <table className="w-full text-sm">
             <thead className="bg-gray-800 text-white">
               <tr>
+                <th className="px-6 py-3 text-left">Codigo</th>
                 <th className="px-6 py-3 text-left">Descripcion</th>
+                <th className="px-6 py-3 text-left">Condicion</th>
                 <th className="px-6 py-3 text-right">Cantidad</th>
                 <th className="px-6 py-3 text-left">Unidad</th>
                 <th className="px-6 py-3 text-left">Area / Maquina</th>
@@ -218,7 +244,19 @@ export default function NotaDesusoDetalle() {
             <tbody>
               {nota.detalle.map((d, i) => (
                 <tr key={d.id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                  <td className="px-6 py-3 font-mono font-semibold">
+                    {d.etiqueta_codigo
+                      ? <span className={`px-1.5 rounded ${claseCodigoAlmacen(d.almacen_nombre)}`}>{codigoAlmacen(d.etiqueta_codigo, d.almacen_nombre)}</span>
+                      : '—'}
+                  </td>
                   <td className="px-6 py-3 text-gray-700">{d.descripcion}</td>
+                  <td className="px-6 py-3 text-xs">
+                    {d.devuelto_condicion === 'USADO' && (
+                      <span className="text-amber-700 font-medium">Usada{d.etiqueta_devuelta_codigo && <> &rarr; cod. {codigoAlmacen(d.etiqueta_devuelta_codigo, d.almacen_nombre)}</>}</span>
+                    )}
+                    {d.devuelto_condicion === 'NUEVO' && <span className="text-green-700 font-medium">Nueva</span>}
+                    {!d.devuelto_condicion && '—'}
+                  </td>
                   <td className="px-6 py-3 text-right text-gray-700">{fmtCantidad(d.cantidad)}</td>
                   <td className="px-6 py-3 text-gray-500">{d.unidad_medida_abreviatura || d.unidad_medida_nombre || '—'}</td>
                   <td className="px-6 py-3 text-gray-500">{d.area_maquina || '—'}</td>
@@ -227,6 +265,18 @@ export default function NotaDesusoDetalle() {
             </tbody>
           </table>
         </div>
+
+        {/* Lo que falta devolver de la nota de salida: se registra aca mismo. */}
+        {enlazada && nota.nota_salida_estado === 'PENDIENTE' && nota.estado === 'VIGENTE' && (
+          <div className="mb-6">
+            <h2 className="text-lg font-semibold text-gray-700 mb-2">Pendiente de la nota de salida</h2>
+            <DevolucionNotaSalida
+              notaSalidaId={nota.nota_salida_id}
+              puedeGestionar={puedeGestionar}
+              onRegistrada={cargar}
+            />
+          </div>
+        )}
       </div>
 
       <PreviewImpresion abierto={preview} onCerrar={() => setPreview(false)}>
@@ -280,7 +330,10 @@ export default function NotaDesusoDetalle() {
                       blanco, para no correr el rayado ya impreso en el papel. */}
                   {filas.map((r, ri) => (
                     <tr key={ri} className="border-b border-gray-400" style={{ height: ALTO_RENGLON_FIJO }}>
-                      <td className="py-1 px-1 align-top overflow-hidden" style={{ height: ALTO_RENGLON_FIJO, maxHeight: ALTO_RENGLON_FIJO }}>{r ? r.textoLinea : ''}</td>
+                      <td className="py-1 px-1 align-top overflow-hidden" style={{ height: ALTO_RENGLON_FIJO, maxHeight: ALTO_RENGLON_FIJO }}>
+                        {r && !r.esContinuacion && r.etiqueta_codigo && <span className="font-mono font-bold px-1 mr-1 rounded" style={estiloCodigoImpreso(r.almacen_nombre)}>{codigoAlmacen(r.etiqueta_codigo, r.almacen_nombre)}</span>}
+                        {r ? r.textoLinea : ''}
+                      </td>
                       <td className="py-1 text-center border-l border-gray-400 align-top">{r && !r.esContinuacion ? fmtCantidad(r.cantidad) : ''}</td>
                       <td className="py-1 text-center border-l border-gray-400 align-top">{r && !r.esContinuacion ? (r.unidad_medida_abreviatura || r.unidad_medida_nombre || '') : ''}</td>
                       <td className="py-1 px-1 border-l border-gray-400 align-top">{r && !r.esContinuacion ? (r.area_maquina || '') : ''}</td>
@@ -291,7 +344,7 @@ export default function NotaDesusoDetalle() {
 
               <div className="px-4 py-2 text-xs flex">
                 <b className="text-gray-600 mr-1">OBSERVACIONES</b>
-                <span className="border-b border-gray-400 flex-1">{nota.observaciones || ''}</span>
+                <span className="border-b border-gray-400 flex-1">{observacionesImpresas}</span>
               </div>
               <div className="grid grid-cols-3 gap-x-6 px-4 pt-10 pb-2 text-xs text-gray-600 text-center">
                 <div className="border-t border-gray-800 pt-1">Solicitado por</div>

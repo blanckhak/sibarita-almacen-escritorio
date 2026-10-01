@@ -10,6 +10,7 @@ const { mensajeConcurrencia } = require('../utils/dbErrores')
 const { periodoCerrado, idsPeriodo } = require('../utils/periodo')
 const log = require('../middlewares/logMiddleware')
 const { perfilSql } = require('../utils/perfil')
+const { registrarEnNotaDevolucion, actualizarRenglonDevolucion } = require('../utils/notaDevolucion')
 
 const ERR_PERIODO_CERRADO = 'El periodo de esta nota esta CERRADO; pedile a un admin que lo reabra para poder modificarla.'
 const MOTIVOS = ['USO_INTERNO', 'PRESTAMO', 'REPARACION', 'DESECHO', 'OTRO']
@@ -89,6 +90,7 @@ router.get('/:id', verificarToken, async (req, res) => {
              dum.nombre as devuelto_unidad_medida_nombre,
              dum.abreviatura as devuelto_unidad_medida_abreviatura,
              en.codigo as etiqueta_devuelta_codigo,
+             ndv.id as nota_devolucion_id, ndv.numero_nota as nota_devolucion_numero,
              -- Stock actual del producto en ese almacen (Fase 9, Bloque 7):
              -- lo que queda hoy, no una foto al momento de la salida.
              (SELECT COALESCE(SUM(i.cantidad), 0)::float8 FROM inventario i
@@ -104,11 +106,24 @@ router.get('/:id', verificarToken, async (req, res) => {
       LEFT JOIN unidades_medida um ON p.unidad_medida_id = um.id
       LEFT JOIN unidades_medida dum ON d.devuelto_unidad_medida_id = dum.id
       LEFT JOIN etiquetas en ON d.etiqueta_devuelta_id = en.id
+      LEFT JOIN notas_desuso_detalle ndd ON ndd.nota_salida_detalle_id = d.id
+      LEFT JOIN notas_desuso ndv ON ndd.nota_desuso_id = ndv.id
       WHERE d.nota_salida_id = $1
       ORDER BY d.id
     `, [req.params.id])
 
-    res.json({ ...nota.rows[0], detalle: detalle.rows })
+    const devoluciones = await pool.query(`
+      SELECT n.id, n.numero_nota, n.fecha, n.estado, a.nombre as almacen_nombre,
+             COUNT(dd.id)::int as total_lineas
+      FROM notas_desuso n
+      JOIN almacenes a ON n.almacen_id = a.id
+      LEFT JOIN notas_desuso_detalle dd ON dd.nota_desuso_id = n.id
+      WHERE n.nota_salida_id = $1
+      GROUP BY n.id, a.nombre
+      ORDER BY n.fecha, n.id
+    `, [req.params.id])
+
+    res.json({ ...nota.rows[0], detalle: detalle.rows, notas_devolucion: devoluciones.rows })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -417,6 +432,10 @@ router.post('/:id/devolucion', verificarToken, soloRoles('admin', 'almacen', 'al
   async (req, res) => {
   const { etiqueta_ids } = req.body
   const condicion = req.body.condicion === 'USADO' ? 'USADO' : 'NUEVO'
+  const areaMaquina = typeof req.body.area_maquina === 'string' && req.body.area_maquina.trim()
+    ? req.body.area_maquina.trim() : null
+  const errArea = validarLargos({ 'area / maquina': [areaMaquina, 150] })
+  if (errArea) return res.status(400).json({ error: errArea })
   if (!Array.isArray(etiqueta_ids) || etiqueta_ids.length === 0) {
     return res.status(400).json({ error: 'Selecciona al menos un codigo para devolver' })
   }
@@ -642,6 +661,16 @@ router.post('/:id/devolucion', verificarToken, soloRoles('admin', 'almacen', 'al
       }
     }
 
+    // Cada linea devuelta queda tambien en la Nota de Devolucion enlazada.
+    let notaDevolucion = null
+    for (const eid of etiqueta_ids) {
+      notaDevolucion = await registrarEnNotaDevolucion(client, {
+        detalleId: detallePorId[eid].detalle_id,
+        usuarioId: req.usuario.id,
+        areaMaquina,
+      })
+    }
+
     const pendientes = await client.query(`
       SELECT COUNT(*) FROM notas_salida_detalle d
       WHERE d.nota_salida_id = $1 AND d.etiqueta_id IS NOT NULL AND d.devuelto_condicion IS NULL
@@ -654,7 +683,7 @@ router.post('/:id/devolucion', verificarToken, soloRoles('admin', 'almacen', 'al
     )
 
     await client.query('COMMIT')
-    res.json({ ...actualizada.rows[0], condicion, codigos_nuevos: codigosNuevos })
+    res.json({ ...actualizada.rows[0], condicion, codigos_nuevos: codigosNuevos, nota_devolucion: notaDevolucion })
   } catch (err) {
     await client.query('ROLLBACK')
     const msgConcurrencia = mensajeConcurrencia(err)
@@ -776,6 +805,7 @@ router.put('/:id/lineas/:etiquetaId/devolucion-usada', verificarToken, soloRoles
        WHERE id = $7`,
       [nuevaCantidad, unidadMedidaId, presentacion, obs, cantConsumida, totalConsumido, l.detalle_id]
     )
+    await actualizarRenglonDevolucion(client, { detalleId: l.detalle_id, cantidad: nuevaCantidad, unidadMedidaId })
 
     await client.query('COMMIT')
     res.json({ ok: true })

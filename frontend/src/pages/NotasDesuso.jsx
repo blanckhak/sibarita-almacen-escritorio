@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import api from '../utils/api'
 import { useAuth } from '../context/AuthContext'
 import { usePeriodo } from '../context/PeriodoContext'
 import PeriodoFiltro from '../components/PeriodoFiltro'
 import { puedeVerPeriodos } from '../utils/permisos'
+import DevolucionNotaSalida from '../components/DevolucionNotaSalida'
 
 const colorEstado = {
   VIGENTE: 'bg-green-100 text-green-700',
@@ -27,6 +28,12 @@ export default function NotasDesuso() {
   const [mensaje, setMensaje]     = useState(null)
   const [form, setForm]           = useState(FORM_VACIO)
   const [unidades, setUnidades]   = useState([])
+  // Nota de salida cuya devolucion se registra (lo normal). Vacio = nota
+  // manual, para material que volvio sin una nota de salida en el sistema.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [salidaId, setSalidaId]   = useState(searchParams.get('salida') || '')
+  const [pendientes, setPendientes] = useState([])
+  const [modoManual, setModoManual] = useState(false)
 
   const puedeRegistrar = ['admin', 'almacen', 'almacenero'].includes(usuario?.rol)
 
@@ -39,13 +46,37 @@ export default function NotasDesuso() {
 
   useEffect(() => { cargarNotas() }, [paramsPeriodo.periodo_id])
   useEffect(() => { api.get('/api/unidades-medida').then(res => setUnidades(res.data)).catch(() => {}) }, [])
+  const cargarPendientes = () => {
+    api.get('/api/notas-salida', { params: { estado: 'PENDIENTE' } })
+      .then(res => setPendientes(res.data))
+      .catch(() => {})
+  }
+  useEffect(() => { if (mostrarForm) cargarPendientes() }, [mostrarForm])
+  // Viene de "Registrar devolucion" en una nota de salida.
+  useEffect(() => {
+    const s = searchParams.get('salida')
+    if (s) { setSalidaId(s); setModoManual(false); setMostrarForm(true) }
+  }, [searchParams])
 
   // Almacen de la nota nueva: el elegido en el filtro, si no el del usuario;
   // si no hay ninguno se elige en el formulario.
   const abrirNuevo = () => {
     const delUsuario = almacenes.find(a => a.nombre === usuario?.almacen)
     setForm({ ...FORM_VACIO, almacen_id: almacenSel || (delUsuario ? String(delUsuario.id) : '') })
+    setSalidaId('')
+    setModoManual(false)
     setMostrarForm(true)
+  }
+
+  const cerrarForm = () => {
+    setMostrarForm(false)
+    setSalidaId('')
+    if (searchParams.get('salida')) setSearchParams({})
+  }
+
+  const elegirSalida = (v) => {
+    setSalidaId(v)
+    setSearchParams(v ? { salida: v } : {})
   }
 
   const agregarLinea = () => setForm(f => ({ ...f, lineas: [...f.lineas, { ...LINEA_VACIA }] }))
@@ -80,7 +111,7 @@ export default function NotasDesuso() {
       }
       await api.post('/api/notas-desuso', payload)
       setMensaje({ tipo: 'ok', texto: 'Nota de devolucion generada correctamente' })
-      setMostrarForm(false)
+      cerrarForm()
       cargarNotas()
     } catch (err) {
       setMensaje({ tipo: 'error', texto: err.response?.data?.error || 'Error al guardar la nota de devolucion' })
@@ -95,11 +126,11 @@ export default function NotasDesuso() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-3xl font-bold text-gray-800">Notas de Devolucion</h1>
-          <p className="text-gray-500 mt-1">Ingreso de activos usados que vuelven de un area</p>
+          <p className="text-gray-500 mt-1">Lo que vuelve de una nota de salida: devuelto / no devuelto</p>
         </div>
         {puedeRegistrar && (
           <button
-            onClick={() => mostrarForm ? setMostrarForm(false) : abrirNuevo()}
+            onClick={() => mostrarForm ? cerrarForm() : abrirNuevo()}
             className="bg-blue-700 hover:bg-blue-800 text-white text-sm px-4 py-2 rounded-lg font-medium transition"
           >
             {mostrarForm ? 'Cancelar' : '+ Nueva Nota de Devolucion'}
@@ -128,7 +159,54 @@ export default function NotasDesuso() {
       {mostrarForm && (
         <div className="bg-white rounded-xl shadow-md p-6 mb-6 border border-blue-100">
           <h2 className="text-lg font-semibold text-gray-700 mb-4">Nueva Nota de Devolucion</h2>
+
+          {!modoManual && (
+            <>
+              <label className="block text-sm font-medium text-gray-600 mb-1">Nota de Salida de Activo</label>
+              <select
+                value={salidaId}
+                onChange={e => elegirSalida(e.target.value)}
+                className="w-full max-w-xl border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 mb-1"
+              >
+                <option value="">Seleccionar nota de salida pendiente...</option>
+                {/* La que vino por ?salida= puede no estar en la lista si ya quedo DEVUELTO. */}
+                {salidaId && !pendientes.some(n => String(n.id) === String(salidaId)) && (
+                  <option value={salidaId}>Nota de salida seleccionada (sin pendientes)</option>
+                )}
+                {pendientes.map(n => (
+                  <option key={n.id} value={n.id}>
+                    N.° {n.numero_nota} · {n.persona_responsable} · {n.seccion || 'Sin seccion'} · {new Date(n.fecha).toLocaleDateString('es-GT')}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-400 mb-4">
+                Elegi la nota de salida y marca cada codigo como Devuelto (nuevo o usado) o No devuelto.
+                Lo devuelto en el dia queda en una sola Nota de Devolucion.{' '}
+                <button type="button" onClick={() => { setModoManual(true); elegirSalida('') }} className="text-blue-700 hover:underline">
+                  Volvio material sin nota de salida en el sistema
+                </button>
+              </p>
+
+              {salidaId && (
+                <DevolucionNotaSalida
+                  notaSalidaId={salidaId}
+                  puedeGestionar={puedeRegistrar}
+                  onRegistrada={() => { cargarNotas(); cargarPendientes() }}
+                />
+              )}
+
+              <div className="flex justify-end mt-4">
+                <button type="button" onClick={cerrarForm} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">Cerrar</button>
+              </div>
+            </>
+          )}
+
+          {modoManual && (
           <form onSubmit={handleSubmit}>
+            <p className="text-xs text-gray-500 mb-4">
+              Nota manual: no mueve inventario.{' '}
+              <button type="button" onClick={() => setModoManual(false)} className="text-blue-700 hover:underline">Volver a elegir una nota de salida</button>
+            </p>
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div>
                 <label className="block text-sm font-medium text-gray-600 mb-1">Almacen</label>
@@ -229,12 +307,13 @@ export default function NotasDesuso() {
             </div>
 
             <div className="flex justify-end gap-3">
-              <button type="button" onClick={() => setMostrarForm(false)} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">Cancelar</button>
+              <button type="button" onClick={cerrarForm} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">Cancelar</button>
               <button type="submit" disabled={guardando} className="px-6 py-2 text-sm bg-blue-700 text-white rounded-lg hover:bg-blue-800 disabled:opacity-50">
                 {guardando ? 'Guardando...' : 'Generar Nota de Devolucion'}
               </button>
             </div>
           </form>
+          )}
         </div>
       )}
 
@@ -246,6 +325,7 @@ export default function NotasDesuso() {
             <thead className="bg-gray-800 text-white">
               <tr>
                 <th className="px-6 py-3 text-left">N° Nota</th>
+                <th className="px-6 py-3 text-left">Nota Salida</th>
                 <th className="px-6 py-3 text-left">Seccion</th>
                 <th className="px-6 py-3 text-left">Responsable</th>
                 <th className="px-6 py-3 text-left">Almacen</th>
@@ -259,6 +339,11 @@ export default function NotasDesuso() {
               {notas.map((n, i) => (
                 <tr key={n.id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                   <td className="px-6 py-3 font-mono font-semibold text-gray-800">{n.numero_nota}</td>
+                  <td className="px-6 py-3 font-mono text-gray-700">
+                    {n.nota_salida_id
+                      ? <Link to={`/notas-salida/${n.nota_salida_id}`} className="text-blue-700 hover:underline">{n.nota_salida_ref}</Link>
+                      : (n.nota_salida_ref || '—')}
+                  </td>
                   <td className="px-6 py-3 text-gray-700">{n.seccion || '—'}</td>
                   <td className="px-6 py-3 text-gray-700">{n.persona_responsable}</td>
                   <td className="px-6 py-3 text-gray-500">{n.almacen_nombre}</td>

@@ -2,6 +2,7 @@ const pool = require('./db')
 const bcrypt = require('bcryptjs')
 const { MODO, esProduccion } = require('./modo')
 const { cargarSecreto } = require('./secreto')
+const { registrarEnNotaDevolucion } = require('../utils/notaDevolucion')
 
 async function setup() {
   console.log(`Iniciando configuracion de base de datos (modo ${MODO})...`)
@@ -675,7 +676,46 @@ async function setup() {
       unidad_medida_id INTEGER REFERENCES unidades_medida(id),
       area_maquina VARCHAR(150)
     );
+
+    -- Nota de Devolucion enlazada a la Nota de Salida: al marcar "Devuelto"
+    -- una linea de la nota de salida se crea/completa sola la nota de
+    -- devolucion (utils/notaDevolucion.js). Las hechas a mano quedan sin enlace.
+    ALTER TABLE notas_desuso ADD COLUMN IF NOT EXISTS nota_salida_id INTEGER REFERENCES notas_salida(id);
+    ALTER TABLE notas_desuso_detalle ADD COLUMN IF NOT EXISTS nota_salida_detalle_id INTEGER REFERENCES notas_salida_detalle(id);
+    CREATE UNIQUE INDEX IF NOT EXISTS notas_desuso_detalle_salida_unique
+      ON notas_desuso_detalle (nota_salida_detalle_id) WHERE nota_salida_detalle_id IS NOT NULL;
   `)
+
+  // Backfill: las devoluciones registradas antes del enlace tambien tienen su
+  // nota de devolucion (agrupadas por nota de salida + almacen + dia). Solo
+  // toma lineas que todavia no estan en ninguna, asi que correrlo de nuevo no
+  // duplica nada.
+  {
+    const sinNota = await pool.query(`
+      SELECT d.id, d.devuelto_en, n.usuario_id
+      FROM notas_salida_detalle d
+      JOIN notas_salida n ON d.nota_salida_id = n.id
+      WHERE d.devuelto_condicion IS NOT NULL AND d.etiqueta_id IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM notas_desuso_detalle dd WHERE dd.nota_salida_detalle_id = d.id)
+      ORDER BY d.devuelto_en NULLS FIRST, d.id
+    `)
+    if (sinNota.rows.length > 0) {
+      const client = await pool.connect()
+      try {
+        await client.query('BEGIN')
+        for (const r of sinNota.rows) {
+          await registrarEnNotaDevolucion(client, { detalleId: r.id, usuarioId: r.usuario_id, fecha: r.devuelto_en })
+        }
+        await client.query('COMMIT')
+        console.log(`Notas de devolucion: ${sinNota.rows.length} linea(s) devuelta(s) enlazadas`)
+      } catch (err) {
+        await client.query('ROLLBACK')
+        console.error('Backfill notas de devolucion:', err.message)
+      } finally {
+        client.release()
+      }
+    }
+  }
 
   // Fase 14: backfill. Corre una sola vez (guarda: no hay periodos todavia).
   // Por cada almacen crea un "Periodo 1" ACTIVO (desde la guia mas antigua o

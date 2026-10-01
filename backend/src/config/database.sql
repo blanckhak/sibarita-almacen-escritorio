@@ -457,3 +457,9 @@ CREATE TABLE notas_desuso_detalle (
   unidad_medida_id INTEGER REFERENCES unidades_medida(id),
   area_maquina VARCHAR(150)
 );
+
+-- Nota de Devolucion enlazada a la Nota de Salida (utils/notaDevolucion.js).
+ALTER TABLE notas_desuso ADD COLUMN nota_salida_id INTEGER REFERENCES notas_salida(id);
+ALTER TABLE notas_desuso_detalle ADD COLUMN nota_salida_detalle_id INTEGER REFERENCES notas_salida_detalle(id);
+CREATE UNIQUE INDEX notas_desuso_detalle_salida_unique
+  ON notas_desuso_detalle (nota_salida_detalle_id) WHERE nota_salida_detalle_id IS NOT NULL;
