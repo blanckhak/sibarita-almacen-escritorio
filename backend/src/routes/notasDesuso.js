@@ -70,7 +70,7 @@ router.get('/:id', verificarToken, async (req, res) => {
       WHERE n.id = $1
     `, [req.params.id])
     if (nota.rows.length === 0) {
-      return res.status(404).json({ error: 'Nota de desuso no encontrada' })
+      return res.status(404).json({ error: 'Nota de devolucion no encontrada' })
     }
 
     const detalle = await pool.query(`
@@ -106,7 +106,7 @@ router.post('/', verificarToken, soloRoles('admin', 'almacen', 'almacenero'),
   })
   if (errLargo) return res.status(400).json({ error: errLargo })
   if (!Array.isArray(lineas) || lineas.length === 0) {
-    return res.status(400).json({ error: 'La nota de desuso debe incluir al menos una linea' })
+    return res.status(400).json({ error: 'La nota de devolucion debe incluir al menos una linea' })
   }
   for (const l of lineas) {
     if (!l.descripcion || !l.descripcion.trim()) {
@@ -198,7 +198,7 @@ router.put('/:id', verificarToken, soloRoles('admin', 'almacen', 'almacenero'),
   try {
     const nota = await pool.query('SELECT estado, periodo_id FROM notas_desuso WHERE id = $1', [req.params.id])
     if (nota.rows.length === 0) {
-      return res.status(404).json({ error: 'Nota de desuso no encontrada' })
+      return res.status(404).json({ error: 'Nota de devolucion no encontrada' })
     }
     if (nota.rows[0].estado === 'ANULADA') {
       return res.status(400).json({ error: 'Esta nota esta anulada' })
@@ -233,7 +233,7 @@ router.post('/:id/anular', verificarToken, soloRoles('admin', 'almacen', 'almace
   try {
     const nota = await pool.query('SELECT estado, periodo_id FROM notas_desuso WHERE id = $1', [req.params.id])
     if (nota.rows.length === 0) {
-      return res.status(404).json({ error: 'Nota de desuso no encontrada' })
+      return res.status(404).json({ error: 'Nota de devolucion no encontrada' })
     }
     if (nota.rows[0].estado === 'ANULADA') {
       return res.status(400).json({ error: 'La nota ya esta anulada' })

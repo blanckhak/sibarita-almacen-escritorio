@@ -62,7 +62,7 @@ export default function NotaDesusoDetalle() {
         nota_salida_ref: edRef.trim(),
         observaciones: edObs.trim(),
       })
-      setMensaje({ tipo: 'ok', texto: 'Nota de desuso actualizada' })
+      setMensaje({ tipo: 'ok', texto: 'Nota de devolucion actualizada' })
       setEditando(false)
       cargar()
     } catch (err) {
@@ -82,7 +82,7 @@ export default function NotaDesusoDetalle() {
     setGuardando(true)
     try {
       await api.post(`/api/notas-desuso/${id}/anular`, { motivo: motivoAnulacion.trim() })
-      setMensaje({ tipo: 'ok', texto: 'Nota de desuso anulada' })
+      setMensaje({ tipo: 'ok', texto: 'Nota de devolucion anulada' })
       setAnulando(false)
       setMotivoAnulacion('')
       cargar()
@@ -94,19 +94,19 @@ export default function NotaDesusoDetalle() {
     }
   }
 
-  if (cargando) return <div className="p-6 text-center py-12 text-gray-400">Cargando nota de desuso...</div>
-  if (!nota) return <div className="p-6 text-center py-12 text-gray-400">Nota de desuso no encontrada</div>
+  if (cargando) return <div className="p-6 text-center py-12 text-gray-400">Cargando nota de devolucion...</div>
+  if (!nota) return <div className="p-6 text-center py-12 text-gray-400">Nota de devolucion no encontrada</div>
 
   const [yy, mm, dd] = String(nota.fecha).slice(0, 10).split('-')
 
   return (
     <div className="p-6">
       <div className="print:hidden">
-        <Link to="/notas-desuso" className="text-sm text-blue-700 hover:underline">&larr; Volver a notas de desuso</Link>
+        <Link to="/notas-desuso" className="text-sm text-blue-700 hover:underline">&larr; Volver a notas de devolucion</Link>
 
         <div className="flex items-center justify-between mt-2 mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-gray-800">Nota de Desuso N.° {nota.numero_nota}</h1>
+            <h1 className="text-3xl font-bold text-gray-800">Nota de Devolucion N.° {nota.numero_nota}</h1>
             <p className="text-gray-500 mt-1">
               {nota.persona_responsable} · {nota.seccion || 'Sin seccion'} · {nota.almacen_nombre} · {new Date(nota.fecha).toLocaleDateString('es-GT')}
             </p>
@@ -188,7 +188,7 @@ export default function NotaDesusoDetalle() {
 
         {anulando && (
           <div className="bg-white rounded-xl shadow-md p-6 mb-6 border border-red-100">
-            <h2 className="text-lg font-semibold text-gray-700 mb-1">Anular nota de desuso</h2>
+            <h2 className="text-lg font-semibold text-gray-700 mb-1">Anular nota de devolucion</h2>
             <p className="text-sm text-gray-500 mb-4">Esta accion no se puede deshacer.</p>
             <div className="flex items-end gap-3">
               <div className="flex-1">
@@ -239,7 +239,7 @@ export default function NotaDesusoDetalle() {
               <div className="flex items-start justify-between px-4 pt-3">
                 <div>
                   <div className="font-bold text-lg text-gray-800 text-center">MANUFACTURA DE ALIMENTOS S.A.</div>
-                  <div className="font-semibold text-sm text-gray-700 uppercase tracking-wide text-center">Nota de Ingreso de Activos - Desuso</div>
+                  <div className="font-semibold text-sm text-gray-700 uppercase tracking-wide text-center">Nota de Devolucion de Activos</div>
                 </div>
                 <table className="border border-gray-800 text-center text-xs">
                   <tbody>

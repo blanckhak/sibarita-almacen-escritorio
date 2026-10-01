@@ -18,13 +18,13 @@ const ENLACES_PRIMARIOS = [
   { path: '/inventario',    label: 'Inventario',      roles: ['admin','almacen','almacenero','mantenimiento','compras'] },
   { path: '/guias',         label: 'Guias',           roles: ['admin','almacen','almacenero','mantenimiento','compras'] },
   { path: '/notas-salida',  label: 'Notas de Salida', roles: ['admin','almacen','almacenero','mantenimiento','compras'] },
+  { path: '/notas-desuso',  label: 'Notas de Devolucion', roles: ['admin','almacen','almacenero','mantenimiento','compras'] },
   { path: '/periodos',      label: 'Periodos',        roles: ROLES_PERIODOS },
 ]
 const ENLACES_SECUNDARIOS = [
   { path: '/almacenes',            label: 'Almacenes',           roles: null },
   { path: '/productos',            label: 'Catalogo',            roles: ['admin','almacen','almacenero','mantenimiento','compras'] },
   { path: '/solicitudes-materiales', label: 'Solicitud Materiales', roles: ['admin','almacen','almacenero','mantenimiento','compras'] },
-  { path: '/notas-desuso',         label: 'Notas de Desuso',     roles: ['admin','almacen','almacenero','mantenimiento','compras'] },
   { path: '/consulta-productos',   label: 'Consulta',            roles: ['admin','almacen','almacenero','mantenimiento','compras'] },
   { path: '/movimientos',          label: 'Movimientos',         roles: ['admin','almacen','almacenero'] },
   { path: '/reportes',             label: 'Reportes',            roles: ['admin','almacen','almacenero','compras'] },

@@ -79,11 +79,11 @@ export default function NotasDesuso() {
         })),
       }
       await api.post('/api/notas-desuso', payload)
-      setMensaje({ tipo: 'ok', texto: 'Nota de desuso generada correctamente' })
+      setMensaje({ tipo: 'ok', texto: 'Nota de devolucion generada correctamente' })
       setMostrarForm(false)
       cargarNotas()
     } catch (err) {
-      setMensaje({ tipo: 'error', texto: err.response?.data?.error || 'Error al guardar la nota de desuso' })
+      setMensaje({ tipo: 'error', texto: err.response?.data?.error || 'Error al guardar la nota de devolucion' })
     } finally {
       setGuardando(false)
       setTimeout(() => setMensaje(null), 4000)
@@ -94,7 +94,7 @@ export default function NotasDesuso() {
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-gray-800">Notas de Desuso</h1>
+          <h1 className="text-3xl font-bold text-gray-800">Notas de Devolucion</h1>
           <p className="text-gray-500 mt-1">Ingreso de activos usados que vuelven de un area</p>
         </div>
         {puedeRegistrar && (
@@ -102,7 +102,7 @@ export default function NotasDesuso() {
             onClick={() => mostrarForm ? setMostrarForm(false) : abrirNuevo()}
             className="bg-blue-700 hover:bg-blue-800 text-white text-sm px-4 py-2 rounded-lg font-medium transition"
           >
-            {mostrarForm ? 'Cancelar' : '+ Nueva Nota de Desuso'}
+            {mostrarForm ? 'Cancelar' : '+ Nueva Nota de Devolucion'}
           </button>
         )}
       </div>
@@ -127,7 +127,7 @@ export default function NotasDesuso() {
 
       {mostrarForm && (
         <div className="bg-white rounded-xl shadow-md p-6 mb-6 border border-blue-100">
-          <h2 className="text-lg font-semibold text-gray-700 mb-4">Nueva Nota de Desuso</h2>
+          <h2 className="text-lg font-semibold text-gray-700 mb-4">Nueva Nota de Devolucion</h2>
           <form onSubmit={handleSubmit}>
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div>
@@ -231,7 +231,7 @@ export default function NotasDesuso() {
             <div className="flex justify-end gap-3">
               <button type="button" onClick={() => setMostrarForm(false)} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">Cancelar</button>
               <button type="submit" disabled={guardando} className="px-6 py-2 text-sm bg-blue-700 text-white rounded-lg hover:bg-blue-800 disabled:opacity-50">
-                {guardando ? 'Guardando...' : 'Generar Nota de Desuso'}
+                {guardando ? 'Guardando...' : 'Generar Nota de Devolucion'}
               </button>
             </div>
           </form>
@@ -239,7 +239,7 @@ export default function NotasDesuso() {
       )}
 
       {cargando ? (
-        <div className="text-center py-12 text-gray-400">Cargando notas de desuso...</div>
+        <div className="text-center py-12 text-gray-400">Cargando notas de devolucion...</div>
       ) : (
         <div className="bg-white rounded-xl shadow overflow-hidden">
           <table className="w-full text-sm">
@@ -277,7 +277,7 @@ export default function NotasDesuso() {
             </tbody>
           </table>
           {notas.length === 0 && (
-            <p className="text-center text-gray-400 py-8">No hay notas de desuso registradas todavia</p>
+            <p className="text-center text-gray-400 py-8">No hay notas de devolucion registradas todavia</p>
           )}
         </div>
       )}
